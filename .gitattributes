@@ -1,0 +1,10 @@
+*.bin filter=lfs diff=lfs merge=lfs -text
+*.dict filter=lfs diff=lfs merge=lfs -text
+*.ogg filter=lfs diff=lfs merge=lfs -text
+*.res filter=lfs diff=lfs merge=lfs -text
+*.pmdl filter=lfs diff=lfs merge=lfs -text
+*/means filter=lfs diff=lfs merge=lfs -text
+*/mixture_weight filter=lfs diff=lfs merge=lfs -text
+*/sendump filter=lfs diff=lfs merge=lfs -text
+*/transition_matrices filter=lfs diff=lfs merge=lfs -text
+*/variances filter=lfs diff=lfs merge=lfs -text
