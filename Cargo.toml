@@ -1,0 +1,38 @@
+[package]
+name = "lily"
+version = "0.1.0"
+authors = ["sergio"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+yaml-rust = "^0.4" # Load configuration files from this program and skills
+fluent = "^0.9" # Translations and templating
+serde = "^1.0" # For serde_json
+
+rsnowboy = {git = "https://github.com/sheosi/rsnowboy"} # Hotword detector
+pocketsphinx = "^0.6.0" # Offline Stt
+sphinxad = "^0.1" # Recording library
+cpal = "^0.10" # For recording (future substitute of sphinxad)
+hound = "^3.4" # Write to wav
+
+snips-nlu-lib = { git = "https://github.com/snipsco/snips-nlu-rs", branch = "master" } # NLU
+snips-nlu-ontology = { git = "https://github.com/snipsco/snips-nlu-ontology", tag = "0.67.1"  } # NLU-related things
+serde_json ="^1.0" # Used in nlu output and to get text from IBM's Wattson
+cpython = "^0.3" # Load actions, in the future when Pyo3 works with stable we'll change this
+python3-sys = "^0.3" # For PyImport_AppendInitTab
+
+ref_thread_local = "^0.0" # For having the TTS as a global in a thread local way
+ttspico = {git = "https://github.com/sheosi/ttspico-rs", branch="devel"} # Main Tts (only for some languages)
+espeak-sys = {git = "https://github.com/sheosi/espeak-sys"} # Auxiliar Tts (speaks any language)
+libc = "^0.2" # Required to interface with espeak-sys
+rodio = "^0.10" # Playback library
+
+syslog = "^5.0" # Linux log interface
+log = "^0.4" # Common API for logging so we can change backend easily
+
+#Cloud-based
+google_translate_tts = "0.1.2" # Format TTS URLs
+reqwest = {version="0.10.0-alpha.2", features=["default-tls", "blocking"]} # HTTP client
+base64 = "0.11.0" # For sending data to the online TTS and STT

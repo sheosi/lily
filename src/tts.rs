@@ -1,0 +1,241 @@
+use std::convert::TryInto;
+use core::cell::RefCell;
+use std::rc::Rc;
+use crate::lang::Lang;
+use crate::audio::Audio;
+
+#[derive(Debug, Clone)]
+pub enum TtsErrCause {
+    StringHadInternalNul
+}
+
+#[derive(Debug, Clone)]
+pub struct TtsError {
+    cause: TtsErrCause
+}
+
+impl std::convert::From<std::ffi::NulError> for TtsError {
+    fn from(_nul_err: std::ffi::NulError) -> Self {
+        TtsError{cause: TtsErrCause::StringHadInternalNul}
+    }
+}
+
+impl std::fmt::Display for TtsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.cause {
+            TtsErrCause::StringHadInternalNul => {
+                write!(f, "The string you asked for had internal nulls ('\0') which is incompatible with C")
+            }
+        }
+    }
+}
+
+pub trait Tts {
+    fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError>;
+}
+
+pub struct EspeakTts {    
+}
+
+impl EspeakTts {
+    pub fn new(_lang: Lang)  -> EspeakTts {
+        unsafe {espeak_sys::espeak_Initialize(espeak_sys::espeak_AUDIO_OUTPUT::AUDIO_OUTPUT_PLAYBACK, 0, std::ptr::null(), 0);}
+        //espeak_SetSynthCallback();
+
+        EspeakTts{}
+    }
+}
+
+
+impl Tts for EspeakTts {
+    fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
+        let synth_cstr = std::ffi::CString::new(input.to_string())?;
+        let synth_flags = espeak_sys::espeakCHARS_AUTO | espeak_sys::espeakPHONEMES | espeak_sys::espeakENDPAUSE;
+
+        // input.len().try_into().unwrap() -> size_t is the same as usize
+        unsafe {espeak_sys::espeak_Synth(synth_cstr.as_ptr() as (*const std::ffi::c_void) , input.len() as libc::size_t, 0, espeak_sys::espeak_POSITION_TYPE::POS_CHARACTER, 0, synth_flags, std::ptr::null_mut(), std::ptr::null_mut());}
+
+        Ok(Audio {buffer:vec![], samples_per_second: 16000})
+    }
+
+}
+
+// The MIT License
+//
+// Copyright (c) 2019 Paolo Jovon <paolo.jovon@gmail.com>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+use ttspico as pico;
+
+pub struct PicoTts {
+    sys: Rc<RefCell<pico::System>>,
+    voice: Rc<RefCell<pico::Voice>>,
+    engine: pico::Engine
+}
+
+
+impl PicoTts {
+
+    pub fn sg_name(lang: Lang) -> &'static str {
+        match lang {
+            Lang::EsEs => {"es-ES_zl0_sg.bin"},
+            Lang::EnUs => {"en-US_lh0_sg.bin"}
+        }
+
+    }
+
+    pub fn new(lang: Lang) -> Self {
+        // 1. Create a Pico system
+        let sys = pico::System::new(4 * 1024 * 1024).expect("Could not init system");
+
+
+        // 2. Load Text Analysis (TA) and Speech Generation (SG) resources for the voice you want to use
+        let ta_res = 
+            pico::System::load_resource(sys.clone(), "tts/".to_string() + lang.iso_str() + "_ta.bin")
+            .expect("Failed to load TA");
+        let sg_res = pico::System::load_resource(sys.clone(), "tts/".to_string() + Self::sg_name(lang))
+            .expect("Failed to load SG");
+
+
+        // 3. Create a Pico voice definition and attach the loaded resources to it
+        let voice = pico::System::create_voice(sys.clone(), "TestVoice")
+        .expect("Failed to create voice");
+    voice
+        .borrow_mut().add_resource(ta_res)
+        .expect("Failed to add TA to voice");
+    voice
+        .borrow_mut().add_resource(sg_res)
+        .expect("Failed to add SG to voice");
+
+
+        // 4. Create an engine from the voice definition
+        // UNSAFE: Creating an engine without attaching the resources will result in a crash!
+        let engine = unsafe { pico::Voice::create_engine(voice.clone()).expect("Failed to create engine") };
+        //let voice_def = espeak_sys::espeak_VOICE{name: std::ptr::null(), languages: std::ptr::null(), identifier: std::ptr::null(), gender: 0, age: 0, variant: 0, xx1:0, score: 0, spare: std::ptr::null_mut()};
+        PicoTts{sys, voice, engine}
+    }
+}
+
+impl Tts for PicoTts {
+    fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
+        // 5. Put (UTF-8) text to be spoken into the engine
+        // See `Engine::put_text()` for more details.
+        let input = std::ffi::CString::new(input).expect("CString::new failed");
+        let mut text_bytes = input.as_bytes_with_nul();
+        while text_bytes.len() > 0 {
+            let n_put = self.engine
+                .put_text(text_bytes)
+                .expect("pico_putTextUtf8 failed");
+            text_bytes = &text_bytes[n_put..];
+        }
+
+        // 6. Do the actual text-to-speech, getting audio data (16-bit signed PCM @ 16kHz) from the input text
+        // Speech audio is computed in small chunks, one "step" at a time; see `Engine::get_data()` for more details.
+        let mut pcm_data = vec![0i16; 0];
+        let mut pcm_buf = [0i16; 1024];
+        'tts: loop {
+            let (n_written, status) = self.engine
+                .get_data(&mut pcm_buf[..])
+                .expect("pico_getData error");
+            pcm_data.extend(&pcm_buf[..n_written]);
+            if status == ttspico::EngineStatus::Idle {
+                break 'tts;
+            }
+        }
+
+        Ok(Audio{buffer: pcm_data, samples_per_second: 16000})
+    }
+}
+
+struct GTts {
+    engine: crate::gtts::GttsEngine,
+    fallback_tts : Box<dyn Tts>,
+    curr_lang: String
+}
+
+impl GTts {
+    pub fn new(lang: Lang, fallback_tts: Box<dyn Tts>) -> Self {
+        GTts{engine: crate::gtts::GttsEngine::new(), fallback_tts, curr_lang: Self::make_tts_lang(lang).to_string()}
+    }
+
+    fn make_tts_lang(lang: Lang) -> &'static str {
+        match lang {
+            Lang::EsEs => {"es"},
+            Lang::EnUs => {"en"}
+        }
+    }
+}
+
+impl Tts for GTts {
+    fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
+        match self.engine.synth(input, &self.curr_lang) {
+            Ok(_) => {Ok(Audio{buffer:Vec::new(), samples_per_second: 16000})},
+            Err(_) => {
+                // If it didn't work try with local
+                self.fallback_tts.synth_text(input)
+            }
+        }
+    }
+}
+
+struct IbmTts {
+    engine: crate::gtts::IbmTtsEngine,
+    fallback_tts : Box<dyn Tts>,
+    curr_voice: String
+}
+
+impl IbmTts {
+    pub fn new(lang: Lang, fallback_tts: Box<dyn Tts>) -> Self {
+        IbmTts{engine: crate::gtts::IbmTtsEngine::new(), fallback_tts, curr_voice: Self::make_tts_voice(lang).to_string()}
+    }
+
+    fn make_tts_voice(lang: Lang) -> &'static str {
+        match lang {
+            Lang::EsEs => {"es-ES_LauraV3Voice"},
+            Lang::EnUs => {"en-US_AllisonV3Voice"}
+        }
+    }
+}
+
+impl Tts for IbmTts {
+    fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
+        match self.engine.synth(input, &self.curr_voice) {
+            Ok(_) => {Ok(Audio{buffer:Vec::new(), samples_per_second: 16000})},
+            Err(_) => {
+                // If it didn't work try with local
+                self.fallback_tts.synth_text(input)
+            }
+        }
+    }
+}
+
+pub struct TtsFactory;
+
+impl TtsFactory {
+    pub fn load(lang: Lang, prefer_cloud_tss: bool) -> Box<dyn Tts> {
+        //Box::new(EspeakTts::new(lang))
+        let local_tts = Box::new(PicoTts::new(lang));
+
+        match prefer_cloud_tss {
+            true => {Box::new(IbmTts::new(lang, local_tts))},
+            false => {local_tts}
+        }
+    }
+}
