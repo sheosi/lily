@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::io::{Read, Write};
 
+
 #[derive(Serialize)]
 struct NluTrainSet {
     entities: HashMap<String, HashMap<String,()>>,
@@ -41,7 +42,7 @@ impl NluManager {
         self.intents.push((order_name.to_string(), phrases));
     }
 
-    pub fn train(&self, path: &Path) {
+    pub fn train(&self, train_set_path: &Path, engine_path: &Path) {
 
     	// Prepare data
     	fn make_utt(input: &String) -> Utterance {
@@ -60,7 +61,6 @@ impl NluManager {
     	let train_set = serde_json::to_string(&train_set).unwrap();
 
     	// Write to file
-    	let train_set_path = path.join("nlu_train_set.json");
     	let mut train_file = std::fs::OpenOptions::new().read(true).write(true).create(true).open(train_set_path).unwrap();
     	let mut old_train_file: String = String::new();
     	train_file.read_to_string(&mut old_train_file).unwrap();
@@ -70,7 +70,7 @@ impl NluManager {
 	    	train_file.write_all(train_set[..].as_bytes()).unwrap();
 	    	train_file.sync_all().unwrap();
 
-			std::process::Command::new("snips-nlu").arg("train").arg(train_set).arg(path).spawn().expect("Failed to open snips-nlu binary").wait().expect("snips-nlu failed it's execution, maybe some argument it's wrong?");
+			std::process::Command::new("snips-nlu").arg("train").arg(train_set).arg(engine_path).spawn().expect("Failed to open snips-nlu binary").wait().expect("snips-nlu failed it's execution, maybe some argument it's wrong?");
 		}
     }
 }
@@ -80,8 +80,8 @@ pub struct Nlu {
 }
 
 impl Nlu {
-    pub fn new() -> Nlu {
-        let engine = SnipsNluEngine::from_path("engine").unwrap();
+    pub fn new(engine_path: &Path) -> Nlu {
+        let engine = SnipsNluEngine::from_path(engine_path).unwrap();
 
         Nlu { engine }
     }

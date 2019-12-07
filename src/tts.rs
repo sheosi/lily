@@ -1,4 +1,5 @@
-use std::convert::TryInto;
+use crate::vars::PICO_DATA_PATH;
+use std::path::Path;
 use core::cell::RefCell;
 use std::rc::Rc;
 use crate::lang::Lang;
@@ -104,13 +105,13 @@ impl PicoTts {
     pub fn new(lang: Lang) -> Self {
         // 1. Create a Pico system
         let sys = pico::System::new(4 * 1024 * 1024).expect("Could not init system");
-
+        let lang_path = Path::new(PICO_DATA_PATH);
 
         // 2. Load Text Analysis (TA) and Speech Generation (SG) resources for the voice you want to use
         let ta_res = 
-            pico::System::load_resource(sys.clone(), "tts/".to_string() + lang.iso_str() + "_ta.bin")
+            pico::System::load_resource(sys.clone(), lang_path.join(lang.iso_str().to_owned() + "_ta.bin").to_str().unwrap())
             .expect("Failed to load TA");
-        let sg_res = pico::System::load_resource(sys.clone(), "tts/".to_string() + Self::sg_name(lang))
+        let sg_res = pico::System::load_resource(sys.clone(), lang_path.join(Self::sg_name(lang)).to_str().unwrap())
             .expect("Failed to load SG");
 
 

@@ -7,6 +7,7 @@ mod lang;
 mod audio;
 mod gtts;
 mod nlu;
+mod vars;
 
 use cpython::{Python, PyList, PyTuple, PyDict, PyString, PythonObject, PyResult, ObjectProtocol, PyClone};
 use std::collections::HashMap;
@@ -22,8 +23,9 @@ use crate::audio::Recording;
 use ref_thread_local::RefThreadLocal;
 
 use log::{info, warn};
-use yaml_rust::{YamlEmitter, YamlLoader};
+use yaml_rust::{YamlLoader};
 use crate::nlu::{Nlu, NluManager};
+use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH, SNOWBOY_DATA_PATH};
 
 ref_thread_local! {
     static managed TTS: Box<dyn crate::tts::Tts> = tts::TtsFactory::load(Lang::EsEs, false);
@@ -119,16 +121,17 @@ enum ProgState {
 fn record_loop(order_map: &mut OrderMap) {
     // Set language
     let curr_lang = Lang::EsEs;
+    let snowboy_path = Path::new(SNOWBOY_DATA_PATH);
 
     // Init
     let mut record_device = RecDevice::new();
     let mut _play_device = PlayDevice::new();
 
     let mut stt = stt::SttFactory::load(curr_lang, false);
-    let mut hotword_detector = Snowboy::new(Path::new("lily.pmdl"), Path::new("common.res"));
+    let mut hotword_detector = Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res"));
 
     info!("Init Nlu");
-    let nlu = Nlu::new();
+    let nlu = Nlu::new(Path::new(NLU_ENGINE_PATH));
     let mut current_state = ProgState::WaitingForHotword;
 
 
@@ -395,7 +398,7 @@ fn gen_order_map() -> OrderMap {
             }
         }
     }
-    nlu_man.train(Path::new("engine"));
+    nlu_man.train(Path::new(NLU_TRAIN_SET_PATH), Path::new(NLU_ENGINE_PATH));
 
     order_map
 }

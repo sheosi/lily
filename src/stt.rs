@@ -1,4 +1,6 @@
+use std::path::Path;
 use crate::lang::Lang;
+use crate::vars::STT_DATA_PATH;
 
 #[derive(Debug, Clone)]
 pub enum SttErrCause {
@@ -31,17 +33,19 @@ pub struct Pocketsphinx {
 
 impl Pocketsphinx {
     pub fn new(lang: Lang) -> Pocketsphinx {
-    	let iso_str = lang.iso_str().to_owned();
+    	let iso_str = lang.iso_str();
+        let stt_path = Path::new(STT_DATA_PATH);
+
         let config = pocketsphinx::CmdLn::init(
             true,
             &[
                 //"pocketsphinx",
                 "-hmm",
-                &(iso_str.clone() + "/acoustic-model"),
+                stt_path.join(iso_str).join("acoustic-model").to_str().unwrap(),
                 "-lm",
-                &(iso_str.clone() + "/language-model.lm.bin"),
+                stt_path.join(iso_str).join("language-model.lm.bin").to_str().unwrap(),
                 "-dict",
-                &(iso_str.clone() + "/pronounciation-dictionary.dict"),
+                stt_path.join(iso_str).join("pronounciation-dictionary.dict").to_str().unwrap(),
             ],
         )
         .unwrap();
