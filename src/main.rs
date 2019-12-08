@@ -22,10 +22,10 @@ use yaml_rust::{YamlLoader, Yaml};
 use crate::nlu::{Nlu, NluManager};
 use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH, SNOWBOY_DATA_PATH};
 use cpython::ToPyObject;
-use unic_langid::{LanguageIdentifier, langid};
+use unic_langid::LanguageIdentifier;
 
 ref_thread_local! {
-    static managed TTS: Box<dyn crate::tts::Tts> = tts::TtsFactory::load(&langid!("es-ES"), false);
+    static managed TTS: Box<dyn crate::tts::Tts> = tts::TtsFactory::dummy();
 }
 
 
@@ -118,6 +118,7 @@ enum ProgState {
 fn record_loop(order_map: &mut OrderMap) {
     // Set language
     let curr_lang : LanguageIdentifier = get_locale_default().parse().expect("Locale parsing failed");
+    *TTS.borrow_mut() = tts::TtsFactory::load(&curr_lang, false);
     let snowboy_path = Path::new(SNOWBOY_DATA_PATH);
 
     // Init

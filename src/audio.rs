@@ -138,6 +138,10 @@ pub struct Audio {
 }
 
 impl Audio {
+    pub fn new_empty(samples_per_second: u32) -> Self {
+        Self{buffer: Vec::new(), samples_per_second}
+    }
+
     pub fn join(&self, other: &Audio) -> Option<Audio> {
         if self.samples_per_second == other.samples_per_second {
             let new_buffer = [&self.buffer[..], &other.buffer[..]].concat();

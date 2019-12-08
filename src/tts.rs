@@ -255,6 +255,21 @@ impl Tts for IbmTts {
     }
 }
 
+
+pub struct DummyTts{}
+
+impl DummyTts {
+    pub fn new() -> Self{
+        Self{}
+    }
+}
+
+impl Tts for DummyTts {
+    fn synth_text(&mut self, _input: &str) -> Result<Audio, TtsError> {
+        Ok(Audio::new_empty(16000))
+    }
+}
+
 pub struct TtsFactory;
 
 impl TtsFactory {
@@ -267,5 +282,9 @@ impl TtsFactory {
             true => {Box::new(IbmTts::new(lang, local_tts))},
             false => {local_tts}
         }
+    }
+
+    pub fn dummy() -> Box<dyn Tts> {
+        Box::new(DummyTts::new())
     }
 }
