@@ -49,5 +49,5 @@ if False:
 
 @lily_sdk.action(name = "say")
 class Say():
-    def trigger_action():
-        lily.say("Testeando")
+    def trigger_action(args):
+        lily.say(args)

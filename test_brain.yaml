@@ -7,3 +7,11 @@ say_hello:
 
   actions:
     say: say_hello_i18n # This is a fluent reference
+
+lily_start:
+  actions:
+    say: Lily lista para la acción
+
+init_reco:
+  actions:
+    say: Dime

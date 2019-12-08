@@ -9,6 +9,8 @@ mod gtts;
 mod nlu;
 mod vars;
 
+use std::rc::Rc;
+use core::cell::RefCell;
 use cpython::{Python, PyList, PyTuple, PyDict, PyString, PythonObject, PyResult, ObjectProtocol, PyClone};
 use std::collections::HashMap;
 
@@ -23,9 +25,10 @@ use crate::audio::Recording;
 use ref_thread_local::RefThreadLocal;
 
 use log::{info, warn};
-use yaml_rust::{YamlLoader};
+use yaml_rust::{YamlLoader, Yaml};
 use crate::nlu::{Nlu, NluManager};
 use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH, SNOWBOY_DATA_PATH};
+use cpython::ToPyObject;
 
 ref_thread_local! {
     static managed TTS: Box<dyn crate::tts::Tts> = tts::TtsFactory::load(Lang::EsEs, false);
@@ -141,7 +144,7 @@ fn record_loop(order_map: &mut OrderMap) {
     record_device.start_recording().unwrap();
     hotword_detector.start_hotword_check();
 
-    order_map.call_action("lily_start");
+    order_map.call_order("lily_start");
 
     let mut current_speech = crate::audio::Audio{buffer: Vec::new(), samples_per_second: 16000};
 
@@ -160,7 +163,7 @@ fn record_loop(order_map: &mut OrderMap) {
                         current_state = ProgState::Listening;
                         stt.begin_decoding().unwrap();
                         info!("Hotword detected");
-                        order_map.call_action("init_reco");
+                        order_map.call_order("init_reco");
                         record_device.start_recording().unwrap();
                     }
                     _ => {}
@@ -196,11 +199,11 @@ fn record_loop(order_map: &mut OrderMap) {
                                 // what we got
                                 if score >= 0.8 {
                                     info!("Let's call an action");
-                                    order_map.call_action(&result.intent.intent_name.unwrap());
+                                    order_map.call_order(&result.intent.intent_name.unwrap());
                                     info!("Action called");
                                 }
                                 else {
-                                    order_map.call_action("unrecognized");
+                                    order_map.call_order("unrecognized");
                                 }
                                 record_device.start_recording().unwrap();
                                 hotword_detector.start_hotword_check();
@@ -307,11 +310,30 @@ impl ActionRegistry {
 
 struct ActionData {
     obj: cpython::PyObject,
-    args: yaml_rust::yaml::Yaml
+    args: cpython::PyObject
+}
+
+struct ActionSet {
+    acts: Vec<ActionData>
+}
+
+impl ActionSet {
+    fn create() -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {acts: Vec::new()}))
+    }
+    fn add_action(&mut self, py: Python, act_name: &str, yaml: &yaml_rust::Yaml, action_registry: &ActionRegistry) {
+        self.acts.push(ActionData{obj: action_registry.get(act_name).unwrap().clone_ref(py), args: yaml_to_python(&yaml, py)});
+    }
+    fn call_all(&mut self, py: Python) {
+        for action in self.acts.iter() {
+            let trig_act = action.obj.getattr(py, "trigger_action").unwrap();
+            trig_act.call(py, PyTuple::new(py, &[action.args.clone_ref(py)]), None).unwrap();
+        }
+    }
 }
 
 struct OrderMap {
-    map: HashMap<String, Vec<ActionData>>
+    map: HashMap<String, Rc<RefCell<ActionSet>>>
 }
 
 impl OrderMap {
@@ -319,25 +341,21 @@ impl OrderMap {
         Self{map: HashMap::new()}
     }
 
-    fn add_order_action(&mut self, order_name: &str, act_name: &str, yaml: yaml_rust::Yaml, action_registry: &ActionRegistry) {
+    fn add_order(&mut self, order_name: &str, act_set: Rc<RefCell<ActionSet>>) {
         // Get GIL
         let gil = Python::acquire_gil();
         let python = gil.python();
 
-        let action_entry = self.map.entry(order_name.to_string()).or_insert(Vec::new());
-        action_entry.push(ActionData{obj: action_registry.get(act_name).unwrap().clone_ref(python), args: yaml});
+        let action_entry = self.map.entry(order_name.to_string()).or_insert(ActionSet::create());
+        *action_entry = act_set;
     }
 
-    fn call_action(&mut self, act_name: &str) {
-        if let Some(action_entry) = self.map.get_mut(act_name) {
+    fn call_order(&mut self, act_name: &str) {
+        if let Some(action_set) = self.map.get_mut(act_name) {
             let gil = Python::acquire_gil();
             let python = gil.python();
 
-            for action in action_entry {
-                let py_obj = &mut action.obj;
-                let trig_act = py_obj.getattr(python, "trigger_action").unwrap();
-                trig_act.call(python, PyTuple::empty(python), None).unwrap();
-            }
+            action_set.borrow_mut().call_all(python);
         }
     }
 }
@@ -380,28 +398,80 @@ fn gen_order_map() -> OrderMap {
                 }
 
             }
+
+            let mut act_set = ActionSet::create();
+            for (act_name, act_arg) in actions.iter() {
+                let gil = Python::acquire_gil();
+                let py = gil.python();
+                act_set.borrow_mut().add_action(py, act_name, act_arg, &action_registry);
+            }
             for (sig_name, sig_arg) in signals.iter() {
                     
 
                 if sig_name == &"order" {
                     if let Some(order_str) = sig_arg.as_str() {
                         nlu_man.add_intent(skill_name, vec![order_str.to_string()]);
-
-                    }
-                    for (act_name, act_arg) in actions.iter() {
-                        order_map.add_order_action(skill_name, act_name, act_arg.clone().clone(), &action_registry);
                     }
                 }
                 else {
                     warn!("Unknown signal {} present in conf file", sig_name);
                 }
             }
+
+            order_map.add_order(skill_name, act_set);
         }
     }
     nlu_man.train(Path::new(NLU_TRAIN_SET_PATH), Path::new(NLU_ENGINE_PATH));
 
     order_map
 }
+
+fn yaml_to_python(yaml: &yaml_rust::Yaml, py: Python) -> cpython::PyObject {
+    match yaml {
+        Yaml::Real(string) => {
+            string.parse::<f64>().unwrap().into_py_object(py).into_object()
+        }
+        Yaml::Integer(int) => {
+            int.into_py_object(py).into_object()
+
+        }
+        Yaml::Boolean(boolean) => {
+            if *boolean {
+                cpython::Python::True(py).into_object()
+            }
+            else {
+                cpython::Python::False(py).into_object()
+            }
+        }
+        Yaml::String(string) => {
+            string.into_py_object(py).into_object()
+        }
+        Yaml::Array(array) => {
+            let vec: Vec<_> = array.iter().map(|data| yaml_to_python(data, py)).collect();
+            cpython::PyList::new(py, &vec).into_object()
+
+        }
+        Yaml::Hash(hash) => {
+            let dict = PyDict::new(py);
+            for (key, value) in hash.iter() {
+                dict.set_item(py, yaml_to_python(key,py), yaml_to_python(value, py)).unwrap();
+            }
+            
+            dict.into_object()
+
+        }
+        Yaml::Null => {
+            cpython::Python::None(py)
+        }
+        Yaml::BadValue => {
+            panic!("Received a BadValue");
+        }
+        Yaml::Alias(index) => { // Alias are not supported right now, they are insecure and problematic anyway
+            format!("Alias, index: {}", index).into_py_object(py).into_object()
+        }
+    }
+}
+
 fn main() {
     init_log();
     let mut order_map = gen_order_map();
