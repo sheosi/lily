@@ -7,3 +7,4 @@ PocketSphinx
 Sphinxad
 Python-dev
 sox -> for gtts
+libespeak-ng
