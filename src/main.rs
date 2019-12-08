@@ -336,10 +336,6 @@ impl OrderMap {
     }
 
     fn add_order(&mut self, order_name: &str, act_set: Rc<RefCell<ActionSet>>) {
-        // Get GIL
-        let gil = Python::acquire_gil();
-        let python = gil.python();
-
         let action_entry = self.map.entry(order_name.to_string()).or_insert(ActionSet::create());
         *action_entry = act_set;
     }
