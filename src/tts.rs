@@ -2,8 +2,9 @@ use crate::vars::PICO_DATA_PATH;
 use std::path::Path;
 use core::cell::RefCell;
 use std::rc::Rc;
-use crate::lang::Lang;
 use crate::audio::Audio;
+use unic_langid::{LanguageIdentifier, langid, langids};
+use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 
 #[derive(Debug, Clone)]
 pub enum TtsErrCause {
@@ -39,7 +40,7 @@ pub struct EspeakTts {
 }
 
 impl EspeakTts {
-    pub fn new(_lang: Lang)  -> EspeakTts {
+    pub fn new(_lang: &LanguageIdentifier)  -> EspeakTts {
         unsafe {espeak_sys::espeak_Initialize(espeak_sys::espeak_AUDIO_OUTPUT::AUDIO_OUTPUT_PLAYBACK, 0, std::ptr::null(), 0);}
         //espeak_SetSynthCallback();
 
@@ -94,24 +95,32 @@ pub struct PicoTts {
 
 impl PicoTts {
 
-    pub fn sg_name(lang: Lang) -> &'static str {
-        match lang {
-            Lang::EsEs => {"es-ES_zl0_sg.bin"},
-            Lang::EnUs => {"en-US_lh0_sg.bin"}
+    // Just accept a negotiated LanguageIdentifier
+    fn sg_name(lang: &LanguageIdentifier) -> &'static str {
+        let lang_str = format!("{}-{}", lang.get_language(), lang.get_region().unwrap());
+        match lang_str.as_str()  {
+            "es-ES" => "es-ES_zl0_sg.bin",
+            "en-US" => "en-US_lh0_sg.bin",
+            _ => ""
         }
 
     }
 
-    pub fn new(lang: Lang) -> Self {
+    fn ta_name(lang: &LanguageIdentifier) -> String {
+        format!("{}-{}_ta.bin", lang.get_language() , lang.get_region().unwrap())
+    }
+
+    pub fn new(lang: &LanguageIdentifier) -> Self {
         // 1. Create a Pico system
+        let lang = Self::lang_neg(lang);
         let sys = pico::System::new(4 * 1024 * 1024).expect("Could not init system");
         let lang_path = Path::new(PICO_DATA_PATH);
 
         // 2. Load Text Analysis (TA) and Speech Generation (SG) resources for the voice you want to use
         let ta_res = 
-            pico::System::load_resource(sys.clone(), lang_path.join(lang.iso_str().to_owned() + "_ta.bin").to_str().unwrap())
+            pico::System::load_resource(sys.clone(), lang_path.join(Self::ta_name(&lang)).to_str().unwrap())
             .expect("Failed to load TA");
-        let sg_res = pico::System::load_resource(sys.clone(), lang_path.join(Self::sg_name(lang)).to_str().unwrap())
+        let sg_res = pico::System::load_resource(sys.clone(), lang_path.join(Self::sg_name(&lang)).to_str().unwrap())
             .expect("Failed to load SG");
 
 
@@ -131,6 +140,12 @@ impl PicoTts {
         let engine = unsafe { pico::Voice::create_engine(voice.clone()).expect("Failed to create engine") };
         //let voice_def = espeak_sys::espeak_VOICE{name: std::ptr::null(), languages: std::ptr::null(), identifier: std::ptr::null(), gender: 0, age: 0, variant: 0, xx1:0, score: 0, spare: std::ptr::null_mut()};
         PicoTts{sys, voice, engine}
+    }
+
+    fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
+        let available_langs = langids!("es-ES", "en-US");
+        let default = langid!("en-US");
+        negotiate_languages(&[lang],&available_langs, Some(&default), NegotiationStrategy::Filtering)[0].clone()
     }
 }
 
@@ -172,15 +187,18 @@ struct GTts {
 }
 
 impl GTts {
-    pub fn new(lang: Lang, fallback_tts: Box<dyn Tts>) -> Self {
-        GTts{engine: crate::gtts::GttsEngine::new(), fallback_tts, curr_lang: Self::make_tts_lang(lang).to_string()}
+    pub fn new(lang: &LanguageIdentifier, fallback_tts: Box<dyn Tts>) -> Self {
+        GTts{engine: crate::gtts::GttsEngine::new(), fallback_tts, curr_lang: Self::make_tts_lang(&Self::lang_neg(lang)).to_string()}
     }
 
-    fn make_tts_lang(lang: Lang) -> &'static str {
-        match lang {
-            Lang::EsEs => {"es"},
-            Lang::EnUs => {"en"}
-        }
+    fn make_tts_lang<'a>(lang: &'a LanguageIdentifier) -> &'a str {
+        lang.get_language()
+    }
+
+    fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
+        let available_langs = langids!("es", "en");
+        let default = langid!("en");
+        negotiate_languages(&[lang],&available_langs, Some(&default), NegotiationStrategy::Filtering)[0].clone()
     }
 }
 
@@ -203,15 +221,25 @@ struct IbmTts {
 }
 
 impl IbmTts {
-    pub fn new(lang: Lang, fallback_tts: Box<dyn Tts>) -> Self {
-        IbmTts{engine: crate::gtts::IbmTtsEngine::new(), fallback_tts, curr_voice: Self::make_tts_voice(lang).to_string()}
+    pub fn new(lang: &LanguageIdentifier, fallback_tts: Box<dyn Tts>) -> Self {
+        IbmTts{engine: crate::gtts::IbmTtsEngine::new(), fallback_tts, curr_voice: Self::make_tts_voice(&Self::lang_neg(lang)).to_string()}
     }
 
-    fn make_tts_voice(lang: Lang) -> &'static str {
-        match lang {
-            Lang::EsEs => {"es-ES_LauraV3Voice"},
-            Lang::EnUs => {"en-US_AllisonV3Voice"}
+    // Accept only negotiated LanguageIdentifiers
+    fn make_tts_voice(lang: &LanguageIdentifier) -> &'static str {
+        let lang_str = format!("{}-{}", lang.get_language(), lang.get_region().unwrap());
+        match lang_str.as_str() {
+            "es-ES" => "es-ES_LauraV3Voice",
+            "en-US" => "en-US_AllisonV3Voice",
+            _ => ""
         }
+    }
+
+    // Accept only negotiated LanguageIdentifiers
+    fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
+        let available_langs = langids!("es-ES", "en-US");
+        let default = langid!("en-US");
+        negotiate_languages(&[lang],&available_langs, Some(&default), NegotiationStrategy::Filtering)[0].clone()
     }
 }
 
@@ -230,7 +258,8 @@ impl Tts for IbmTts {
 pub struct TtsFactory;
 
 impl TtsFactory {
-    pub fn load(lang: Lang, prefer_cloud_tss: bool) -> Box<dyn Tts> {
+    pub fn load(lang: &LanguageIdentifier, prefer_cloud_tss: bool) -> Box<dyn Tts> {
+        
         //Box::new(EspeakTts::new(lang))
         let local_tts = Box::new(PicoTts::new(lang));
 

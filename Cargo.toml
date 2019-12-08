@@ -36,3 +36,8 @@ log = "^0.4" # Common API for logging so we can change backend easily
 google_translate_tts = "0.1.2" # Format TTS URLs
 reqwest = {version="0.10.0-alpha.2", features=["default-tls", "blocking"]} # HTTP client
 base64 = "0.11.0" # For sending data to the online TTS and STT
+
+# Localization
+unic-langid = {version="^0.7", features = ["macros"]} # For parsing Unicode Language Identifiers
+locale_config = "*" # Interact with the system locale, the * is suggestednby it's author
+fluent-langneg = "^0.11" # Language negotiation

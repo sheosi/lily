@@ -3,7 +3,6 @@
 
 mod stt;
 mod tts;
-mod lang;
 mod audio;
 mod gtts;
 mod nlu;
@@ -20,7 +19,6 @@ use std::path::Path;
 use crate::stt::Stt;
 use crate::tts::Tts;
 use crate::audio::{RecDevice, PlayDevice};
-use crate::lang::Lang;
 use crate::audio::Recording;
 use ref_thread_local::RefThreadLocal;
 
@@ -29,9 +27,10 @@ use yaml_rust::{YamlLoader, Yaml};
 use crate::nlu::{Nlu, NluManager};
 use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH, SNOWBOY_DATA_PATH};
 use cpython::ToPyObject;
+use unic_langid::{LanguageIdentifier, langid};
 
 ref_thread_local! {
-    static managed TTS: Box<dyn crate::tts::Tts> = tts::TtsFactory::load(Lang::EsEs, false);
+    static managed TTS: Box<dyn crate::tts::Tts> = tts::TtsFactory::load(&langid!("es-ES"), false);
 }
 
 
@@ -123,14 +122,14 @@ enum ProgState {
 
 fn record_loop(order_map: &mut OrderMap) {
     // Set language
-    let curr_lang = Lang::EsEs;
+    let curr_lang : LanguageIdentifier = get_locale_default().parse().expect("Locale parsing failed");
     let snowboy_path = Path::new(SNOWBOY_DATA_PATH);
 
     // Init
     let mut record_device = RecDevice::new();
     let mut _play_device = PlayDevice::new();
 
-    let mut stt = stt::SttFactory::load(curr_lang, false);
+    let mut stt = stt::SttFactory::load(&curr_lang, false);
     let mut hotword_detector = Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res"));
 
     info!("Init Nlu");
@@ -399,7 +398,7 @@ fn gen_order_map() -> OrderMap {
 
             }
 
-            let mut act_set = ActionSet::create();
+            let act_set = ActionSet::create();
             for (act_name, act_arg) in actions.iter() {
                 let gil = Python::acquire_gil();
                 let py = gil.python();
@@ -470,6 +469,17 @@ fn yaml_to_python(yaml: &yaml_rust::Yaml, py: Python) -> cpython::PyObject {
             format!("Alias, index: {}", index).into_py_object(py).into_object()
         }
     }
+}
+
+
+fn get_locale_default() -> String {
+    for (tag, val) in locale_config::Locale::user_default().tags() {
+        if let None = tag {
+            return format!("{}", val)
+        }
+    }
+
+    "".to_string()
 }
 
 fn main() {

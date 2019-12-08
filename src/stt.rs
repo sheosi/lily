@@ -1,6 +1,7 @@
 use std::path::Path;
-use crate::lang::Lang;
+use unic_langid::{LanguageIdentifier, langid, langids};
 use crate::vars::STT_DATA_PATH;
+use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 
 #[derive(Debug, Clone)]
 pub enum SttErrCause {
@@ -32,8 +33,8 @@ pub struct Pocketsphinx {
 }
 
 impl Pocketsphinx {
-    pub fn new(lang: Lang) -> Pocketsphinx {
-    	let iso_str = lang.iso_str();
+    pub fn new(lang: &LanguageIdentifier) -> Self {
+    	let iso_str = format!("{:?}", Self::lang_neg(lang));
         let stt_path = Path::new(STT_DATA_PATH);
 
         let config = pocketsphinx::CmdLn::init(
@@ -41,11 +42,11 @@ impl Pocketsphinx {
             &[
                 //"pocketsphinx",
                 "-hmm",
-                stt_path.join(iso_str).join("acoustic-model").to_str().unwrap(),
+                stt_path.join(&iso_str).join("acoustic-model").to_str().unwrap(),
                 "-lm",
-                stt_path.join(iso_str).join("language-model.lm.bin").to_str().unwrap(),
+                stt_path.join(&iso_str).join("language-model.lm.bin").to_str().unwrap(),
                 "-dict",
-                stt_path.join(iso_str).join("pronounciation-dictionary.dict").to_str().unwrap(),
+                stt_path.join(&iso_str).join("pronounciation-dictionary.dict").to_str().unwrap(),
             ],
         )
         .unwrap();
@@ -55,6 +56,12 @@ impl Pocketsphinx {
             decoder,
             is_speech_started: false
         }
+    }
+
+    fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
+        let available_langs = langids!("es-ES", "en-US");
+        let default = langid!("en-US");
+        negotiate_languages(&[lang], &available_langs, Some(&default), NegotiationStrategy::Filtering)[0].clone()
     }
 }
 
@@ -111,15 +118,19 @@ pub struct IbmStt {
 }
 
 impl IbmStt {
-    pub fn new(lang: Lang, fallback: Box<dyn Stt>) -> Self{
+    pub fn new(lang: &LanguageIdentifier, fallback: Box<dyn Stt>) -> Self{
         IbmStt{engine: crate::gtts::IbmSttEngine::new(), model: Self::model_from_lang(lang).to_string(), fallback, copy_audio: crate::audio::Audio{buffer: Vec::new(), samples_per_second: 16000}}
     }
 
-    fn model_from_lang(lang: Lang) -> &'static str {
-        match lang {
-            Lang::EsEs => {"es-ES_BroadbandModel"},
-            Lang::EnUs => {"en-US_BroadbandModel"}
-        }
+    fn model_from_lang(lang: &LanguageIdentifier) -> String {
+        let lang = Self::lang_neg(lang);
+        format!("{}-{}_BroadbandModel", lang.get_language(), lang.get_region().unwrap())
+    }
+
+    fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
+        let available_langs = langids!("es-ES", "en-US");
+        let default = langid!("en-US");
+        negotiate_languages(&[lang],&available_langs, Some(&default), NegotiationStrategy::Filtering)[0].clone()
     }
 }
 
@@ -148,7 +159,7 @@ impl Stt for IbmStt {
 pub struct SttFactory;
 
 impl SttFactory {
-	pub fn load(lang: Lang, prefer_cloud: bool) -> Box<dyn Stt>{
+	pub fn load(lang: &LanguageIdentifier, prefer_cloud: bool) -> Box<dyn Stt>{
 
 		let local_stt = Box::new(Pocketsphinx::new(lang));
         if prefer_cloud {

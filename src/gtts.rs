@@ -1,4 +1,3 @@
-use crate::lang::Lang;
 use rodio::source::Source;
 use std::io::Write;
 use serde::Deserialize;
