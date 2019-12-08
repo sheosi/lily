@@ -1,6 +1,3 @@
-#[macro_use] extern crate cpython;
-#[macro_use] extern crate ref_thread_local;
-
 mod stt;
 mod tts;
 mod audio;
@@ -10,17 +7,15 @@ mod vars;
 
 use std::rc::Rc;
 use core::cell::RefCell;
-use cpython::{Python, PyList, PyTuple, PyDict, PyString, PythonObject, PyResult, ObjectProtocol, PyClone};
+use cpython::{Python, PyList, PyTuple, PyDict, PyString, PythonObject, PyResult, ObjectProtocol, PyClone, py_module_initializer, py_fn, py_method_def};
 use std::collections::HashMap;
 
 use serde::{Serialize, Deserialize};
 use std::path::Path;
 
-use crate::stt::Stt;
-use crate::tts::Tts;
 use crate::audio::{RecDevice, PlayDevice};
 use crate::audio::Recording;
-use ref_thread_local::RefThreadLocal;
+use ref_thread_local::{RefThreadLocal, ref_thread_local};
 
 use log::{info, warn};
 use yaml_rust::{YamlLoader, Yaml};
