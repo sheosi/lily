@@ -3,7 +3,7 @@ use serde::Serialize;
 use snips_nlu_lib::SnipsNluEngine;
 use std::collections::HashMap;
 use std::path::Path;
-use std::io::{Read, Write, Seek, SeekFrom};
+use std::io::{Read, Write, Seek, SeekFrom, ErrorKind};
 
 
 #[derive(Serialize)]
@@ -73,13 +73,15 @@ impl NluManager {
         let engine_path = Path::new(engine_path);
 
     	// Make sure it's different, otherwise no need to train it
-    	if old_train_file != train_set || engine_path.is_dir() {
+    	if old_train_file != train_set || !engine_path.is_dir() {
             // Create parents
             std::fs::create_dir_all(engine_path.parent().unwrap()).unwrap();
             std::fs::create_dir_all(train_set_path.parent().unwrap()).unwrap();
 
             //Clean engine folder
-            std::fs::remove_dir_all(engine_path).unwrap();
+            if engine_path.is_dir() {
+                std::fs::remove_dir_all(engine_path).unwrap();
+            }
 
             // Write train file
             train_file.set_len(0).unwrap(); // Truncate file
