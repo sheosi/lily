@@ -34,7 +34,8 @@ pub struct Pocketsphinx {
 
 impl Pocketsphinx {
     pub fn new(lang: &LanguageIdentifier) -> Self {
-    	let iso_str = format!("{:?}", Self::lang_neg(lang));
+        let lang = Self::lang_neg(lang);
+        let iso_str = format!("{}-{}", lang.get_language(), lang.get_region().unwrap().to_lowercase());
         let stt_path = Path::new(STT_DATA_PATH);
 
         let config = pocketsphinx::CmdLn::init(
@@ -42,11 +43,11 @@ impl Pocketsphinx {
             &[
                 //"pocketsphinx",
                 "-hmm",
-                stt_path.join(&iso_str).join("acoustic-model").to_str().unwrap(),
+                stt_path.join(&iso_str).join(&iso_str).to_str().unwrap(),
                 "-lm",
-                stt_path.join(&iso_str).join("language-model.lm.bin").to_str().unwrap(),
+                stt_path.join(&iso_str).join(iso_str.to_string() + ".lm.bin").to_str().unwrap(),
                 "-dict",
-                stt_path.join(&iso_str).join("pronounciation-dictionary.dict").to_str().unwrap(),
+                stt_path.join(&iso_str).join("cmudict-".to_owned() + &iso_str + ".dict").to_str().unwrap(),
             ],
         )
         .unwrap();
@@ -85,7 +86,7 @@ impl Stt for Pocketsphinx {
     fn begin_decoding(&mut self) -> Result<(), SttError> {
         self.decoder.start_utt(None)?;
         Ok(())
-    }
+    }   
     fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
         self.decoder.process_raw(audio, false, false)?;
         if self.decoder.get_in_speech() {
@@ -118,6 +119,8 @@ pub struct IbmStt {
 }
 
 impl IbmStt {
+
+
     pub fn new(lang: &LanguageIdentifier, fallback: Box<dyn Stt>) -> Self{
         IbmStt{engine: crate::gtts::IbmSttEngine::new(), model: Self::model_from_lang(lang).to_string(), fallback, copy_audio: crate::audio::Audio{buffer: Vec::new(), samples_per_second: 16000}}
     }
@@ -140,6 +143,7 @@ impl Stt for IbmStt {
         self.fallback.begin_decoding()?;
         Ok(())
     }
+    
     fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
         self.copy_audio.append_audio(audio, 16000);
         let res = self.fallback.decode(audio)?;
