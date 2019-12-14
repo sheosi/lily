@@ -361,7 +361,7 @@ fn gen_order_map(curr_lang: &LanguageIdentifier) -> OrderMap {
     //Debug support
     println!("{:?}", doc);
 
-    let action_registry = ActionRegistry::new(Path::new("/home/sergio/Documentos/lily/python"));
+    let action_registry = ActionRegistry::new(Path::new("python"));
     let mut order_map = OrderMap::new();
     let mut nlu_man = NluManager::new();
 
