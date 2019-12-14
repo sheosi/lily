@@ -115,9 +115,10 @@ enum ProgState {
     Listening,
 }
 
-fn record_loop(order_map: &mut OrderMap) {
+fn record_loop() {
     // Set language
     let curr_lang : LanguageIdentifier = get_locale_default().parse().expect("Locale parsing failed");
+    let mut order_map = gen_order_map(&curr_lang);
     *TTS.borrow_mut() = tts::TtsFactory::load(&curr_lang, false);
     let snowboy_path = Path::new(SNOWBOY_DATA_PATH);
 
@@ -351,7 +352,7 @@ impl OrderMap {
     }
 }
 
-fn gen_order_map() -> OrderMap {
+fn gen_order_map(curr_lang: &LanguageIdentifier) -> OrderMap {
     let docs = YamlLoader::load_from_str(&std::fs::read_to_string("test_brain.yaml").unwrap()).unwrap();
 
     // Multi document support, doc is a yaml::YamlLoader
@@ -412,7 +413,8 @@ fn gen_order_map() -> OrderMap {
             order_map.add_order(skill_name, act_set);
         }
     }
-    nlu_man.train(Path::new(NLU_TRAIN_SET_PATH), Path::new(NLU_ENGINE_PATH));
+    
+    nlu_man.train(Path::new(NLU_TRAIN_SET_PATH), Path::new(NLU_ENGINE_PATH), &curr_lang);
 
     order_map
 }
@@ -476,6 +478,5 @@ fn get_locale_default() -> String {
 
 fn main() {
     init_log();
-    let mut order_map = gen_order_map();
-    record_loop(&mut order_map);
+    record_loop();
 }
