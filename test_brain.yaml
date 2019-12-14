@@ -1,17 +1,25 @@
-include: some_file.yaml
-translation: translations.ftl
+include: some_file.yaml # Just a mock up, NYI
+translation: translations.ftl # Just a mock up, NYI
 
 say_hello:
   signals:
-    order: hello there
+    order: Hello
 
   actions:
-    say: say_hello_i18n # This is a fluent reference
+    say: Hello, dear
 
-lily_start:
+lily_start: # Called by lily executable when it's ready to serve petitions
   actions:
-    say: Lily lista para la acción
+    say: Lily ready for action
 
-init_reco:
+
+say_name:
+  signals:
+    order: Tell me your name
+
   actions:
-    say: Dime
+    say: My name is Lily
+
+#init_reco: # Called by executable when starts listening, the sound is causing problems now so it's disabled
+#  actions:
+#    say: Dime
