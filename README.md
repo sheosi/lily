@@ -73,3 +73,13 @@ Sphinxad
 Python 
 sox (binary) -> for gtts
 libespeak-ng
+
+Install english module for NLU:
+sudo snips-nlu download en
+
+Install spanish module for NLU:
+sudo snips-nlu download es
+
+## Current state:
+
+Very very early phase, it's still a prototype. It will be buggy and there are a ton of unwrap() all around.
