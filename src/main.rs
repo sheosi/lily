@@ -229,6 +229,15 @@ impl ActionRegistry {
         new
     }
 
+    fn clone_try_adding(&self, new_actions_path: &Path) -> Self {
+        if new_actions_path.is_dir() {
+            self.clone_adding(new_actions_path)
+        }
+        else {
+            self.clone()
+        }
+    }
+
     fn get(&self, action_name: &str) -> Option<&cpython::PyObject> {
         self.map.get(action_name)
     }
@@ -283,62 +292,65 @@ impl OrderMap {
 }
 
 fn load_package(order_map: &mut OrderMap, nlu_man: &mut NluManager, action_registry: &ActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) {
-    // Load Yaml
-    let docs = YamlLoader::load_from_str(&std::fs::read_to_string(path.join("skills_def.yaml")).unwrap()).unwrap();
+    let yaml_path = path.join("skills_def.yaml");
+    if yaml_path.is_file() {
+        // Load Yaml
+        let docs = YamlLoader::load_from_str(&std::fs::read_to_string(&yaml_path).unwrap()).unwrap();
 
-    // Multi document support, doc is a yaml::YamlLoader
-    let doc = &docs[0];
+        // Multi document support, doc is a yaml::YamlLoader
+        let doc = &docs[0];
 
-    //Debug support
-    println!("{:?}", docs);
+        //Debug support
+        println!("{:?}", docs);
 
-    // Load actions + singals from Yaml
-    for (key, data) in doc.as_hash().unwrap().iter() {
-        if let Some(skill_def) = data.as_hash() {
-            let skill_name = key.as_str().unwrap();
-            println!("{}", skill_name);
+        // Load actions + singals from Yaml
+        for (key, data) in doc.as_hash().unwrap().iter() {
+            if let Some(skill_def) = data.as_hash() {
+                let skill_name = key.as_str().unwrap();
+                println!("{}", skill_name);
 
-            let mut actions: Vec<(&str, &yaml_rust::Yaml)> = Vec::new();
-            let mut signals: Vec<(&str, &yaml_rust::Yaml)> = Vec::new();
-            for (key2, data2) in skill_def.iter() {
-                let as_str = key2.as_str().unwrap();
-                
-                match as_str {
-                    "actions" => {
-                        for (key3, data3) in data2.as_hash().unwrap().iter() {
-                            actions.push((key3.as_str().unwrap(), data3));
-                        }
-                    }
-                    "signals" => {
-                        for (key3, data3) in data2.as_hash().unwrap().iter() {
-                            signals.push((key3.as_str().unwrap(), data3));
-                        }
-                    }
-                    _ => {}
-                }
-
-            }
-
-            let act_set = ActionSet::create();
-            for (act_name, act_arg) in actions.iter() {
-                let gil = Python::acquire_gil();
-                let py = gil.python();
-                act_set.borrow_mut().add_action(py, act_name, act_arg, &action_registry);
-            }
-            for (sig_name, sig_arg) in signals.iter() {
+                let mut actions: Vec<(&str, &yaml_rust::Yaml)> = Vec::new();
+                let mut signals: Vec<(&str, &yaml_rust::Yaml)> = Vec::new();
+                for (key2, data2) in skill_def.iter() {
+                    let as_str = key2.as_str().unwrap();
                     
+                    match as_str {
+                        "actions" => {
+                            for (key3, data3) in data2.as_hash().unwrap().iter() {
+                                actions.push((key3.as_str().unwrap(), data3));
+                            }
+                        }
+                        "signals" => {
+                            for (key3, data3) in data2.as_hash().unwrap().iter() {
+                                signals.push((key3.as_str().unwrap(), data3));
+                            }
+                        }
+                        _ => {}
+                    }
 
-                if sig_name == &"order" {
-                    if let Some(order_str) = sig_arg.as_str() {
-                        nlu_man.add_intent(skill_name, vec![order_str.to_string()]);
+                }
+
+                let act_set = ActionSet::create();
+                for (act_name, act_arg) in actions.iter() {
+                    let gil = Python::acquire_gil();
+                    let py = gil.python();
+                    act_set.borrow_mut().add_action(py, act_name, act_arg, &action_registry);
+                }
+                for (sig_name, sig_arg) in signals.iter() {
+                        
+
+                    if sig_name == &"order" {
+                        if let Some(order_str) = sig_arg.as_str() {
+                            nlu_man.add_intent(skill_name, vec![order_str.to_string()]);
+                        }
+                    }
+                    else {
+                        warn!("Unknown signal {} present in conf file", sig_name);
                     }
                 }
-                else {
-                    warn!("Unknown signal {} present in conf file", sig_name);
-                }
-            }
 
-            order_map.add_order(skill_name, act_set);
+                order_map.add_order(skill_name, act_set);
+            }
         }
     }
 }
@@ -353,7 +365,7 @@ fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> OrderMap {
     for entry in std::fs::read_dir(path).unwrap() {
         let entry = entry.unwrap().path();
         if entry.is_dir() {
-            load_package(&mut order_map, &mut nlu_man, &action_registry.clone_adding(&entry.join("python")), &entry, curr_lang);
+            load_package(&mut order_map, &mut nlu_man, &action_registry.clone_try_adding(&entry.join("python")), &entry, curr_lang);
         }
     }
 
