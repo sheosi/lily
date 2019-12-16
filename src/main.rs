@@ -10,8 +10,6 @@ use std::rc::Rc;
 use core::cell::RefCell;
 use cpython::{Python, PyList, PyTuple, PyDict, PyString, PythonObject, PyResult, ObjectProtocol, PyClone, py_module_initializer, py_fn, py_method_def};
 use std::collections::HashMap;
-
-use serde::{Serialize, Deserialize};
 use std::path::Path;
 
 use crate::audio::{RecDevice, PlayDevice};
@@ -22,7 +20,7 @@ use ref_thread_local::{RefThreadLocal, ref_thread_local};
 use log::{info, warn};
 use yaml_rust::{YamlLoader, Yaml};
 use crate::nlu::{Nlu, NluManager};
-use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH, SNOWBOY_DATA_PATH};
+use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH, SNOWBOY_DATA_PATH, PYTHON_SDK_PATH, PACKAGES_PATH};
 use cpython::ToPyObject;
 use unic_langid::LanguageIdentifier;
 
@@ -38,7 +36,9 @@ enum ProgState {
 fn record_loop() {
     // Set language
     let curr_lang : LanguageIdentifier = get_locale_default().parse().expect("Locale parsing failed");
-    let mut order_map = gen_order_map(&curr_lang);
+
+    let mut order_map = load_packages(&Path::new(PACKAGES_PATH), &curr_lang);
+
     *TTS.borrow_mut() = tts::TtsFactory::load(&curr_lang, false);
     let snowboy_path = Path::new(SNOWBOY_DATA_PATH);
 
@@ -100,31 +100,36 @@ fn record_loop() {
                         match decode_res {
                             None => warn!("Not recognized"),
                             Some((hypothesis, _utt_id, _score)) => {
-                                record_device.stop_recording().unwrap();
-                                /*for seg in ps_decoder.seg_iter() {
-                                    println!("{} : {}, {}",seg.word(), seg.prob().ascr, seg.prob().lscr);
+                                if !hypothesis.is_empty() {
+                                    record_device.stop_recording().unwrap();
+                                    /*for seg in ps_decoder.seg_iter() {
+                                        println!("{} : {}, {}",seg.word(), seg.prob().ascr, seg.prob().lscr);
 
-                                }*/
-                                let result = nlu.parse(&hypothesis).unwrap();
-                                let result_json = Nlu::to_json(&result);
-                                info!("{}", result_json);
-                                let score = result.intent.confidence_score;
-                                info!("Score: {}",score);
+                                    }*/
+                                    let result = nlu.parse(&hypothesis).unwrap();
+                                    let result_json = Nlu::to_json(&result);
+                                    info!("{}", result_json);
+                                    let score = result.intent.confidence_score;
+                                    info!("Score: {}",score);
 
-                                // Do action if at least we are 80% confident on
-                                // what we got
-                                if score >= 0.8 {
-                                    info!("Let's call an action");
-                                    order_map.call_order(&result.intent.intent_name.unwrap());
-                                    info!("Action called");
+                                    // Do action if at least we are 80% confident on
+                                    // what we got
+                                    if score >= 0.8 {
+                                        info!("Let's call an action");
+                                        order_map.call_order(&result.intent.intent_name.unwrap());
+                                        info!("Action called");
+                                    }
+                                    else {
+                                        order_map.call_order("unrecognized");
+                                    }
+                                    record_device.start_recording().unwrap();
+                                    hotword_detector.start_hotword_check();
+                                    current_speech.write_wav("last_speech.wav");
+                                    current_speech.clear();
                                 }
                                 else {
-                                    order_map.call_order("unrecognized");
+                                    order_map.call_order("empty_reco");
                                 }
-                                record_device.start_recording().unwrap();
-                                hotword_detector.start_hotword_check();
-                                current_speech.write_wav("last_speech.wav");
-                                current_speech.clear();
                             }   
                         }
                     }
@@ -151,29 +156,13 @@ fn init_log() {
 
 }
 
-// add bindings to the generated python module
-// N.B: names: "lily" must be the name of the `.so` or `.pyd` file
+// Define executable module
 py_module_initializer!(lily, initlily, PyInit_lily, |py, m| {
     m.add(py, "__doc__", "This module is implemented in Rust.")?;
-    m.add(py, "sum_as_string", py_fn!(py, sum_as_string_py(a: i64, b:i64)))?;
     m.add(py, "say", py_fn!(py, python_say(input: &str)))?;
 
     Ok(())
 });
-
-// logic implemented as a normal rust function
-fn sum_as_string(a:i64, b:i64) -> String {
-    format!("{}", a + b).to_string()
-}
-
-// rust-cpython aware function. All of our python interface could be
-// declared in a separate module.
-// Note that the py_fn!() macro automatically converts the arguments from
-// Python objects to Rust values; and the Rust return value back into a Python object.
-fn sum_as_string_py(_: Python, a:i64, b:i64) -> PyResult<String> {
-    let out = sum_as_string(a, b);
-    Ok(out)
-}
 
 fn python_say(python: Python, input: &str) -> PyResult<cpython::PyObject> {
     let audio = TTS.borrow_mut().synth_text(input).unwrap();
@@ -184,12 +173,31 @@ fn python_say(python: Python, input: &str) -> PyResult<cpython::PyObject> {
 struct ActionRegistry {
     map: HashMap<String, cpython::PyObject>
 }
+impl Clone for ActionRegistry {
+    fn clone(&self) -> Self {
+        // Get GIL
+        let gil = Python::acquire_gil();
+        let python = gil.python();
+
+        let dup_refs = |pair:(&String, &cpython::PyObject)| {
+            let (key, val) = pair;
+            (key.to_owned(), val.clone_ref(python))
+        };
+
+        let new_map: HashMap<String, cpython::PyObject> = self.map.iter().map(dup_refs).collect();
+        Self{map: new_map}
+    }
+}
 
 impl ActionRegistry {
-    fn new(actions_path: &Path) -> Self {
-        let mod_name = std::ffi::CString::new("lily").unwrap();
-        unsafe {assert!(python3_sys::PyImport_AppendInittab(mod_name.into_raw(), Some(PyInit_lily)) != -1);};
 
+    fn new(actions_path: &Path) -> Self {
+        let mut reg = Self{map: HashMap::new()};
+        reg.add_folder(actions_path);
+        reg
+    }
+
+    fn add_folder(&mut self, actions_path: &Path) {
         // Get GIL
         let gil = Python::acquire_gil();
         let python = gil.python();
@@ -200,7 +208,6 @@ impl ActionRegistry {
         sys_path.insert_item(python, 1, PyString::new(python, actions_path.to_str().unwrap()).into_object());
 
         // Make order_map from python's modules
-        let mut map = HashMap::new();
         for entry in std::fs::read_dir(actions_path).unwrap() {
             let entry = entry.unwrap();
             if entry.path().is_dir() {
@@ -211,12 +218,15 @@ impl ActionRegistry {
 
         let lily_py_mod = python.import("lily_sdk").unwrap();
         for (key, val) in lily_py_mod.get(python, "action_classes").unwrap().cast_into::<PyDict>(python).unwrap().items(python) {
-            map.insert(key.to_string(), val.clone_ref(python));
+            self.map.insert(key.to_string(), val.clone_ref(python));
             println!("{:?}:{:?}", key.to_string(), val.to_string());
         }
+    }
 
-        
-        Self{map}
+    fn clone_adding(&self, new_actions_path: &Path) -> Self {
+        let mut new = self.clone();
+        new.add_folder(new_actions_path);
+        new
     }
 
     fn get(&self, action_name: &str) -> Option<&cpython::PyObject> {
@@ -272,19 +282,17 @@ impl OrderMap {
     }
 }
 
-fn gen_order_map(curr_lang: &LanguageIdentifier) -> OrderMap {
-    let docs = YamlLoader::load_from_str(&std::fs::read_to_string("test_brain.yaml").unwrap()).unwrap();
+fn load_package(order_map: &mut OrderMap, nlu_man: &mut NluManager, action_registry: &ActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) {
+    // Load Yaml
+    let docs = YamlLoader::load_from_str(&std::fs::read_to_string(path.join("skills_def.yaml")).unwrap()).unwrap();
 
     // Multi document support, doc is a yaml::YamlLoader
     let doc = &docs[0];
 
     //Debug support
-    println!("{:?}", doc);
+    println!("{:?}", docs);
 
-    let action_registry = ActionRegistry::new(Path::new("python"));
-    let mut order_map = OrderMap::new();
-    let mut nlu_man = NluManager::new();
-
+    // Load actions + singals from Yaml
     for (key, data) in doc.as_hash().unwrap().iter() {
         if let Some(skill_def) = data.as_hash() {
             let skill_name = key.as_str().unwrap();
@@ -333,8 +341,23 @@ fn gen_order_map(curr_lang: &LanguageIdentifier) -> OrderMap {
             order_map.add_order(skill_name, act_set);
         }
     }
-    
-    nlu_man.train(Path::new(NLU_TRAIN_SET_PATH), Path::new(NLU_ENGINE_PATH), &curr_lang);
+}
+
+fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> OrderMap {
+    let mut order_map = OrderMap::new();
+    let mut nlu_man = NluManager::new();
+
+    // TODO: Add into account own actions from the package
+    let action_registry = ActionRegistry::new(Path::new(PYTHON_SDK_PATH));
+
+    for entry in std::fs::read_dir(path).unwrap() {
+        let entry = entry.unwrap().path();
+        if entry.is_dir() {
+            load_package(&mut order_map, &mut nlu_man, &action_registry.clone_adding(&entry.join("python")), &entry, curr_lang);
+        }
+    }
+
+    nlu_man.train(Path::new(NLU_TRAIN_SET_PATH), Path::new(NLU_ENGINE_PATH), curr_lang);
 
     order_map
 }
@@ -396,7 +419,14 @@ fn get_locale_default() -> String {
     "".to_string()
 }
 
+fn python_init() {
+    // Add this executable as a Python module
+    let mod_name = std::ffi::CString::new("lily").unwrap();
+    unsafe {assert!(python3_sys::PyImport_AppendInittab(mod_name.into_raw(), Some(PyInit_lily)) != -1);};
+}
+
 fn main() {
     init_log();
+    python_init();
     record_loop();
 }

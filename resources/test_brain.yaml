@@ -1,9 +1,0 @@
-include: some_file.yaml
-translation: translations.ftl
-
-say_hello:
-  signals:
-    order: hello there
-
-  actions:
-    say: say_hello_i18n # This is a fluent reference

@@ -3,7 +3,7 @@ use serde::Serialize;
 use snips_nlu_lib::SnipsNluEngine;
 use std::collections::HashMap;
 use std::path::Path;
-use std::io::{Read, Write, Seek, SeekFrom, ErrorKind};
+use std::io::{Read, Write, Seek, SeekFrom};
 
 
 #[derive(Serialize)]

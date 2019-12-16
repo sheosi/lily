@@ -1,0 +1,29 @@
+include: some_file.yaml # Just a mock up, NYI
+translation: translations.ftl # Just a mock up, NYI
+
+say_hello:
+  signals:
+    order: Hello
+
+  actions:
+    say: Hello, dear
+
+lily_start: # Called by lily executable when it's ready to serve petitions
+  actions:
+    say: Lily ready for action
+
+
+say_name:
+  signals:
+    order: Tell me your name
+
+  actions:
+    say: My name is Lily
+
+empty_reco: # Called by Lily when active voice ends and nothing is recorded
+  actions:
+    say: If later you want something from me, let me know
+
+#init_reco: # Called by executable when starts listening, the sound is causing problems now so it's disabled
+#  actions:
+#    say: Dime
