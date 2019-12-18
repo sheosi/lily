@@ -36,13 +36,10 @@ def __set_translations(curr_lang_str):
         print("Translations not present")
 
 
-
 def translate(trans_name, dict_args):
     return translations.format_pattern(translations.get_message(trans_name).value, dict_args)
-import inspect
 
 
-import sys, traceback
 @action(name = "say")
 class Say():
     def trigger_action(args):
