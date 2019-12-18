@@ -21,7 +21,7 @@ use log::{info, warn};
 use yaml_rust::{YamlLoader, Yaml};
 use crate::nlu::{Nlu, NluManager};
 use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH, SNOWBOY_DATA_PATH, PYTHON_SDK_PATH, PACKAGES_PATH, resolve_path};
-use cpython::ToPyObject;
+use cpython::{ToPyObject, FromPyObject};
 use unic_langid::LanguageIdentifier;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 
@@ -308,6 +308,26 @@ impl OrderMap {
     }
 }
 
+fn try_translate(input: &str) -> String {
+    if input.chars().nth(0).unwrap() == '$' {
+        // Get GIL
+        let gil = Python::acquire_gil();
+        let python = gil.python();
+
+        let lily_ext = python.import("lily_ext").unwrap();
+
+        // Remove initial $ from translation
+        let call_res = lily_ext.call(python, "translate", (&input[1..], PyDict::new(python)), None).unwrap();
+        let tuple: PyList = FromPyObject::extract(python, &call_res).unwrap();
+        let res = tuple.get_item(python, 0).to_string();
+        println!("Translation:{:?}", res);
+        res
+    }
+    else {
+        input.to_string()
+    }
+}
+
 fn load_package(order_map: &mut OrderMap, nlu_man: &mut NluManager, action_registry: &ActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) {
     info!("Loading package: {}", path.to_str().unwrap());
     let yaml_path = path.join("skills_def.yaml");
@@ -359,7 +379,7 @@ fn load_package(order_map: &mut OrderMap, nlu_man: &mut NluManager, action_regis
 
                     if sig_name == &"order" {
                         if let Some(order_str) = sig_arg.as_str() {
-                            nlu_man.add_intent(skill_name, vec![order_str.to_string()]);
+                            nlu_man.add_intent(skill_name, vec![try_translate(order_str)]);
                         }
                     }
                     else {

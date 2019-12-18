@@ -15,7 +15,7 @@ lily_start: # Called by lily executable when it's ready to serve petitions
 
 say_name:
   signals:
-    order: Tell me your name
+    order: $say_name
 
   actions:
     say: My name is Lily
@@ -24,6 +24,6 @@ empty_reco: # Called by Lily when active voice ends and nothing is recorded
   actions:
     say: $say_hello_i18n
 
-#init_reco: # Called by executable when starts listening, the sound is causing problems now so it's disabled
-#  actions:
-#    say: Dime
+# init_reco: # Called by executable when starts listening, the sound is causing problems now so it's disabled
+#   actions:
+#     say: Dime
