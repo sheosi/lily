@@ -1,5 +1,4 @@
-use crate::vars::PICO_DATA_PATH;
-use std::path::Path;
+use crate::vars::{PICO_DATA_PATH, resolve_path};
 use core::cell::RefCell;
 use std::rc::Rc;
 use crate::audio::Audio;
@@ -114,7 +113,7 @@ impl PicoTts {
         // 1. Create a Pico system
         let lang = Self::lang_neg(lang);
         let sys = pico::System::new(4 * 1024 * 1024).expect("Could not init system");
-        let lang_path = Path::new(PICO_DATA_PATH);
+        let lang_path = resolve_path(PICO_DATA_PATH);
 
         // 2. Load Text Analysis (TA) and Speech Generation (SG) resources for the voice you want to use
         let ta_res = 

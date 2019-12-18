@@ -1,6 +1,5 @@
-use std::path::Path;
 use unic_langid::{LanguageIdentifier, langid, langids};
-use crate::vars::STT_DATA_PATH;
+use crate::vars::{STT_DATA_PATH, resolve_path};
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 
 #[derive(Debug, Clone)]
@@ -36,7 +35,7 @@ impl Pocketsphinx {
     pub fn new(lang: &LanguageIdentifier) -> Self {
         let lang = Self::lang_neg(lang);
         let iso_str = format!("{}-{}", lang.get_language(), lang.get_region().unwrap().to_lowercase());
-        let stt_path = Path::new(STT_DATA_PATH);
+        let stt_path = resolve_path(STT_DATA_PATH);
 
         let config = pocketsphinx::CmdLn::init(
             true,
