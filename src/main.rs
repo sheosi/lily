@@ -115,7 +115,7 @@ fn record_loop() {
 
                                     // Do action if at least we are 80% confident on
                                     // what we got
-                                    if score >= 0.8 {
+                                    if score >= 0.55 {
                                         info!("Let's call an action");
                                         order_map.call_order(&result.intent.intent_name.unwrap());
                                         info!("Action called");
