@@ -8,6 +8,7 @@ pub const PICO_DATA_PATH: &str = "resources/tts";
 pub const SNOWBOY_DATA_PATH: &str = "resources/hotword";
 pub const PYTHON_SDK_PATH: &str = "resources/python";
 pub const PACKAGES_PATH: &str = "packages";	
+pub const LAST_SPEECH_PATH: &str = "last_speech.wav";
 
 
 ref_thread_local! {

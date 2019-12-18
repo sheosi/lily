@@ -20,7 +20,7 @@ use ref_thread_local::{RefThreadLocal, ref_thread_local};
 use log::{info, warn};
 use yaml_rust::{YamlLoader, Yaml};
 use crate::nlu::{Nlu, NluManager};
-use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH, SNOWBOY_DATA_PATH, PYTHON_SDK_PATH, PACKAGES_PATH, resolve_path};
+use crate::vars::*;
 use cpython::{ToPyObject, FromPyObject};
 use unic_langid::LanguageIdentifier;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
@@ -125,7 +125,7 @@ fn record_loop() {
                                     }
                                     record_device.start_recording().unwrap();
                                     hotword_detector.start_hotword_check();
-                                    current_speech.write_wav("last_speech.wav");
+                                    current_speech.write_wav(resolve_path(LAST_SPEECH_PATH).to_str().unwrap());
                                     current_speech.clear();
                                 }
                                 else {
