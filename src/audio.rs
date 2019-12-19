@@ -1,9 +1,10 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, Duration, UNIX_EPOCH};
 
 use hound;
 use rodio::source::Source;
+
+#[cfg(feature = "devel_cpal_rec")]
 use cpal::traits::HostTrait;
-use std::time::Duration;
 
 pub struct PlayDevice {
     device: rodio::Device
@@ -90,11 +91,13 @@ impl Recording for RecDevice {
     }
 }
 
+#[cfg(feature = "devel_cpal_rec")]
 pub struct RecDeviceCpal {
     device: cpal::Device,
     buffer: [i16; 2048],
 }
 
+#[cfg(feature = "devel_cpal_rec")]
 impl RecDeviceCpal {
     pub fn new() -> Self {
         let host = cpal::default_host();
@@ -109,6 +112,7 @@ impl RecDeviceCpal {
     }
 }
 
+#[cfg(feature = "devel_cpal_rec")]
 impl Recording for RecDeviceCpal {
     fn read(&mut self) -> Option<&[i16]> {
         None

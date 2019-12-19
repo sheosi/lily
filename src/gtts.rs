@@ -1,6 +1,10 @@
+// Other crates
 use rodio::source::Source;
-use std::io::Write;
 use serde::Deserialize;
+
+// Optional dependencies
+#[cfg(feature = "google_tts")]
+use std::io::Write;
 
 const IBM_API_KEY: &str = "";
 const IBM_API_GATEWAY: &str = "";
@@ -24,11 +28,12 @@ struct WattsonAlternative {
 	transcript: String
 }
 
+#[cfg(feature = "google_tts")]
 pub struct GttsEngine {
 	client: reqwest::blocking::Client
 }
 
-
+#[cfg(feature = "google_tts")]
 impl GttsEngine {
 	pub fn new() -> Self {
 		GttsEngine{client: reqwest::blocking::Client::new()}

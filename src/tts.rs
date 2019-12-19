@@ -35,9 +35,11 @@ pub trait Tts {
     fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError>;
 }
 
+#[cfg(feature = "extra_langs_tts")]
 pub struct EspeakTts {    
 }
 
+#[cfg(feature = "extra_langs_tts")]
 impl EspeakTts {
     pub fn new(_lang: &LanguageIdentifier)  -> EspeakTts {
         unsafe {espeak_sys::espeak_Initialize(espeak_sys::espeak_AUDIO_OUTPUT::AUDIO_OUTPUT_PLAYBACK, 0, std::ptr::null(), 0);}
@@ -47,14 +49,14 @@ impl EspeakTts {
     }
 }
 
-
+#[cfg(feature = "extra_langs_tts")]
 impl Tts for EspeakTts {
     fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
         let synth_cstr = std::ffi::CString::new(input.to_string())?;
         let synth_flags = espeak_sys::espeakCHARS_AUTO | espeak_sys::espeakPHONEMES | espeak_sys::espeakENDPAUSE;
 
         // input.len().try_into().unwrap() -> size_t is the same as usize
-        unsafe {espeak_sys::espeak_Synth(synth_cstr.as_ptr() as (*const std::ffi::c_void) , input.len() as libc::size_t, 0, espeak_sys::espeak_POSITION_TYPE::POS_CHARACTER, 0, synth_flags, std::ptr::null_mut(), std::ptr::null_mut());}
+        unsafe {espeak_sys::espeak_Synth(synth_cstr.as_ptr() as *const std::ffi::c_void , input.len() as libc::size_t, 0, espeak_sys::espeak_POSITION_TYPE::POS_CHARACTER, 0, synth_flags, std::ptr::null_mut(), std::ptr::null_mut());}
 
         Ok(Audio {buffer:vec![], samples_per_second: 16000})
     }
@@ -179,13 +181,16 @@ impl Tts for PicoTts {
     }
 }
 
+#[cfg(feature = "google_tts")]
 struct GTts {
     engine: crate::gtts::GttsEngine,
     fallback_tts : Box<dyn Tts>,
     curr_lang: String
 }
 
+#[cfg(feature = "google_tts")]
 impl GTts {
+
     pub fn new(lang: &LanguageIdentifier, fallback_tts: Box<dyn Tts>) -> Self {
         GTts{engine: crate::gtts::GttsEngine::new(), fallback_tts, curr_lang: Self::make_tts_lang(&Self::lang_neg(lang)).to_string()}
     }
@@ -201,6 +206,7 @@ impl GTts {
     }
 }
 
+#[cfg(feature = "google_tts")]
 impl Tts for GTts {
     fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
         match self.engine.synth(input, &self.curr_lang) {
