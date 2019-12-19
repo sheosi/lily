@@ -5,26 +5,30 @@ mod gtts;
 mod nlu;
 mod vars;
 mod hotword;
+mod python;
+mod packages;
 
+// Standard library
 use std::rc::Rc;
 use core::cell::RefCell;
-use cpython::{Python, PyList, PyTuple, PyDict, PyString, PythonObject, PyResult, ObjectProtocol, PyClone, py_module_initializer, py_fn, py_method_def};
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::audio::{RecDevice, PlayDevice};
-use crate::audio::Recording;
+// This crate
+use crate::audio::{RecDevice, PlayDevice, Recording};
+use crate::python::{yaml_to_python, add_to_sys_path, python_init};
 use crate::hotword::{HotwordDetector, Snowboy};
-use ref_thread_local::{RefThreadLocal, ref_thread_local};
-
-use log::{info, warn};
-use yaml_rust::{YamlLoader, Yaml};
-use crate::nlu::{Nlu, NluManager};
+use crate::nlu::Nlu;
 use crate::vars::*;
-use cpython::{ToPyObject, FromPyObject};
-use unic_langid::LanguageIdentifier;
-use fluent_langneg::{negotiate_languages, NegotiationStrategy};
+use crate::packages::load_packages;
 
+// Other crates
+use log::{info, warn};
+use ref_thread_local::{RefThreadLocal, ref_thread_local};
+use unic_langid::LanguageIdentifier;
+use cpython::{Python, PyTuple, PyDict, ObjectProtocol, PyClone};
+
+// To be shared on the same thread
 ref_thread_local! {
     static managed TTS: Box<dyn crate::tts::Tts> = tts::TtsFactory::dummy();
 }
@@ -34,6 +38,7 @@ enum ProgState {
     Listening,
 }
 
+// Main loop, waits for hotword then records, acts and starts agian
 fn record_loop() {
     // Set language
     let curr_lang : LanguageIdentifier = get_locale_default().parse().expect("Locale parsing failed");
@@ -43,7 +48,6 @@ fn record_loop() {
     *TTS.borrow_mut() = tts::TtsFactory::load(&curr_lang, false);
     let snowboy_path = resolve_path(SNOWBOY_DATA_PATH);
 
-    // Init
     let mut record_device = RecDevice::new();
     let mut _play_device = PlayDevice::new();
 
@@ -157,28 +161,7 @@ fn init_log() {
 
 }
 
-// Define executable module
-py_module_initializer!(_lily_impl, init__lily_impl, PyInit__lily_impl, |py, m| {
-    m.add(py, "__doc__", "Internal implementations of Lily's Python functions")?;
-    m.add(py, "_say", py_fn!(py, python_say(input: &str)))?;
-    m.add(py, "__negotiate_lang", py_fn!(py, negotiate_lang(input: &str, available: Vec<String>)))?;
-
-    Ok(())
-});
-
-fn negotiate_lang(python: Python, input: &str, available: Vec<String>) -> PyResult<cpython::PyString> {
-    let in_lang: LanguageIdentifier = input.parse().unwrap();
-    let available_langs: Vec<LanguageIdentifier> = available.iter().map(|lang_str|{lang_str.parse().unwrap()}).collect();
-    Ok(negotiate_languages(&[in_lang],&available_langs, None, NegotiationStrategy::Filtering)[0].to_string().into_py_object(python))
-}
-
-fn python_say(python: Python, input: &str) -> PyResult<cpython::PyObject> {
-    let audio = TTS.borrow_mut().synth_text(input).unwrap();
-    PlayDevice::new().play(&*audio.buffer, audio.samples_per_second);
-    Ok(python.None())
-}
-
-struct ActionRegistry {
+pub struct ActionRegistry {
     map: HashMap<String, cpython::PyObject>
 }
 impl Clone for ActionRegistry {
@@ -211,9 +194,7 @@ impl ActionRegistry {
         let python = gil.python();
 
         // Add folder to sys.path
-        let sys = python.import("sys").unwrap();
-        let sys_path = sys.get(python, "path").unwrap().cast_into::<PyList>(python).unwrap();
-        sys_path.insert_item(python, 1, PyString::new(python, actions_path.to_str().unwrap()).into_object());
+        add_to_sys_path(python, actions_path).unwrap();
         info!("Add folder: {}", actions_path.to_str().unwrap());
 
         // Make order_map from python's modules
@@ -231,7 +212,6 @@ impl ActionRegistry {
         let canon_path = actions_path.parent().unwrap().canonicalize().unwrap();
         info!("Actions_path:{}", canon_path.to_str().unwrap());
         std::env::set_current_dir(canon_path).unwrap();
-        info!("Calling __set_translations for:{}", actions_path.to_str().unwrap());
         lily_py_mod.call(python, "__set_translations", (curr_lang.to_string(),), None).unwrap();
         
         for (key, val) in lily_py_mod.get(python, "action_classes").unwrap().cast_into::<PyDict>(python).unwrap().items(python) {
@@ -284,7 +264,7 @@ impl ActionSet {
     }
 }
 
-struct OrderMap {
+pub struct OrderMap {
     map: HashMap<String, Rc<RefCell<ActionSet>>>
 }
 
@@ -308,157 +288,6 @@ impl OrderMap {
     }
 }
 
-fn try_translate(input: &str) -> String {
-    if input.chars().nth(0).unwrap() == '$' {
-        // Get GIL
-        let gil = Python::acquire_gil();
-        let python = gil.python();
-
-        let lily_ext = python.import("lily_ext").unwrap();
-
-        // Remove initial $ from translation
-        let call_res = lily_ext.call(python, "translate", (&input[1..], PyDict::new(python)), None).unwrap();
-        let tuple: PyList = FromPyObject::extract(python, &call_res).unwrap();
-        let res = tuple.get_item(python, 0).to_string();
-        println!("Translation:{:?}", res);
-        res
-    }
-    else {
-        input.to_string()
-    }
-}
-
-fn load_package(order_map: &mut OrderMap, nlu_man: &mut NluManager, action_registry: &ActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) {
-    info!("Loading package: {}", path.to_str().unwrap());
-    let yaml_path = path.join("skills_def.yaml");
-    if yaml_path.is_file() {
-        // Load Yaml
-        let docs = YamlLoader::load_from_str(&std::fs::read_to_string(&yaml_path).unwrap()).unwrap();
-
-        // Multi document support, doc is a yaml::YamlLoader
-        let doc = &docs[0];
-
-        //Debug support
-        println!("{:?}", docs);
-
-        // Load actions + singals from Yaml
-        for (key, data) in doc.as_hash().unwrap().iter() {
-            if let Some(skill_def) = data.as_hash() {
-                let skill_name = key.as_str().unwrap();
-                println!("{}", skill_name);
-
-                let mut actions: Vec<(&str, &yaml_rust::Yaml)> = Vec::new();
-                let mut signals: Vec<(&str, &yaml_rust::Yaml)> = Vec::new();
-                for (key2, data2) in skill_def.iter() {
-                    let as_str = key2.as_str().unwrap();
-                    
-                    match as_str {
-                        "actions" => {
-                            for (key3, data3) in data2.as_hash().unwrap().iter() {
-                                actions.push((key3.as_str().unwrap(), data3));
-                            }
-                        }
-                        "signals" => {
-                            for (key3, data3) in data2.as_hash().unwrap().iter() {
-                                signals.push((key3.as_str().unwrap(), data3));
-                            }
-                        }
-                        _ => {}
-                    }
-
-                }
-
-                let act_set = ActionSet::create();
-                for (act_name, act_arg) in actions.iter() {
-                    let gil = Python::acquire_gil();
-                    let py = gil.python();
-                    act_set.borrow_mut().add_action(py, act_name, act_arg, &action_registry);
-                }
-                for (sig_name, sig_arg) in signals.iter() {
-                        
-
-                    if sig_name == &"order" {
-                        if let Some(order_str) = sig_arg.as_str() {
-                            nlu_man.add_intent(skill_name, vec![try_translate(order_str)]);
-                        }
-                    }
-                    else {
-                        warn!("Unknown signal {} present in conf file", sig_name);
-                    }
-                }
-
-                order_map.add_order(skill_name, act_set);
-            }
-        }
-    }
-}
-
-fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> OrderMap {
-    let mut order_map = OrderMap::new();
-    let mut nlu_man = NluManager::new();
-
-    let action_registry = ActionRegistry::new(&resolve_path(PYTHON_SDK_PATH), curr_lang);
-
-    info!("PACKAGES_PATH:{}", path.to_str().unwrap());
-    for entry in std::fs::read_dir(path).unwrap() {
-        let entry = entry.unwrap().path();
-        if entry.is_dir() {
-            load_package(&mut order_map, &mut nlu_man, &action_registry.clone_try_adding(&entry.join("python"), curr_lang), &entry, curr_lang);
-        }
-    }
-
-    nlu_man.train(&resolve_path(NLU_TRAIN_SET_PATH), &resolve_path(NLU_ENGINE_PATH), curr_lang);
-
-    order_map
-}
-
-fn yaml_to_python(yaml: &yaml_rust::Yaml, py: Python) -> cpython::PyObject {
-    match yaml {
-        Yaml::Real(string) => {
-            string.parse::<f64>().unwrap().into_py_object(py).into_object()
-        }
-        Yaml::Integer(int) => {
-            int.into_py_object(py).into_object()
-
-        }
-        Yaml::Boolean(boolean) => {
-            if *boolean {
-                cpython::Python::True(py).into_object()
-            }
-            else {
-                cpython::Python::False(py).into_object()
-            }
-        }
-        Yaml::String(string) => {
-            string.into_py_object(py).into_object()
-        }
-        Yaml::Array(array) => {
-            let vec: Vec<_> = array.iter().map(|data| yaml_to_python(data, py)).collect();
-            cpython::PyList::new(py, &vec).into_object()
-
-        }
-        Yaml::Hash(hash) => {
-            let dict = PyDict::new(py);
-            for (key, value) in hash.iter() {
-                dict.set_item(py, yaml_to_python(key,py), yaml_to_python(value, py)).unwrap();
-            }
-            
-            dict.into_object()
-
-        }
-        Yaml::Null => {
-            cpython::Python::None(py)
-        }
-        Yaml::BadValue => {
-            panic!("Received a BadValue");
-        }
-        Yaml::Alias(index) => { // Alias are not supported right now, they are insecure and problematic anyway
-            format!("Alias, index: {}", index).into_py_object(py).into_object()
-        }
-    }
-}
-
-
 fn get_locale_default() -> String {
     for (tag, val) in locale_config::Locale::user_default().tags() {
         if let None = tag {
@@ -467,12 +296,6 @@ fn get_locale_default() -> String {
     }
 
     "".to_string()
-}
-
-fn python_init() {
-    // Add this executable as a Python module
-    let mod_name = std::ffi::CString::new("_lily_impl").unwrap();
-    unsafe {assert!(python3_sys::PyImport_AppendInittab(mod_name.into_raw(), Some(PyInit__lily_impl)) != -1);};
 }
 
 fn main() {
