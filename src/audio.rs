@@ -1,5 +1,7 @@
 use std::time::{SystemTime, Duration, UNIX_EPOCH};
 
+use crate::vars::CLOCK_TOO_EARLY_MSG;
+
 use hound;
 use rodio::source::Source;
 
@@ -10,11 +12,29 @@ pub struct PlayDevice {
     device: rodio::Device
 }
 
+
+pub enum PlayFileError {
+    IoErr(std::io::Error),
+    DecoderError(rodio::decoder::DecoderError)
+}
+
+impl std::convert::From<std::io::Error> for PlayFileError {
+    fn from(err: std::io::Error) -> PlayFileError {
+        PlayFileError::IoErr(err)
+    }
+}
+
+impl std::convert::From<rodio::decoder::DecoderError> for PlayFileError {
+    fn from(err: rodio::decoder::DecoderError) -> PlayFileError {
+        PlayFileError::DecoderError(err)
+    }
+}
+
 impl PlayDevice {
-    pub fn new() -> PlayDevice {
-        let device = rodio::default_output_device().unwrap();
+    pub fn new() -> Option<PlayDevice> {
+        let device = rodio::default_output_device()?;
         
-        PlayDevice {device}
+        Some(PlayDevice {device})
     }
     
     pub fn play(&mut self, buf: &[i16], samples: u32) {
@@ -22,10 +42,12 @@ impl PlayDevice {
         rodio::play_raw(&self.device, source.convert_samples());
     }
     
-    pub fn play_file(&mut self, path: &str) {
-        let file = std::fs::File::open(path).unwrap();
-        let source = rodio::Decoder::new(std::io::BufReader::new(file)).unwrap();
+    pub fn play_file(&mut self, path: &str) -> Result<(), PlayFileError> {
+        let file = std::fs::File::open(path)?;
+        let source = rodio::Decoder::new(std::io::BufReader::new(file))?;
         rodio::play_raw(&self.device, source.convert_samples());
+
+        Ok(())
     }
 }
 
@@ -36,39 +58,39 @@ pub struct RecDevice {
 }
 
 pub trait Recording {
-    fn read(&mut self) -> Option<&[i16]>;
-    fn read_for_ms(&mut self, milis: u16) -> Option<&[i16]>;
+    fn read(&mut self) -> Result<Option<&[i16]>, std::io::Error>;
+    fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, std::io::Error>;
     fn start_recording(&mut self) -> Result<(), std::io::Error>;
     fn stop_recording(&mut self) -> Result<(), std::io::Error>;
 }
 
 impl RecDevice {
-    pub fn new() -> RecDevice {
+    pub fn new() -> Result<RecDevice, std::io::Error> {
         //let host = cpal::default_host();
         //let device = host.default_input_device().expect("Something failed");
 
-        let device = sphinxad::AudioDevice::default_with_sps(16000).unwrap();
+        let device = sphinxad::AudioDevice::default_with_sps(16000)?;
 
-        RecDevice {
+        Ok(RecDevice {
             device,
             buffer: [0i16; 4096],
             last_read: 0
-        }
+        })
 
     }
 
     fn get_millis() -> u128 {
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis()
+        SystemTime::now().duration_since(UNIX_EPOCH).expect(CLOCK_TOO_EARLY_MSG).as_millis()
     }
 }
 
 impl Recording for RecDevice {
-    fn read(&mut self) -> Option<&[i16]> {
+    fn read(&mut self) -> Result<Option<&[i16]>, std::io::Error> {
         self.last_read = Self::get_millis();
-        self.device.read(&mut self.buffer[..]).unwrap()
+        self.device.read(&mut self.buffer[..])
     }
 
-    fn read_for_ms(&mut self, milis: u16) -> Option<&[i16]> {
+    fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, std::io::Error> {
         let curr_time = Self::get_millis();
         let diff_time = (curr_time - self.last_read) as u16;
         if milis > diff_time{
@@ -76,14 +98,14 @@ impl Recording for RecDevice {
             std::thread::sleep(Duration::from_millis(sleep_time));
         }
         else {
-            log::info!("We took {}ms more from what we were asked ({})", diff_time - milis, milis);
+            //log::info!("We took {}ms more from what we were asked ({})", diff_time - milis, milis);
         }
         
         self.read()
     }
 
     fn start_recording(&mut self) -> Result<(), std::io::Error> {
-        self.last_read = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+        self.last_read = SystemTime::now().duration_since(UNIX_EPOCH).expect(CLOCK_TOO_EARLY_MSG).as_millis();
         self.device.start_recording()
     }
     fn stop_recording(&mut self) -> Result<(), std::io::Error> {
@@ -180,7 +202,7 @@ impl Audio {
         }
     }
 
-    pub fn write_wav(&self, filename:&str) {
+    pub fn write_wav(&self, filename:&str) -> Result<(), hound::Error> {
 
         let spec = hound::WavSpec {
             channels: 1,
@@ -188,10 +210,12 @@ impl Audio {
             bits_per_sample: 16,
             sample_format: hound::SampleFormat::Int,
         };
-        let mut writer = hound::WavWriter::create(filename, spec).unwrap();
+        let mut writer = hound::WavWriter::create(filename, spec)?;
         for i in 0 .. self.buffer.len() {
-            writer.write_sample(self.buffer[i]).unwrap();
+            writer.write_sample(self.buffer[i])?;
         }
+
+        Ok(())
     }
 
     pub fn clear(&mut self) {

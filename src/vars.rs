@@ -25,3 +25,6 @@ pub const WRONG_YAML_KEY_MSG: &str = "A Yaml entry must be string convertable, r
 pub const WRONG_YAML_ROOT_MSG: &str = "A 'skill_defs.yaml' file must start with a hash";
 pub const WRONG_YAML_SECTION_TYPE_MSG: &str = "A skill section must be a hash";
 pub const PACKAGES_PATH_ERR_MSG: &str = "Packages folder can't be read";
+pub const AUDIO_REC_START_ERR_MSG: &str = "Failed while trying to start audio recording, please report this";
+pub const AUDIO_REC_STOP_ERR_MSG: &str = "Failed while trying to stop audio recording, please report this";
+pub const CLOCK_TOO_EARLY_MSG :&str = "Somehow the system's clock time is before unix epoch, this is not supported, revise your system's time and the CMOS battery";

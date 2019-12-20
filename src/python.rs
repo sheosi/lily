@@ -95,7 +95,7 @@ fn negotiate_lang(python: Python, input: &str, available: Vec<String>) -> PyResu
 
 fn python_say(python: Python, input: &str) -> PyResult<cpython::PyObject> {
     let audio = TTS.borrow_mut().synth_text(input).unwrap();
-    PlayDevice::new().play(&*audio.buffer, audio.samples_per_second);
+    PlayDevice::new().unwrap().play(&*audio.buffer, audio.samples_per_second);
     Ok(python.None())
 }
 

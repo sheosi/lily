@@ -280,7 +280,6 @@ pub struct TtsFactory;
 impl TtsFactory {
     pub fn load(lang: &LanguageIdentifier, prefer_cloud_tss: bool) -> Box<dyn Tts> {
         
-        //Box::new(EspeakTts::new(lang))
         let local_tts = Box::new(PicoTts::new(lang));
 
         match prefer_cloud_tss {

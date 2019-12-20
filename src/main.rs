@@ -48,7 +48,7 @@ fn record_loop() {
     *TTS.borrow_mut() = tts::TtsFactory::load(&curr_lang, false);
     let snowboy_path = resolve_path(SNOWBOY_DATA_PATH);
 
-    let mut record_device = RecDevice::new();
+    let mut record_device = RecDevice::new().unwrap();
     let mut _play_device = PlayDevice::new();
 
     let mut stt = stt::SttFactory::load(&curr_lang, false);
@@ -62,7 +62,7 @@ fn record_loop() {
     info!("Record start");
 
     // Start recording
-    record_device.start_recording().unwrap();
+    record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
     hotword_detector.start_hotword_check();
 
     order_map.call_order("lily_start");
@@ -70,7 +70,7 @@ fn record_loop() {
     let mut current_speech = crate::audio::Audio{buffer: Vec::new(), samples_per_second: 16000};
 
     loop {
-        let microphone_data = match record_device.read() {
+        let microphone_data = match record_device.read().unwrap() {
             Some(d) => d,
             None => continue,
         };
@@ -80,12 +80,12 @@ fn record_loop() {
                 match hotword_detector.check_hotword(microphone_data) {
                     true => {
                         // Don't record for a moment
-                        record_device.stop_recording().unwrap();
+                        record_device.stop_recording().expect(AUDIO_REC_STOP_ERR_MSG);
                         current_state = ProgState::Listening;
                         stt.begin_decoding().unwrap();
                         info!("Hotword detected");
                         order_map.call_order("init_reco");
-                        record_device.start_recording().unwrap();
+                        record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
                     }
                     _ => {}
                 }
@@ -106,7 +106,7 @@ fn record_loop() {
                             None => warn!("Not recognized"),
                             Some((hypothesis, _utt_id, _score)) => {
                                 if !hypothesis.is_empty() {
-                                    record_device.stop_recording().unwrap();
+                                    record_device.stop_recording().expect(AUDIO_REC_STOP_ERR_MSG);
                                     /*for seg in ps_decoder.seg_iter() {
                                         println!("{} : {}, {}",seg.word(), seg.prob().ascr, seg.prob().lscr);
 
@@ -121,15 +121,20 @@ fn record_loop() {
                                     // what we got
                                     if score >= 0.55 {
                                         info!("Let's call an action");
-                                        order_map.call_order(&result.intent.intent_name.unwrap());
-                                        info!("Action called");
+                                        if let Some(intent_name) = result.intent.intent_name {
+                                            order_map.call_order(&intent_name);
+                                            info!("Action called");
+                                        }
+                                        else {
+                                            order_map.call_order("unrecognized");
+                                        }
                                     }
                                     else {
                                         order_map.call_order("unrecognized");
                                     }
-                                    record_device.start_recording().unwrap();
+                                    record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
                                     hotword_detector.start_hotword_check();
-                                    current_speech.write_wav(resolve_path(LAST_SPEECH_PATH).to_str().unwrap());
+                                    current_speech.write_wav(resolve_path(LAST_SPEECH_PATH).to_str().unwrap()).unwrap();
                                     current_speech.clear();
                                 }
                                 else {
