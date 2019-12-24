@@ -7,6 +7,7 @@ mod vars;
 mod hotword;
 mod python;
 mod packages;
+mod vad;
 
 // Standard library
 use std::rc::Rc;
