@@ -1,5 +1,5 @@
 use std::path::Path;
-use log::info;
+use log::{debug, info};
 
 pub trait HotwordDetector {
     fn start_hotword_check(&mut self);
@@ -54,11 +54,11 @@ impl HotwordDetector for Snowboy {
 
 
             if vad_res == true {
-                info!("I can hear someone");
+                debug!("I can hear someone");
                 self.someone_talking = true;
                 let detector_res = self.detector_check(audio);
                 if detector_res == -2 {
-                    info!("You stopped talking");
+                    debug!("You stopped talking");
                     self.someone_talking = false;
                 } 
                 detector_res == 1
