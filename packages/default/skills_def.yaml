@@ -1,5 +1,4 @@
 include: some_file.yaml # Just a mock up, NYI
-translation: translations.ftl # Just a mock up, NYI
 
 say_hello:
   signals:
@@ -23,6 +22,8 @@ say_name:
 empty_reco: # Called by Lily when active voice ends and nothing is recorded
   actions:
     say: $say_hello_i18n
+
+
 
 # init_reco: # Called by executable when starts listening, the sound is causing problems now so it's disabled
 #   actions:
