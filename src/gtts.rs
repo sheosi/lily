@@ -73,7 +73,7 @@ impl IbmSttEngine {
 		IbmSttEngine{client: reqwest::blocking::Client::new(), api_gateway, api_key}
 	}
 
-	pub fn decode(&mut self, audio: &crate::audio::Audio, model: &str) -> Result<(String, Option<String>, i32), reqwest::Error> {
+	pub fn decode(&mut self, audio: &crate::audio::Audio, model: &str) -> Result<Option<(String, Option<String>, i32)>, reqwest::Error> {
 	    let url_str = format!("https://{}/speech-to-text/api/v1/recognize?model=", self.api_gateway);
 	    let url = reqwest::Url::parse(&format!("{}{}", url_str, model)).unwrap();
 	    //audio.write_wav("temp_stt.wav").unwrap();
@@ -85,16 +85,24 @@ impl IbmSttEngine {
 	    let res = self.client.post(url).body(as_wav).header("Content-Type", "audio/wav").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send()?.text()?;
 	    log::info!("{}", res);
 	    let response: WattsonResponse = serde_json::from_str(&res).unwrap();
-	    let alternatives = &response.results[response.result_index as usize].alternatives;
-	    let res_str = 
-	    	if !alternatives.is_empty() {
-	    		&response.results[response.result_index as usize].alternatives[0].transcript
+	    let res = {
+	    	if !response.results.is_empty() {
+		    	let alternatives = &response.results[response.result_index as usize].alternatives;
+
+		    	if !alternatives.is_empty() {
+		    		let res_str = &alternatives[0].transcript;
+		    		Some((res_str.to_string() , None, 0))
+		    	}
+		    	else {
+		    		None
+		    	}
 	    	}
 	    	else {
-	    		""
-	    	};
+	    		None
+	    	}
+	    };
 
-	    Ok((res_str.to_string() , None, 0))
+	    Ok(res)
 	}
 }
 

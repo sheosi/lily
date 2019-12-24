@@ -1,10 +1,14 @@
 use core::fmt::Display;
 
 use crate::vars::{STT_DATA_PATH, resolve_path};
+use crate::vad::Vad;
+use crate::audio::Audio;
 
 use unic_langid::{LanguageIdentifier, langid, langids};
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use log::info;
+
+const SOUND_SPS: u32 = 16000;
 
 #[derive(Debug, Clone)]
 pub enum SttErrCause {
@@ -14,6 +18,22 @@ pub enum SttErrCause {
 #[derive(Debug, Clone)]
 pub struct SttError {
     cause: SttErrCause
+}
+
+impl std::fmt::Display for SttError {
+    fn fmt (&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.cause {
+            SttErrCause::UNKNOWN => {
+                write!(f, "PocketSphinx error, see log for details")
+            }
+        }
+    }
+}
+
+impl std::convert::From<pocketsphinx::Error> for SttError {
+    fn from(_err: pocketsphinx::Error) -> Self {
+        SttError{cause: SttErrCause::UNKNOWN}
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -41,10 +61,16 @@ pub enum DecodeState {
     Finished(Option<(String, Option<String>, i32)>),
 }
 
-
-pub trait Stt {
+// An Stt which accepts an Stream
+pub trait SttStream {
     fn begin_decoding(&mut self) -> Result<(),SttError>;
     fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError>;
+    fn get_info(&self) -> SttInfo;
+}
+
+// An Stt which accepts only audio batches
+pub trait SttBatched {
+    fn decode(&mut self, audio: &[i16]) -> Result<Option<(String, Option<String>, i32)>, SttError>;
     fn get_info(&self) -> SttInfo;
 }
 
@@ -87,23 +113,7 @@ impl Pocketsphinx {
     }
 }
 
-impl std::fmt::Display for SttError {
-    fn fmt (&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self.cause {
-            SttErrCause::UNKNOWN => {
-                write!(f, "PocketSphinx error, see log for details")
-            }
-        }
-    }
-}
-
-impl std::convert::From<pocketsphinx::Error> for SttError {
-    fn from(_err: pocketsphinx::Error) -> Self {
-        SttError{cause: SttErrCause::UNKNOWN}
-    }
-}
-
-impl Stt for Pocketsphinx {
+impl SttStream for Pocketsphinx {
     fn begin_decoding(&mut self) -> Result<(), SttError> {
         self.decoder.start_utt(None)?;
         Ok(())
@@ -134,19 +144,120 @@ impl Stt for Pocketsphinx {
     }
 }
 
+impl Vad for Pocketsphinx {
+    fn reset(&mut self) {
+        self.begin_decoding().unwrap();
+    }
+
+    fn is_someone_talking(&mut self, audio: &[i16]) -> bool {
+        self.decode(audio).unwrap();
+        self.is_speech_started
+    }
+}
+
+pub struct SttBatcher<V: Vad, S: SttBatched> {
+    vad: V,
+    copy_audio: crate::audio::Audio,
+    batch_stt: S,
+    someone_was_talking: bool
+}
+
+impl<V: Vad, S: SttBatched> SttBatcher<V, S> {
+    fn new(vad: V, batch_stt: S) -> Self {
+        Self {vad, copy_audio: crate::audio::Audio::new_empty(SOUND_SPS), batch_stt, someone_was_talking: false}
+    }
+}
+
+impl<V: Vad, S: SttBatched> SttStream for SttBatcher<V, S> {
+    fn begin_decoding(&mut self) -> Result<(),SttError> {
+        self.copy_audio.clear();
+        self.vad.reset();
+        self.someone_was_talking = false;
+
+        Ok(())
+    }
+
+    fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
+        self.copy_audio.append_audio(audio, SOUND_SPS);
+        if self.vad.is_someone_talking(audio) {
+            if self.someone_was_talking {
+                // We are still getting talke
+                Ok(DecodeState::NotFinished)
+            }
+            else {
+                self.someone_was_talking = true;
+                Ok(DecodeState::StartListening)
+            }
+        }
+        else {
+            if self.someone_was_talking {
+                let res = self.batch_stt.decode(&self.copy_audio.buffer)?;
+                Ok(DecodeState::Finished(res))
+            }
+            else {
+                Ok(DecodeState::NotStarted)
+            }
+
+        }
+    }
+
+    fn get_info(&self) -> SttInfo {
+        self.batch_stt.get_info()
+    }
+
+}
+
+pub struct SttOnlineInterface<S: SttBatched, F: SttStream> {
+    online_stt: S,
+    fallback: F,
+    copy_audio: crate::audio::Audio,
+}
+
+impl<S: SttBatched, F: SttStream> SttOnlineInterface<S, F> {
+    fn new(online_stt: S,fallback: F) -> Self {
+        Self{online_stt, fallback, copy_audio: Audio::new_empty(SOUND_SPS)}
+    }
+}
+
+impl<S: SttBatched, F: SttStream> SttStream for SttOnlineInterface<S, F> {
+    fn begin_decoding(&mut self) -> Result<(),SttError> {
+        self.copy_audio.clear();
+        self.fallback.begin_decoding()?;
+        Ok(())
+
+    }
+
+    fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
+        self.copy_audio.append_audio(audio, SOUND_SPS);
+        let res = self.fallback.decode(audio)?;
+        match res {
+            DecodeState::Finished(local_res) => {
+                match self.online_stt.decode(&self.copy_audio.buffer) {
+                    Ok(ok_res) => Ok(DecodeState::Finished(ok_res)),
+                    Err(_) => Ok(DecodeState::Finished(local_res))
+                }
+
+            },
+            _ => Ok(res)
+        }
+    }
+
+    fn get_info(&self) -> SttInfo {
+        self.online_stt.get_info()
+    }
+
+}
+
 
 pub struct IbmStt {
     engine: crate::gtts::IbmSttEngine,
-    model: String,
-    fallback: Box<dyn Stt>,
-    copy_audio: crate::audio::Audio
+    model: String
 }
 
 impl IbmStt {
 
-
-    pub fn new(lang: &LanguageIdentifier, fallback: Box<dyn Stt>, api_gateway: String, api_key: String) -> Self{
-        IbmStt{engine: crate::gtts::IbmSttEngine::new(api_gateway, api_key), model: Self::model_from_lang(lang).to_string(), fallback, copy_audio: crate::audio::Audio{buffer: Vec::new(), samples_per_second: 16000}}
+    pub fn new(lang: &LanguageIdentifier, api_gateway: String, api_key: String) -> Self {
+        IbmStt{engine: crate::gtts::IbmSttEngine::new(api_gateway, api_key), model: Self::model_from_lang(lang).to_string()}
     }
 
     fn model_from_lang(lang: &LanguageIdentifier) -> String {
@@ -161,26 +272,10 @@ impl IbmStt {
     }
 }
 
-impl Stt for IbmStt {
-    fn begin_decoding(&mut self) -> Result<(),SttError> {
-        self.copy_audio.clear();
-        self.fallback.begin_decoding()?;
-        Ok(())
-    }
+impl SttBatched for IbmStt {
     
-    fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
-        self.copy_audio.append_audio(audio, 16000);
-        let res = self.fallback.decode(audio)?;
-        match res {
-            DecodeState::Finished(local_res) => {
-                match self.engine.decode(&self.copy_audio, &self.model) {
-                    Ok(ok_res) => Ok(DecodeState::Finished(Some(ok_res))),
-                    Err(_) => Ok(DecodeState::Finished(local_res))
-                }
-
-            },
-            _ => Ok(res)
-        }
+    fn decode(&mut self, audio: &[i16]) -> Result<Option<(String, Option<String>, i32)>, SttError> {
+        Ok(self.engine.decode(&Audio{buffer: audio.to_vec(), samples_per_second: SOUND_SPS}, &self.model).unwrap())
     }
 
     fn get_info(&self) -> SttInfo {
@@ -210,33 +305,35 @@ impl DeepspeechStt {
 }
 
 #[cfg(feature = "devel_deepspeech")]
-impl Stt for DeepspeechStt {
-    fn begin_decoding(&mut self) -> Result<(),SttError> {
-    }
-
+impl SttBatched for DeepspeechStt {
     fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
         Ok(DecodeState::Finished(m.speech_to_text(&audio_buf).unwrap()))
+    }
+
+    fn get_info() -> SttInfo {
+        SttInfo {name: "DeepSpeech", is_online: false}
     }
 }
 
 pub struct SttFactory;
 
 impl SttFactory {
-	pub fn load(lang: &LanguageIdentifier, prefer_cloud: bool, gateway_key: Option<(String, String)>) -> Box<dyn Stt>{
+	pub fn load(lang: &LanguageIdentifier, prefer_cloud: bool, gateway_key: Option<(String, String)>) -> Box<dyn SttStream> {
 
-		let local_stt = Box::new(Pocketsphinx::new(lang));
+		let local_stt = Pocketsphinx::new(lang);
         if prefer_cloud {
             info!("Prefer online Stt");
             if let Some((api_gateway, api_key)) = gateway_key {
                 info!("Construct online Stt");
-                Box::new(IbmStt::new(lang, local_stt, api_gateway.to_string(), api_key.to_string()))
+                Box::new(SttOnlineInterface::new(IbmStt::new(lang, api_gateway.to_string(), api_key.to_string()), local_stt))
             }
             else {
-                local_stt
+                Box::new(local_stt)
             }
         }
         else {
-            local_stt
+            Box::new(local_stt)
         }
 	}
 }
+
