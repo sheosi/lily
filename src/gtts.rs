@@ -85,7 +85,14 @@ impl IbmSttEngine {
 	    let res = self.client.post(url).body(as_wav).header("Content-Type", "audio/wav").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send()?.text()?;
 	    log::info!("{}", res);
 	    let response: WattsonResponse = serde_json::from_str(&res).unwrap();
-	    let res_str = &response.results[response.result_index as usize].alternatives[0].transcript;
+	    let alternatives = &response.results[response.result_index as usize].alternatives;
+	    let res_str = 
+	    	if !alternatives.is_empty() {
+	    		&response.results[response.result_index as usize].alternatives[0].transcript
+	    	}
+	    	else {
+	    		""
+	    	};
 
 	    Ok((res_str.to_string() , None, 0))
 	}
