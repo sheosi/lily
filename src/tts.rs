@@ -1,7 +1,10 @@
-use crate::vars::{PICO_DATA_PATH, resolve_path};
+use core::fmt::Display;
 use core::cell::RefCell;
 use std::rc::Rc;
+
+use crate::vars::{PICO_DATA_PATH, resolve_path};
 use crate::audio::Audio;
+
 use unic_langid::{LanguageIdentifier, langid, langids};
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 
@@ -13,6 +16,24 @@ pub enum TtsErrCause {
 #[derive(Debug, Clone)]
 pub struct TtsError {
     cause: TtsErrCause
+}
+
+#[derive(Debug, Clone)]
+pub struct TtsInfo {
+    pub name: String,
+    pub is_online: bool
+}
+
+impl Display for TtsInfo {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
+        let online_str = {
+            if self.is_online {"online"}
+            else {"local"}
+
+        };
+        
+        write!(formatter, "{}({})", self.name, online_str)
+    }
 }
 
 impl std::convert::From<std::ffi::NulError> for TtsError {
@@ -33,6 +54,7 @@ impl std::fmt::Display for TtsError {
 
 pub trait Tts {
     fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError>;
+    fn get_info(&self) -> TtsInfo;
 }
 
 #[cfg(feature = "extra_langs_tts")]
@@ -179,6 +201,13 @@ impl Tts for PicoTts {
 
         Ok(Audio{buffer: pcm_data, samples_per_second: 16000})
     }
+
+    fn get_info(&self) -> TtsInfo {
+        TtsInfo {
+            name: "Pico Tts".to_string(),
+            is_online: false
+        }
+    }
 }
 
 #[cfg(feature = "google_tts")]
@@ -217,6 +246,13 @@ impl Tts for GTts {
             }
         }
     }
+
+    fn get_info() -> TtsInfo {
+        TtsInfo {
+            name: "Google Translate",
+            is_online: true
+        }
+    }
 }
 
 struct IbmTts {
@@ -226,8 +262,8 @@ struct IbmTts {
 }
 
 impl IbmTts {
-    pub fn new(lang: &LanguageIdentifier, fallback_tts: Box<dyn Tts>) -> Self {
-        IbmTts{engine: crate::gtts::IbmTtsEngine::new(), fallback_tts, curr_voice: Self::make_tts_voice(&Self::lang_neg(lang)).to_string()}
+    pub fn new(lang: &LanguageIdentifier, fallback_tts: Box<dyn Tts>, api_gateway: String, api_key: String) -> Self {
+        IbmTts{engine: crate::gtts::IbmTtsEngine::new(api_gateway, api_key), fallback_tts, curr_voice: Self::make_tts_voice(&Self::lang_neg(lang)).to_string()}
     }
 
     // Accept only negotiated LanguageIdentifiers
@@ -258,6 +294,13 @@ impl Tts for IbmTts {
             }
         }
     }
+
+    fn get_info(&self) -> TtsInfo {
+        TtsInfo {
+            name: "IBM Speech To Text".to_string(),
+            is_online: true
+        }
+    }
 }
 
 
@@ -273,17 +316,31 @@ impl Tts for DummyTts {
     fn synth_text(&mut self, _input: &str) -> Result<Audio, TtsError> {
         Ok(Audio::new_empty(16000))
     }
+
+    fn get_info(&self) -> TtsInfo {
+        TtsInfo{
+            name: "Dummy Synthesizer".to_string(),
+            is_online: false
+        }
+    }
 }
 
 pub struct TtsFactory;
 
 impl TtsFactory {
-    pub fn load(lang: &LanguageIdentifier, prefer_cloud_tss: bool) -> Box<dyn Tts> {
+    pub fn load(lang: &LanguageIdentifier, prefer_cloud_tss: bool, gateway_key: Option<(String, String)>) -> Box<dyn Tts> {
         
         let local_tts = Box::new(PicoTts::new(lang));
 
         match prefer_cloud_tss {
-            true => {Box::new(IbmTts::new(lang, local_tts))},
+            true => {
+                if let Some((api_gateway, api_key)) = gateway_key {
+                    Box::new(IbmTts::new(lang, local_tts, api_gateway.to_string(), api_key.to_string()))
+                }
+                else {
+                    local_tts
+                }
+            },
             false => {local_tts}
         }
     }

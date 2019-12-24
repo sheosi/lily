@@ -10,6 +10,7 @@ pub const SNOWBOY_DATA_PATH: &str = "resources/hotword";
 pub const PYTHON_SDK_PATH: &str = "resources/python";
 pub const PACKAGES_PATH: &str = "packages";	
 pub const LAST_SPEECH_PATH: &str = "last_speech.wav";
+pub const MAIN_CONF_PATH: &str = "conf.yaml";
 
 
 ref_thread_local! {

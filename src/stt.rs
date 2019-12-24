@@ -1,6 +1,10 @@
-use unic_langid::{LanguageIdentifier, langid, langids};
+use core::fmt::Display;
+
 use crate::vars::{STT_DATA_PATH, resolve_path};
+
+use unic_langid::{LanguageIdentifier, langid, langids};
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
+use log::info;
 
 #[derive(Debug, Clone)]
 pub enum SttErrCause {
@@ -12,6 +16,23 @@ pub struct SttError {
     cause: SttErrCause
 }
 
+#[derive(Debug, Clone)]
+pub struct SttInfo {
+    pub name: String,
+    pub is_online: bool
+}
+
+impl Display for SttInfo {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
+        let online_str = {
+            if self.is_online {"online"}
+            else {"local"}
+
+        };
+        
+        write!(formatter, "{}({})", self.name, online_str)
+    }
+}
 
 pub enum DecodeState {
     NotStarted, 
@@ -24,6 +45,7 @@ pub enum DecodeState {
 pub trait Stt {
     fn begin_decoding(&mut self) -> Result<(),SttError>;
     fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError>;
+    fn get_info(&self) -> SttInfo;
 }
 
 pub struct Pocketsphinx {
@@ -107,6 +129,9 @@ impl Stt for Pocketsphinx {
             }
         }
     }
+    fn get_info(&self) -> SttInfo {
+        SttInfo {name: "Pocketsphinx".to_string(), is_online: false}
+    }
 }
 
 
@@ -120,8 +145,8 @@ pub struct IbmStt {
 impl IbmStt {
 
 
-    pub fn new(lang: &LanguageIdentifier, fallback: Box<dyn Stt>) -> Self{
-        IbmStt{engine: crate::gtts::IbmSttEngine::new(), model: Self::model_from_lang(lang).to_string(), fallback, copy_audio: crate::audio::Audio{buffer: Vec::new(), samples_per_second: 16000}}
+    pub fn new(lang: &LanguageIdentifier, fallback: Box<dyn Stt>, api_gateway: String, api_key: String) -> Self{
+        IbmStt{engine: crate::gtts::IbmSttEngine::new(api_gateway, api_key), model: Self::model_from_lang(lang).to_string(), fallback, copy_audio: crate::audio::Audio{buffer: Vec::new(), samples_per_second: 16000}}
     }
 
     fn model_from_lang(lang: &LanguageIdentifier) -> String {
@@ -157,16 +182,58 @@ impl Stt for IbmStt {
             _ => Ok(res)
         }
     }
+
+    fn get_info(&self) -> SttInfo {
+        SttInfo {name: "Ibm's Speech To Text".to_string(), is_online: true}
+    }
+}
+
+
+// Deepspeech
+#[cfg(feature = "devel_deepspeech")]
+pub struct DeepSpeechStt {
+    model: deepspeech::Model
+}
+
+#[cfg(feature = "devel_deepspeech")]
+impl DeepspeechStt { 
+    pub fn new() -> Self { 
+        const BEAM_WIDTH:u16 = 500;
+        const LM_WEIGHT:f32 = 16_000;
+
+        let mut model = deepspeech::Model::load_from_files(&dir_path.join("output_graph.pb"), BEAM_WIDTH).unwrap();
+        model.enable_decoder_with_lm(&dir_path.join("lm.binary"),&dir_path.join("trie"), LM_WEIGHT, VALID_WORD_COUNT_WEIGHT);
+
+
+        Self {model}
+    }
+}
+
+#[cfg(feature = "devel_deepspeech")]
+impl Stt for DeepspeechStt {
+    fn begin_decoding(&mut self) -> Result<(),SttError> {
+    }
+
+    fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
+        Ok(DecodeState::Finished(m.speech_to_text(&audio_buf).unwrap()))
+    }
 }
 
 pub struct SttFactory;
 
 impl SttFactory {
-	pub fn load(lang: &LanguageIdentifier, prefer_cloud: bool) -> Box<dyn Stt>{
+	pub fn load(lang: &LanguageIdentifier, prefer_cloud: bool, gateway_key: Option<(String, String)>) -> Box<dyn Stt>{
 
 		let local_stt = Box::new(Pocketsphinx::new(lang));
         if prefer_cloud {
-            Box::new(IbmStt::new(lang, local_stt))
+            info!("Prefer online Stt");
+            if let Some((api_gateway, api_key)) = gateway_key {
+                info!("Construct online Stt");
+                Box::new(IbmStt::new(lang, local_stt, api_gateway.to_string(), api_key.to_string()))
+            }
+            else {
+                local_stt
+            }
         }
         else {
             local_stt

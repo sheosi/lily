@@ -6,9 +6,6 @@ use serde::Deserialize;
 #[cfg(feature = "google_tts")]
 use std::io::Write;
 
-const IBM_API_KEY: &str = "";
-const IBM_API_GATEWAY: &str = "";
-
 #[derive(Deserialize)]
 struct WattsonResponse {
 
@@ -65,49 +62,53 @@ impl GttsEngine {
 }
 
 pub struct IbmSttEngine {
-	client: reqwest::blocking::Client
+	client: reqwest::blocking::Client,
+	api_gateway: String,
+	api_key: String
 }
 
 impl IbmSttEngine {
 
-	pub fn new() -> Self {
-		IbmSttEngine{client: reqwest::blocking::Client::new(), }
+	pub fn new(api_gateway: String, api_key: String) -> Self {
+		IbmSttEngine{client: reqwest::blocking::Client::new(), api_gateway, api_key}
 	}
 
 	pub fn decode(&mut self, audio: &crate::audio::Audio, model: &str) -> Result<(String, Option<String>, i32), reqwest::Error> {
-	    let url_str = format!("https://{}/speech-to-text/api/v1/recognize?model=", IBM_API_GATEWAY);
+	    let url_str = format!("https://{}/speech-to-text/api/v1/recognize?model=", self.api_gateway);
 	    let url = reqwest::Url::parse(&format!("{}{}", url_str, model)).unwrap();
-	    audio.write_wav("temp_stt.wav");
+	    //audio.write_wav("temp_stt.wav").unwrap();
+	    //std::process::Command::new("sox").arg("temp_stt.wav").arg("temp_stt.flac").spawn().expect("sox failed").wait().expect("sox failed 2");
+	    let as_wav = audio.to_wav();
 
-	    std::process::Command::new("sox").arg("temp_stt.wav").arg("temp_stt.flac").spawn().expect("sox failed").wait().expect("sox failed 2");
-
-	    let file = std::fs::File::open("temp_stt.flac").unwrap();
-	    let res = self.client.post(url).body(file).header("Content-Type", "audio/flac").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", IBM_API_KEY)))).send()?.text()?;
+	    //let file = std::fs::File::open("temp_stt.flac").unwrap();
+	    //let res = self.client.post(url).body(file).header("Content-Type", "audio/wav").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send()?.text()?;
+	    let res = self.client.post(url).body(as_wav).header("Content-Type", "audio/wav").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send()?.text()?;
 	    log::info!("{}", res);
 	    let response: WattsonResponse = serde_json::from_str(&res).unwrap();
 	    let res_str = &response.results[response.result_index as usize].alternatives[0].transcript;
-	    println!("Wattson: {}", &res_str);
 
 	    Ok((res_str.to_string() , None, 0))
 	}
 }
 
 pub struct IbmTtsEngine {
-	client: reqwest::blocking::Client
+	client: reqwest::blocking::Client,
+	api_gateway: String,
+	api_key: String
 }
 
 impl IbmTtsEngine {
 
-	pub fn new() -> Self {
-		IbmTtsEngine{client: reqwest::blocking::Client::new()}
+	pub fn new(api_gateway: String, api_key: String) -> Self {
+		IbmTtsEngine{client: reqwest::blocking::Client::new(), api_gateway, api_key}
 	}
 
 	pub fn synth(&mut self, text: &str, voice: &str) -> Result<(), reqwest::Error> {
-	    let url_str = format!("https://{}/text-to-speech/api/v1/synthesize?voice=", IBM_API_GATEWAY);
+	    let url_str = format!("https://{}/text-to-speech/api/v1/synthesize?voice=", self.api_gateway);
 	    let url = reqwest::Url::parse(&format!("{}{}&text={}", url_str, voice, text)).unwrap();
 
 		let mut buf: Vec<u8> = vec![];
-	    self.client.post(url).header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", IBM_API_KEY)))).send().unwrap().copy_to(&mut buf)?;
+	    self.client.post(url).header("accept", "audio/mp3").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send().unwrap().copy_to(&mut buf)?;
 	    //let response: WattsonResponse = serde_json::from_str(&res).unwrap();
 	    //let res_str = &response.results[response.result_index as usize].alternatives[0].transcript;
 

@@ -1,4 +1,5 @@
 use std::time::{SystemTime, Duration, UNIX_EPOCH};
+use std::convert::TryInto;
 
 use crate::vars::CLOCK_TOO_EARLY_MSG;
 
@@ -216,6 +217,29 @@ impl Audio {
         }
 
         Ok(())
+    }
+
+    pub fn to_wav(&self) -> Vec<u8> {
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: self.samples_per_second,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut buffer: Vec<u8> = Vec::new();
+        {
+            let cursor = std::io::Cursor::new(&mut buffer);
+            let mut writer = hound::WavWriter::new(cursor,spec).unwrap();
+            let mut sample_writer = writer.get_i16_writer(self.buffer.len().try_into().unwrap());
+
+            for i in 0 .. self.buffer.len() {
+                sample_writer.write_sample(self.buffer[i]);
+            }
+
+            sample_writer.flush().unwrap();
+        }
+
+        buffer
     }
 
     pub fn clear(&mut self) {
