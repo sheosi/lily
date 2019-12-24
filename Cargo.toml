@@ -8,11 +8,14 @@ edition = "2018"
 
 [dependencies]
 yaml-rust = "^0.4" # Load configuration files from this program and skills
+serde_yaml = "^0.8"
 fluent = "^0.9" # Translations and templating
-serde = "^1.0" # For serde_json
+serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
 
 rsnowboy = {git = "https://github.com/sheosi/rsnowboy"} # Hotword detector
+vad = "0.1.5"
 pocketsphinx = "^0.6.0" # Offline Stt
+#deepspeech = {version = "^0.6", optional = true} # More correct and better (also slower) Stt 
 sphinxad = "^0.1" # Recording library
 cpal = {version = "^0.10", optional = true} # For recording (future substitute of sphinxad)
 hound = "^3.4" # Write to wav
@@ -24,8 +27,8 @@ cpython = "^0.3" # Load actions, in the future when Pyo3 works with stable we'll
 python3-sys = "^0.3" # For PyImport_AppendInitTab
 
 ref_thread_local = "^0.0" # For having the TTS as a global in a thread local way
-ttspico = {git = "https://github.com/sheosi/ttspico-rs", branch="devel"} # Main Tts (only for some languages)
-espeak-sys = {git = "https://github.com/sheosi/espeak-sys", optional = true} # Auxiliar Tts (speaks any language)
+ttspico = "^0.1" # Main Tts (only for some languages)
+espeak-sys = {version = "^0.0", optional = true} # Auxiliar Tts (speaks any language)
 libc = "^0.2" # Required to interface with espeak-sys
 rodio = "^0.10" # Playback library
 
@@ -47,3 +50,4 @@ default = []
 extra_langs_tts = ["espeak-sys"]
 google_tts = []
 devel_cpal_rec = ["cpal"]
+devel_deepspeech = []#devel_deepspeech = ["deepspeech"]
