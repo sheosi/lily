@@ -1,11 +1,19 @@
-use crate::TTS;
+use std::rc::Rc;
 use std::path::Path;
+
+use crate::TTS;
+use crate::audio::PlayDevice;
+
 use unic_langid::LanguageIdentifier;
 use fluent_langneg::negotiate::{negotiate_languages, NegotiationStrategy};
 use cpython::{Python, PyList, PyDict, PyString, PythonObject, PyResult, ToPyObject, py_module_initializer, py_fn, py_method_def, FromPyObject};
 use yaml_rust::Yaml;
-use crate::audio::PlayDevice;
-use ref_thread_local::RefThreadLocal;
+use ref_thread_local::{ref_thread_local, RefThreadLocal};
+
+ref_thread_local! {
+    pub static managed PYTHON_LILY_PKG_NONE: Rc<String> = Rc::new("<None>".to_string());
+    pub static managed PYTHON_LILY_PKG_CURR: Rc<String> = PYTHON_LILY_PKG_NONE.borrow().clone();
+}
 
 pub fn yaml_to_python(yaml: &yaml_rust::Yaml, py: Python) -> cpython::PyObject {
     match yaml {
@@ -83,9 +91,18 @@ py_module_initializer!(_lily_impl, init__lily_impl, PyInit__lily_impl, |py, m| {
     m.add(py, "__doc__", "Internal implementations of Lily's Python functions")?;
     m.add(py, "_say", py_fn!(py, python_say(input: &str)))?;
     m.add(py, "__negotiate_lang", py_fn!(py, negotiate_lang(input: &str, available: Vec<String>)))?;
+    m.add(py, "log_error", py_fn!(py, log_error(input: &str)))?;
+    m.add(py, "log_warn", py_fn!(py, log_warn(input: &str)))?;
+    m.add(py, "log_info", py_fn!(py, log_info(input: &str)))?;
+    m.add(py, "__get_curr_lily_package", py_fn!(py, get_current_package()))?;
 
     Ok(())
 });
+
+fn get_current_package(py: Python) -> PyResult<cpython::PyString> {
+    let curr_pkg_string = &*PYTHON_LILY_PKG_CURR.borrow().clone();
+    Ok(curr_pkg_string.clone().into_py_object(py))
+}
 
 fn negotiate_lang(python: Python, input: &str, available: Vec<String>) -> PyResult<cpython::PyString> {
     let in_lang: LanguageIdentifier = input.parse().unwrap();
@@ -96,6 +113,24 @@ fn negotiate_lang(python: Python, input: &str, available: Vec<String>) -> PyResu
 fn python_say(python: Python, input: &str) -> PyResult<cpython::PyObject> {
     let audio = TTS.borrow_mut().synth_text(input).unwrap();
     PlayDevice::new().unwrap().play(&*audio.buffer, audio.samples_per_second);
+    Ok(python.None())
+}
+
+fn log_info(python: Python, input: &str) -> PyResult<cpython::PyObject> {
+    log::info!("{}", input);
+
+    Ok(python.None())
+}
+
+fn log_warn(python: Python, input: &str) -> PyResult<cpython::PyObject> {
+    log::warn!("{}", input);
+
+    Ok(python.None())
+}
+
+fn log_error(python: Python, input: &str) -> PyResult<cpython::PyObject>  {
+    log::error!("{}", input);
+
     Ok(python.None())
 }
 

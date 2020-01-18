@@ -1,20 +1,28 @@
 // Standard library
 use std::path::Path;
+use std::rc::Rc;
 
 // This crate
 use crate::vars::{resolve_path, NLU_TRAIN_SET_PATH, NLU_ENGINE_PATH, PYTHON_SDK_PATH, PACKAGES_PATH_ERR_MSG, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
 use crate::nlu::NluManager;
 use crate::python::try_translate;
-use crate::{OrderMap, ActionSet, ActionRegistry};
+use crate::extensions::{OrderMap, ActionSet, ActionRegistry};
 
 // Other crates
 use yaml_rust::yaml::{YamlLoader, Hash};
 use unic_langid::LanguageIdentifier;
 use log::{info, warn};
 use cpython::Python;
+use ref_thread_local::RefThreadLocal;
 
 pub fn load_package(order_map: &mut OrderMap, nlu_man: &mut NluManager, action_registry: &ActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) {
     info!("Loading package: {}", path.to_str().unwrap());
+
+    // Set current Python module
+    let pkg_name = Rc::new(path.file_name().unwrap().to_str().unwrap().to_string());
+    let pkg_path = Rc::new(path.to_path_buf());
+    *crate::python::PYTHON_LILY_PKG_CURR.borrow_mut() = pkg_name.clone();
+
     let yaml_path = path.join("skills_def.yaml");
     if yaml_path.is_file() {
         // Load Yaml
@@ -62,7 +70,7 @@ pub fn load_package(order_map: &mut OrderMap, nlu_man: &mut NluManager, action_r
                 for (act_name, act_arg) in actions.iter() {
                     let gil = Python::acquire_gil();
                     let py = gil.python();
-                    act_set.borrow_mut().add_action(py, act_name, act_arg, &action_registry);
+                    act_set.borrow_mut().add_action(py, act_name, act_arg, &action_registry, pkg_name.clone(), pkg_path.clone());
                 }
                 for (sig_name, sig_arg) in signals.iter() {
 
@@ -92,13 +100,18 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> OrderMap {
     let mut order_map = OrderMap::new();
     let mut nlu_man = NluManager::new();
 
-    let action_registry = ActionRegistry::new(&resolve_path(PYTHON_SDK_PATH), curr_lang);
+    // Get GIL
+    let gil = Python::acquire_gil();
+    let py = gil.python();
+
+    let action_registry = ActionRegistry::new_with_no_trans(py, &resolve_path(PYTHON_SDK_PATH));
+
 
     info!("PACKAGES_PATH:{}", path.to_str().unwrap());
     for entry in std::fs::read_dir(path).expect(PACKAGES_PATH_ERR_MSG) {
         let entry = entry.unwrap().path();
         if entry.is_dir() {
-            load_package(&mut order_map, &mut nlu_man, &action_registry.clone_try_adding(&entry.join("python"), curr_lang), &entry, curr_lang);
+            load_package(&mut order_map, &mut nlu_man, &action_registry.clone_try_adding(py, &entry.join("python"), curr_lang), &entry, curr_lang);
         }
     }
 

@@ -67,16 +67,27 @@ impl NluManager {
     	let train_set = serde_json::to_string(&train_set).unwrap();
 
     	// Write to file
-    	let mut train_file = std::fs::OpenOptions::new().read(true).write(true).create(true).open(train_set_path).unwrap();
-    	let mut old_train_file: String = String::new();
-    	train_file.read_to_string(&mut old_train_file).unwrap();
+    	let mut train_file = std::fs::OpenOptions::new().read(true).write(true).create(true).open(train_set_path);
+        let should_write = {
+            if let Ok(train_file) = &mut train_file {
+                let mut old_train_file: String = String::new();
+                train_file.read_to_string(&mut old_train_file).unwrap();
+                old_train_file != train_set
+            }
+            else {
+                std::fs::create_dir_all(train_set_path.parent().unwrap()).unwrap();
+                train_file = std::fs::OpenOptions::new().read(true).write(true).create(true).open(train_set_path);
+
+                false
+            }
+        };
+    	
         let engine_path = Path::new(engine_path);
 
     	// Make sure it's different, otherwise no need to train it
-    	if old_train_file != train_set || !engine_path.is_dir() {
+    	if should_write {
             // Create parents
             std::fs::create_dir_all(engine_path.parent().unwrap()).unwrap();
-            std::fs::create_dir_all(train_set_path.parent().unwrap()).unwrap();
 
             //Clean engine folder
             if engine_path.is_dir() {
@@ -84,6 +95,7 @@ impl NluManager {
             }
 
             // Write train file
+            let mut train_file = train_file.unwrap();
             train_file.set_len(0).unwrap(); // Truncate file
             train_file.seek(SeekFrom::Start(0)).unwrap(); // Start from the start
 	    	train_file.write_all(train_set[..].as_bytes()).unwrap();

@@ -8,26 +8,23 @@ mod hotword;
 mod python;
 mod packages;
 mod vad;
+mod extensions;
 
 // Standard library
-use std::rc::Rc;
-use core::cell::RefCell;
-use std::collections::HashMap;
 use std::path::Path;
 
 // This crate
 use crate::audio::{RecDevice, PlayDevice, Recording};
-use crate::python::{yaml_to_python, add_to_sys_path, python_init};
 use crate::hotword::{HotwordDetector, Snowboy};
 use crate::nlu::Nlu;
 use crate::vars::*;
 use crate::packages::load_packages;
+use crate::python::python_init;
 
 // Other crates
 use log::{info, warn};
 use ref_thread_local::{RefThreadLocal, ref_thread_local};
 use unic_langid::LanguageIdentifier;
-use cpython::{Python, PyTuple, PyDict, ObjectProtocol, PyClone};
 use serde::Deserialize;
 
 // To be shared on the same thread
@@ -230,133 +227,6 @@ fn init_log() {
             .map(|()| log::set_max_level(log_level)).ok();
             //simple_logger::init().unwrap();
 
-}
-
-pub struct ActionRegistry {
-    map: HashMap<String, cpython::PyObject>
-}
-impl Clone for ActionRegistry {
-    fn clone(&self) -> Self {
-        // Get GIL
-        let gil = Python::acquire_gil();
-        let python = gil.python();
-
-        let dup_refs = |pair:(&String, &cpython::PyObject)| {
-            let (key, val) = pair;
-            (key.to_owned(), val.clone_ref(python))
-        };
-
-        let new_map: HashMap<String, cpython::PyObject> = self.map.iter().map(dup_refs).collect();
-        Self{map: new_map}
-    }
-}
-
-impl ActionRegistry {
-
-    fn new(actions_path: &Path, curr_lang: &LanguageIdentifier) -> Self {
-        let mut reg = Self{map: HashMap::new()};
-        reg.add_folder(actions_path, curr_lang);
-        reg
-    }
-
-    fn add_folder(&mut self, actions_path: &Path, curr_lang: &LanguageIdentifier) {
-        // Get GIL
-        let gil = Python::acquire_gil();
-        let python = gil.python();
-
-        // Add folder to sys.path
-        add_to_sys_path(python, actions_path).unwrap();
-        info!("Add folder: {}", actions_path.to_str().unwrap());
-
-        // Make order_map from python's modules
-        for entry in std::fs::read_dir(actions_path).unwrap() {
-            let entry = entry.unwrap();
-            if entry.path().is_dir() {
-                let mod_name = entry.file_name().into_string().unwrap().to_string();
-                python.import(&mod_name).unwrap();
-            }
-        }
-
-        let lily_py_mod = python.import("lily_ext").unwrap();
-
-        // The path is the Python path, so set the current directory to it's parent (the package)
-        let canon_path = actions_path.parent().unwrap().canonicalize().unwrap();
-        info!("Actions_path:{}", canon_path.to_str().unwrap());
-        std::env::set_current_dir(canon_path).unwrap();
-        lily_py_mod.call(python, "__set_translations", (curr_lang.to_string(),), None).unwrap();
-        
-        for (key, val) in lily_py_mod.get(python, "action_classes").unwrap().cast_into::<PyDict>(python).unwrap().items(python) {
-            self.map.insert(key.to_string(), val.clone_ref(python));
-            println!("{:?}:{:?}", key.to_string(), val.to_string());
-        }
-    }
-
-    fn clone_adding(&self, new_actions_path: &Path, curr_lang: &LanguageIdentifier) -> Self {
-        let mut new = self.clone();
-        new.add_folder(new_actions_path, curr_lang);
-        new
-    }
-
-    fn clone_try_adding(&self, new_actions_path: &Path, curr_lang: &LanguageIdentifier) -> Self {
-        if new_actions_path.is_dir() {
-            self.clone_adding(new_actions_path, curr_lang)
-        }
-        else {
-            self.clone()
-        }
-    }
-
-    fn get(&self, action_name: &str) -> Option<&cpython::PyObject> {
-        self.map.get(action_name)
-    }
-}
-
-struct ActionData {
-    obj: cpython::PyObject,
-    args: cpython::PyObject
-}
-
-struct ActionSet {
-    acts: Vec<ActionData>
-}
-
-impl ActionSet {
-    fn create() -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {acts: Vec::new()}))
-    }
-    fn add_action(&mut self, py: Python, act_name: &str, yaml: &yaml_rust::Yaml, action_registry: &ActionRegistry) {
-        self.acts.push(ActionData{obj: action_registry.get(act_name).unwrap().clone_ref(py), args: yaml_to_python(&yaml, py)});
-    }
-    fn call_all(&mut self, py: Python) {
-        for action in self.acts.iter() {
-            let trig_act = action.obj.getattr(py, "trigger_action").unwrap();
-            trig_act.call(py, PyTuple::new(py, &[action.args.clone_ref(py)]), None).unwrap();
-        }
-    }
-}
-
-pub struct OrderMap {
-    map: HashMap<String, Rc<RefCell<ActionSet>>>
-}
-
-impl OrderMap {
-    fn new() -> Self {
-        Self{map: HashMap::new()}
-    }
-
-    fn add_order(&mut self, order_name: &str, act_set: Rc<RefCell<ActionSet>>) {
-        let action_entry = self.map.entry(order_name.to_string()).or_insert(ActionSet::create());
-        *action_entry = act_set;
-    }
-
-    fn call_order(&mut self, act_name: &str) {
-        if let Some(action_set) = self.map.get_mut(act_name) {
-            let gil = Python::acquire_gil();
-            let python = gil.python();
-
-            action_set.borrow_mut().call_all(python);
-        }
-    }
 }
 
 fn get_locale_default() -> String {
