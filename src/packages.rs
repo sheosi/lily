@@ -84,7 +84,7 @@ pub fn load_package(order_map: &mut OrderMap, nlu_man: &mut NluManager, action_r
 
                     if sig_name == &"order" {
                         if let Some(order_str) = sig_arg.as_str() {
-                            nlu_man.add_intent(skill_name, vec![try_translate(order_str)]);
+                            nlu_man.add_intent(skill_name, vec![try_translate(order_str)?]);
                         }
                         else {
                             warn!("Order's arg is not a string, can't be understood");

@@ -9,6 +9,7 @@ use fluent_langneg::negotiate::{negotiate_languages, NegotiationStrategy};
 use cpython::{Python, PyList, PyDict, PyString, PythonObject, PyResult, ToPyObject, py_module_initializer, py_fn, py_method_def, FromPyObject};
 use yaml_rust::Yaml;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
+use anyhow::{anyhow, Result};
 
 ref_thread_local! {
     pub static managed PYTHON_LILY_PKG_NONE: Rc<String> = Rc::new("<None>".to_string());
@@ -16,8 +17,10 @@ ref_thread_local! {
 }
 
 pub fn yaml_to_python(yaml: &yaml_rust::Yaml, py: Python) -> cpython::PyObject {
+    // If for some reason we can't transform, just panic, but the odds should be really small
+
     match yaml {
-        Yaml::Real(string) => {
+        Yaml::Real(string) => { // This should always parse into a float
             string.parse::<f64>().unwrap().into_py_object(py).into_object()
         }
         Yaml::Integer(int) => {
@@ -42,7 +45,7 @@ pub fn yaml_to_python(yaml: &yaml_rust::Yaml, py: Python) -> cpython::PyObject {
         }
         Yaml::Hash(hash) => {
             let dict = PyDict::new(py);
-            for (key, value) in hash.iter() {
+            for (key, value) in hash.iter() { // There shouldn't be a problem with this either
                 dict.set_item(py, yaml_to_python(key,py), yaml_to_python(value, py)).unwrap();
             }
             
@@ -60,29 +63,39 @@ pub fn yaml_to_python(yaml: &yaml_rust::Yaml, py: Python) -> cpython::PyObject {
         }
     }
 }
-pub fn python_init() {
+pub fn python_init() -> Result<()> {
     // Add this executable as a Python module
-    let mod_name = std::ffi::CString::new("_lily_impl").unwrap();
+    let mod_name = std::ffi::CString::new("_lily_impl")?;
     unsafe {assert!(python3_sys::PyImport_AppendInittab(mod_name.into_raw(), Some(PyInit__lily_impl)) != -1);};
+
+    Ok(())
 }
 
-pub fn try_translate(input: &str) -> String {
-    if input.chars().nth(0).unwrap() == '$' {
-        // Get GIL
-        let gil = Python::acquire_gil();
-        let python = gil.python();
+pub fn try_translate(input: &str) -> Result<String> {
+    if let Some(first_letter) = input.chars().nth(0) {
+        if first_letter == '$' {
+            // Get GIL
+            let gil = Python::acquire_gil();
+            let python = gil.python();
 
-        let lily_ext = python.import("lily_ext").unwrap();
+            let lily_ext = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
 
-        // Remove initial $ from translation
-        let call_res = lily_ext.call(python, "translate", (&input[1..], PyDict::new(python)), None).unwrap();
-        let tuple: PyList = FromPyObject::extract(python, &call_res).unwrap();
-        let res = tuple.get_item(python, 0).to_string();
-        println!("Translation:{:?}", res);
-        res
+            // Remove initial $ from translation
+            let call_res_result = lily_ext.call(python, "translate", (&input[1..], PyDict::new(python)), None);
+            let call_res = call_res_result.map_err(|py_err|anyhow!("Somehow translate seems missing in lily_ext, just why? {:?}", py_err))?;
+
+            let trans_lst: PyList = FromPyObject::extract(python, &call_res).map_err(|py_err|anyhow!("translate() didn't return a list: {:?}", py_err))?;
+            let res = trans_lst.get_item(python, 0).to_string();
+            println!("Translation:{:?}", res);
+
+            Ok(res)
+        }
+        else {
+            Ok(input.to_string())
+        }
     }
     else {
-        input.to_string()
+            Ok(input.to_string())
     }
 }
 
@@ -104,15 +117,26 @@ fn get_current_package(py: Python) -> PyResult<cpython::PyString> {
     Ok(curr_pkg_string.clone().into_py_object(py))
 }
 
-fn negotiate_lang(python: Python, input: &str, available: Vec<String>) -> PyResult<cpython::PyString> {
-    let in_lang: LanguageIdentifier = input.parse().unwrap();
-    let available_langs: Vec<LanguageIdentifier> = available.iter().map(|lang_str|{lang_str.parse().unwrap()}).collect();
-    Ok(negotiate_languages(&[in_lang],&available_langs, None, NegotiationStrategy::Filtering)[0].to_string().into_py_object(python))
+fn make_err<T: std::fmt::Debug>(py: Python, err: T) -> cpython::PyErr {
+    cpython::PyErr::new::<PyString, String>(py, format!("{:?}", err))
+}
+
+fn negotiate_lang(py: Python, input: &str, available: Vec<String>) -> PyResult<cpython::PyString> {
+    let in_lang: LanguageIdentifier = input.parse().map_err(|err|make_err(py, err))?;
+
+    // This is done with a for to have control over the return, so that an exception is thrown if
+    // an input language string is wrong
+    let mut available_langs: Vec<LanguageIdentifier> = Vec::with_capacity(available.len());
+    for lang_str in available.iter() {
+         available_langs.push(lang_str.parse().map_err(|err|make_err(py, err))?);
+    }
+    
+    Ok(negotiate_languages(&[in_lang],&available_langs, None, NegotiationStrategy::Filtering)[0].to_string().into_py_object(py))
 }
 
 fn python_say(python: Python, input: &str) -> PyResult<cpython::PyObject> {
-    let audio = TTS.borrow_mut().synth_text(input).unwrap();
-    PlayDevice::new().unwrap().play(&*audio.buffer, audio.samples_per_second);
+    let audio = TTS.borrow_mut().synth_text(input).map_err(|err|make_err(python, err))?;
+    PlayDevice::new().ok_or_else(||make_err(python, "Couldn't obtain play stream"))?.play(&*audio.buffer, audio.samples_per_second);
     Ok(python.None())
 }
 
@@ -134,10 +158,15 @@ fn log_error(python: Python, input: &str) -> PyResult<cpython::PyObject>  {
     Ok(python.None())
 }
 
-pub fn add_to_sys_path(py: Python, path: &Path) -> PyResult<()> {
-    let sys = py.import("sys")?;
-    let sys_path = sys.get(py, "path")?.cast_into::<PyList>(py)?;
-    sys_path.insert_item(py, 1, PyString::new(py, path.to_str().unwrap()).into_object());
+pub fn add_to_sys_path(py: Python, path: &Path) -> Result<()> {
+    let sys = py.import("sys").map_err(|py_err|anyhow!("Failed while importing sys package: {:?}", py_err))?;
+    let sys_path = {
+        let obj = sys.get(py, "path").map_err(|py_err|anyhow!("Error while getting path module from sys: {:?}", py_err))?;
+        obj.cast_into::<PyList>(py).map_err(|py_err|anyhow!("What? Couldn't get path as a List: {:?}", py_err))?
+    };
+    
+    let path_str = path.to_str().ok_or_else(||anyhow!("Couldn't transform given path to add to sys.path into an str"))?;
+    sys_path.insert_item(py, 1, PyString::new(py, path_str).into_object());
 
     Ok(())
 }

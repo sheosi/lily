@@ -241,6 +241,6 @@ fn get_locale_default() -> String {
 
 fn main() {
     init_log();
-    python_init();
+    python_init().unwrap();
     record_loop();
 }
