@@ -108,7 +108,7 @@ fn record_loop() {
 
     let mut hotword_detector = {
         let snowboy_path = resolve_path(SNOWBOY_DATA_PATH);
-        Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res"))
+        Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res")).unwrap()
     };
 
     info!("Init Nlu");

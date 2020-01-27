@@ -1,6 +1,7 @@
 use std::path::Path;
 use crate::vad::Vad;
 use log::{debug, info};
+use anyhow::{anyhow, Result};
 
 pub trait HotwordDetector {
     fn start_hotword_check(&mut self);
@@ -15,16 +16,19 @@ pub struct Snowboy {
 
 
 impl Snowboy {
-    pub fn new(model_path: &Path, res_path: &Path) -> Snowboy {
+    pub fn new(model_path: &Path, res_path: &Path) -> Result<Snowboy> {
 
         let vad = crate::vad::SnowboyVad::new(res_path);
 
-        let detector = rsnowboy::SnowboyDetect::new(res_path.to_str().unwrap(), model_path.to_str().unwrap());
+        let res_path_str = res_path.to_str().ok_or_else(||anyhow!("Failed to transform resource path to unicode {:?}", res_path))?;
+        let model_path_str = model_path.to_str().ok_or_else(||anyhow!("Failed to transform model path to unicode {:?}", model_path))?;
+
+        let detector = rsnowboy::SnowboyDetect::new(res_path_str, model_path_str);
         detector.set_sensitivity("0.50");
         detector.set_audio_gain(1.0);
         detector.apply_frontend(false);
 
-        Snowboy {vad, detector, someone_talking: true}
+        Ok(Snowboy {vad, detector, someone_talking: true})
     }
 
     pub fn detector_check(&mut self, audio: &[i16]) -> i32 {
