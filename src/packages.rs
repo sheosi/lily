@@ -70,7 +70,7 @@ pub fn load_package(order_map: &mut OrderMap, nlu_man: &mut NluManager, action_r
                 for (act_name, act_arg) in actions.iter() {
                     let gil = Python::acquire_gil();
                     let py = gil.python();
-                    act_set.borrow_mut().add_action(py, act_name, act_arg, &action_registry, pkg_name.clone(), pkg_path.clone());
+                    act_set.borrow_mut().add_action(py, act_name, act_arg, &action_registry, pkg_name.clone(), pkg_path.clone()).unwrap();
                 }
                 for (sig_name, sig_arg) in signals.iter() {
 
@@ -105,14 +105,14 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> OrderMap {
     let gil = Python::acquire_gil();
     let py = gil.python();
 
-    let action_registry = ActionRegistry::new_with_no_trans(py, &resolve_path(PYTHON_SDK_PATH));
+    let action_registry = ActionRegistry::new_with_no_trans(py, &resolve_path(PYTHON_SDK_PATH)).unwrap();
 
 
     info!("PACKAGES_PATH:{}", path.to_str().unwrap());
     for entry in std::fs::read_dir(path).expect(PACKAGES_PATH_ERR_MSG) {
         let entry = entry.unwrap().path();
         if entry.is_dir() {
-            load_package(&mut order_map, &mut nlu_man, &action_registry.clone_try_adding(py, &entry.join("python"), curr_lang), &entry, curr_lang);
+            load_package(&mut order_map, &mut nlu_man, &action_registry.clone_try_adding(py, &entry.join("python"), curr_lang).unwrap(), &entry, curr_lang);
         }
     }
 

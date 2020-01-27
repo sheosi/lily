@@ -122,7 +122,7 @@ fn record_loop() {
     record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
     hotword_detector.start_hotword_check();
 
-    order_map.call_order("lily_start");
+    order_map.call_order("lily_start").unwrap();
 
     let mut current_speech = crate::audio::Audio{buffer: Vec::new(), samples_per_second: 16000};
 
@@ -141,7 +141,7 @@ fn record_loop() {
                         current_state = ProgState::Listening;
                         stt.begin_decoding().unwrap();
                         info!("Hotword detected");
-                        order_map.call_order("init_reco");
+                        order_map.call_order("init_reco").unwrap();
                         record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
                     }
                     _ => {}
@@ -179,15 +179,15 @@ fn record_loop() {
                                     if score >= 0.55 {
                                         info!("Let's call an action");
                                         if let Some(intent_name) = result.intent.intent_name {
-                                            order_map.call_order(&intent_name);
+                                            order_map.call_order(&intent_name).unwrap();
                                             info!("Action called");
                                         }
                                         else {
-                                            order_map.call_order("unrecognized");
+                                            order_map.call_order("unrecognized").unwrap();
                                         }
                                     }
                                     else {
-                                        order_map.call_order("unrecognized");
+                                        order_map.call_order("unrecognized").unwrap();
                                     }
                                     record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
                                     hotword_detector.start_hotword_check();
@@ -195,7 +195,7 @@ fn record_loop() {
                                     current_speech.clear();
                                 }
                                 else {
-                                    order_map.call_order("empty_reco");
+                                    order_map.call_order("empty_reco").unwrap();
                                 }
                             }   
                         }
