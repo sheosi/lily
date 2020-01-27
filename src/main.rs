@@ -94,7 +94,7 @@ fn record_loop() {
         }
     };
 
-    let mut order_map = load_packages(&Path::new(&resolve_path(PACKAGES_PATH)), &curr_lang);
+    let mut order_map = load_packages(&Path::new(&resolve_path(PACKAGES_PATH)), &curr_lang).unwrap();
     *TTS.borrow_mut() = tts::TtsFactory::load(&curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone());
     info!("Using tts {}", TTS.borrow().get_info());
 
