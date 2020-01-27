@@ -5,6 +5,7 @@ use crate::vars::CLOCK_TOO_EARLY_MSG;
 
 use hound;
 use rodio::source::Source;
+use thiserror::Error;
 
 #[cfg(feature = "devel_cpal_rec")]
 use cpal::traits::HostTrait;
@@ -219,7 +220,7 @@ impl Audio {
         Ok(())
     }
 
-    pub fn to_wav(&self) -> Vec<u8> {
+    pub fn to_wav(&self) -> Result<Vec<u8>, WavError> {
         let spec = hound::WavSpec {
             channels: 1,
             sample_rate: self.samples_per_second,
@@ -229,17 +230,17 @@ impl Audio {
         let mut buffer: Vec<u8> = Vec::new();
         {
             let cursor = std::io::Cursor::new(&mut buffer);
-            let mut writer = hound::WavWriter::new(cursor,spec).unwrap();
-            let mut sample_writer = writer.get_i16_writer(self.buffer.len().try_into().unwrap());
+            let mut writer = hound::WavWriter::new(cursor,spec)?;
+            let mut sample_writer = writer.get_i16_writer(self.buffer.len().try_into().map_err(|_|WavError::TooBig)?);
 
             for i in 0 .. self.buffer.len() {
                 sample_writer.write_sample(self.buffer[i]);
             }
 
-            sample_writer.flush().unwrap();
+            sample_writer.flush()?;
         }
 
-        buffer
+        Ok(buffer)
     }
 
     pub fn clear(&mut self) {
@@ -247,3 +248,11 @@ impl Audio {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum WavError {
+    #[error("hound error")]
+    Hound(#[from] hound::Error),
+
+    #[error("this buffer size is too big ")]
+    TooBig
+}

@@ -1,6 +1,7 @@
 // Other crates
 use rodio::source::Source;
 use serde::Deserialize;
+use thiserror::Error;
 
 // Optional dependencies
 #[cfg(feature = "google_tts")]
@@ -36,7 +37,7 @@ impl GttsEngine {
 		GttsEngine{client: reqwest::blocking::Client::new()}
 	}
 
-	pub fn synth(&mut self, text: &str, lang: &str) -> Result<(), reqwest::Error> {
+	pub fn synth(&mut self, text: &str, lang: &str) -> Result<(), GttsError> {
 		const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; WOW64) \
 	            AppleWebKit/537.36 (KHTML, like Gecko) \
 	            Chrome/47.0.2526.106 Safari/537.36";
@@ -50,9 +51,9 @@ impl GttsEngine {
 
         let mut file = std::fs::File::create("translate_tts.mp3").unwrap();
         // Write a slice of bytes to the file
-        file.write_all(&buf).unwrap();
+        file.write_all(&buf)?;
 
-		let device = rodio::default_output_device().unwrap();
+		let device = rodio::default_output_device()?;
 		//let source = rodio::Decoder::new(std::io::Cursor::new(buf)).unwrap();
 		let source = rodio::Decoder::new(std::io::BufReader::new(std::fs::File::open("translate_tts.mp3").unwrap())).unwrap();
 		rodio::play_raw(&device, source.convert_samples());
@@ -73,18 +74,18 @@ impl IbmSttEngine {
 		IbmSttEngine{client: reqwest::blocking::Client::new(), api_gateway, api_key}
 	}
 
-	pub fn decode(&mut self, audio: &crate::audio::Audio, model: &str) -> Result<Option<(String, Option<String>, i32)>, reqwest::Error> {
+	pub fn decode(&mut self, audio: &crate::audio::Audio, model: &str) -> Result<Option<(String, Option<String>, i32)>, GttsError> {
 	    let url_str = format!("https://{}/speech-to-text/api/v1/recognize?model=", self.api_gateway);
-	    let url = reqwest::Url::parse(&format!("{}{}", url_str, model)).unwrap();
+	    let url = reqwest::Url::parse(&format!("{}{}", url_str, model))?; 
 	    //audio.write_wav("temp_stt.wav").unwrap();
 	    //std::process::Command::new("sox").arg("temp_stt.wav").arg("temp_stt.flac").spawn().expect("sox failed").wait().expect("sox failed 2");
-	    let as_wav = audio.to_wav();
+	    let as_wav = audio.to_wav()?;
 
 	    //let file = std::fs::File::open("temp_stt.flac").unwrap();
 	    //let res = self.client.post(url).body(file).header("Content-Type", "audio/wav").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send()?.text()?;
 	    let res = self.client.post(url).body(as_wav).header("Content-Type", "audio/wav").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send()?.text()?;
 	    log::info!("{}", res);
-	    let response: WattsonResponse = serde_json::from_str(&res).unwrap();
+	    let response: WattsonResponse = serde_json::from_str(&res)?;
 	    let res = {
 	    	if !response.results.is_empty() {
 		    	let alternatives = &response.results[response.result_index as usize].alternatives;
@@ -134,4 +135,20 @@ impl IbmTtsEngine {
 
 		Ok(())
 	}
+}
+
+
+#[derive(Error,Debug)]
+pub enum GttsError {
+	#[error("network failure")]
+	Network(#[from] reqwest::Error),
+
+	#[error("url parsing")]
+	UrlParse(#[from] url::ParseError),
+
+	#[error("wav conversion")]
+	WavConvert(#[from] crate::audio::WavError),
+
+	#[error("json parsing")]
+	JsonParse(#[from] serde_json::Error)
 }

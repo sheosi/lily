@@ -11,7 +11,8 @@ yaml-rust = "^0.4" # Load configuration files from this program and skills
 serde_yaml = "^0.8"
 fluent = "^0.9" # Translations and templating
 serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
-anyhow = "^1.0" # For error overall handling in the app
+anyhow = "^1.0" # For error handling overall in the app
+thiserror = "^1.0" # For error handling in parts that can be made their own crate
 
 rsnowboy = {git = "https://github.com/sheosi/rsnowboy"} # Hotword detector
 vad = "0.1.5"
@@ -39,6 +40,7 @@ log = "^0.4" # Common API for logging so we can change backend easily
 #Cloud-based
 google_translate_tts = "0.1.2" # Format TTS URLs
 reqwest = {version="0.10.0-alpha.2", features=["default-tls", "blocking"]} # HTTP client
+url = "^2.1"
 base64 = "0.11.0" # For sending data to the online TTS and STT
 
 # Localization
