@@ -112,7 +112,7 @@ fn record_loop() {
     };
 
     info!("Init Nlu");
-    let nlu = Nlu::new(&resolve_path(NLU_ENGINE_PATH));
+    let nlu = Nlu::new(&resolve_path(NLU_ENGINE_PATH)).unwrap();
     let mut current_state = ProgState::WaitingForHotword;
 
 
@@ -169,7 +169,7 @@ fn record_loop() {
 
                                     }*/
                                     let result = nlu.parse(&hypothesis).unwrap();
-                                    let result_json = Nlu::to_json(&result);
+                                    let result_json = Nlu::to_json(&result).unwrap();
                                     info!("{}", result_json);
                                     let score = result.intent.confidence_score;
                                     info!("Score: {}",score);

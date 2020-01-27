@@ -126,7 +126,7 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<Orde
         }
     }
 
-    nlu_man.train(&resolve_path(NLU_TRAIN_SET_PATH), &resolve_path(NLU_ENGINE_PATH), curr_lang);
+    nlu_man.train(&resolve_path(NLU_TRAIN_SET_PATH), &resolve_path(NLU_ENGINE_PATH), curr_lang)?;
 
     Ok(order_map)
 }
