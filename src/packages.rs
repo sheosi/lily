@@ -94,6 +94,7 @@ pub fn load_package(order_map: &mut OrderMap, nlu_man: &mut NluManager, action_r
             }
         }
     }
+    *crate::python::PYTHON_LILY_PKG_CURR.borrow_mut() = crate::python::PYTHON_LILY_PKG_NONE.borrow().clone();
 }
 
 pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> OrderMap {

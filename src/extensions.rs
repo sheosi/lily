@@ -6,7 +6,7 @@ use core::cell::RefCell;
 use std::collections::HashMap;
 
 // This crate
-use crate::python::{yaml_to_python, add_to_sys_path, PYTHON_LILY_PKG_NONE};
+use crate::python::{yaml_to_python, add_to_sys_path, PYTHON_LILY_PKG_NONE, PYTHON_LILY_PKG_CURR};
 
 // Other crates
 use unic_langid::LanguageIdentifier;
@@ -50,7 +50,11 @@ impl ActionRegistry {
         let canon_path = actions_path.parent().unwrap().canonicalize().unwrap();
         info!("Actions_path:{}", canon_path.to_str().unwrap());
         std::env::set_current_dir(canon_path).unwrap();
+
+        let pkg_name = Rc::new(actions_path.parent().unwrap().file_name().unwrap().to_str().unwrap().to_string());
+        *PYTHON_LILY_PKG_CURR.borrow_mut() = pkg_name;
         lily_py_mod.call(python, "__set_translations", (curr_lang.to_string(),), None).unwrap();
+        *PYTHON_LILY_PKG_CURR.borrow_mut() = crate::python::PYTHON_LILY_PKG_NONE.borrow().clone();
     }
 
     pub fn add_folder_no_trans(&mut self, python: Python, actions_path: &Path) {
@@ -117,7 +121,7 @@ impl ActionSet {
     pub fn call_all(&mut self, py: Python) {
         for action in self.acts.iter() {
             let trig_act = action.obj.getattr(py, "trigger_action").unwrap();
-            std::env::set_current_dir(*action.lily_pkg_path);
+            std::env::set_current_dir(action.lily_pkg_path.as_ref()).unwrap();
             *crate::python::PYTHON_LILY_PKG_CURR.borrow_mut() = action.lily_pkg_name.clone();
             trig_act.call(py, PyTuple::new(py, &[action.args.clone_ref(py)]), None).unwrap();
             *crate::python::PYTHON_LILY_PKG_CURR.borrow_mut() = PYTHON_LILY_PKG_NONE.borrow().clone();
