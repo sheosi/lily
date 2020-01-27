@@ -247,9 +247,9 @@ impl Tts for GTts {
         }
     }
 
-    fn get_info() -> TtsInfo {
+    fn get_info(&self) -> TtsInfo {
         TtsInfo {
-            name: "Google Translate",
+            name: "Google Translate".to_string(),
             is_online: true
         }
     }
