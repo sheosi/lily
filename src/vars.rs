@@ -14,7 +14,7 @@ pub const MAIN_CONF_PATH: &str = "conf.yaml";
 
 
 ref_thread_local! {
-    static managed ORG_PATH: PathBuf = std::env::current_dir().unwrap().canonicalize().unwrap();
+    static managed ORG_PATH: PathBuf = std::env::current_dir().expect("Couldn't get current_dir").canonicalize().expect("Failed to canonicalize current_dir");
 }
 
 pub fn resolve_path(path: &str) -> PathBuf {
