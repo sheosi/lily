@@ -314,7 +314,7 @@ impl Tts for IbmTts {
 
     fn get_info(&self) -> TtsInfo {
         TtsInfo {
-            name: "IBM Speech To Text".to_string(),
+            name: "IBM Text To Speech".to_string(),
             is_online: true
         }
     }
