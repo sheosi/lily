@@ -2,10 +2,11 @@ use std::path::Path;
 use crate::vad::Vad;
 use log::{debug, info};
 use anyhow::{anyhow, Result};
+use thiserror::Error;
 
 pub trait HotwordDetector {
     fn start_hotword_check(&mut self);
-    fn check_hotword(&mut self, audio: &[i16]) -> bool;
+    fn check_hotword(&mut self, audio: &[i16]) -> Result<bool>;
 }
 
 pub struct Snowboy {
@@ -44,9 +45,9 @@ impl HotwordDetector for Snowboy {
         info!("WaitingForHotword");
     }
 
-    fn check_hotword(&mut self, audio: &[i16]) -> bool {
+    fn check_hotword(&mut self, audio: &[i16]) -> Result<bool> {
         if !self.someone_talking {
-            let vad_res = self.vad.is_someone_talking(audio);
+            let vad_res = self.vad.is_someone_talking(audio)?;
             /*match vad_val {
                 -2 => {println!("Silence");}
                 -1 => {println!("Wait something happened");}
@@ -64,18 +65,38 @@ impl HotwordDetector for Snowboy {
                     debug!("You stopped talking");
                     self.someone_talking = false;
                 } 
-                detector_res == 1
+                Ok(detector_res == 1)
             }
             else {
-                false
+                Ok(false)
             }
         }
         else {
             let detector_res = self.detector_check(audio);
-            if detector_res == -2 {
-                //self.someone_talking = false;
-            } 
-            detector_res == 1
+            if detector_res != -1 {
+                if detector_res == -2 {
+                    //self.someone_talking = false;
+                } 
+                Ok(detector_res == 1)
+            }
+            else {
+                Err(HotwordError::Unknown.into())
+            }
         }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum HotwordError{
+    #[error("Something happened with the hotword engine")]
+    Unknown,
+
+    #[error("Something happend with the vad engine")]
+    VadError
+}
+
+impl std::convert::From<crate::vad::VadError> for HotwordError {
+    fn from(_err: crate::vad::VadError) -> Self {
+        HotwordError::VadError
     }
 }

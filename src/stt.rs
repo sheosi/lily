@@ -7,32 +7,19 @@ use crate::audio::AudioRaw;
 use unic_langid::{LanguageIdentifier, langid, langids};
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use log::info;
+use thiserror::Error;
 
 const SOUND_SPS: u32 = 16000;
 
-#[derive(Debug, Clone)]
-pub enum SttErrCause {
-    UNKNOWN
-}
-
-#[derive(Debug, Clone)]
-pub struct SttError {
-    cause: SttErrCause
-}
-
-impl std::fmt::Display for SttError {
-    fn fmt (&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self.cause {
-            SttErrCause::UNKNOWN => {
-                write!(f, "PocketSphinx error, see log for details")
-            }
-        }
-    }
+#[derive(Error, Debug, Clone)]
+pub enum SttError {
+    #[error("PocketSphinx error, see log for details")]
+    Unknown
 }
 
 impl std::convert::From<pocketsphinx::Error> for SttError {
     fn from(_err: pocketsphinx::Error) -> Self {
-        SttError{cause: SttErrCause::UNKNOWN}
+        SttError::Unknown
     }
 }
 
@@ -149,9 +136,9 @@ impl Vad for Pocketsphinx {
         self.begin_decoding().unwrap();
     }
 
-    fn is_someone_talking(&mut self, audio: &[i16]) -> bool {
-        self.decode(audio).unwrap();
-        self.is_speech_started
+    fn is_someone_talking(&mut self, audio: &[i16]) -> anyhow::Result<bool> {
+        self.decode(audio)?;
+        Ok(self.is_speech_started)
     }
 }
 
@@ -179,7 +166,7 @@ impl<V: Vad, S: SttBatched> SttStream for SttBatcher<V, S> {
 
     fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
         self.copy_audio.append_audio(audio, SOUND_SPS);
-        if self.vad.is_someone_talking(audio) {
+        if self.vad.is_someone_talking(audio).unwrap() {
             if self.someone_was_talking {
                 // We are still getting talke
                 Ok(DecodeState::NotFinished)

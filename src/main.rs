@@ -138,7 +138,7 @@ fn record_loop() {
 
         match current_state {
             ProgState::WaitingForHotword => {
-                match hotword_detector.check_hotword(microphone_data) {
+                match hotword_detector.check_hotword(microphone_data).unwrap() {
                     true => {
                         // Don't record for a moment
                         record_device.stop_recording().expect(AUDIO_REC_STOP_ERR_MSG);
