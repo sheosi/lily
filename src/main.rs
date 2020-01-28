@@ -20,6 +20,7 @@ use crate::nlu::Nlu;
 use crate::vars::*;
 use crate::packages::load_packages;
 use crate::python::python_init;
+use crate::tts::{Gender, VoiceDescr};
 
 // Other crates
 use log::{info, warn};
@@ -37,7 +38,7 @@ enum ProgState {
     Listening,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct Config {
     #[serde(default = "false_val")]
     prefer_online_tts: bool,
@@ -76,6 +77,7 @@ fn load_conf() -> Option<Config> {
 fn record_loop() {
     // Set language
     let config = load_conf().unwrap_or(Config{prefer_online_tts: false, prefer_online_stt: false, ibm_tts_key: None, ibm_stt_key: None, ibm_gateway: None});
+    println!("{:?}", config);
     let curr_lang : LanguageIdentifier = get_locale_default().parse().expect("Locale parsing failed");
     let ibm_tts_gateway_key = {
         if config.ibm_gateway.is_some() && config.ibm_tts_key.is_some() {
@@ -95,7 +97,9 @@ fn record_loop() {
     };
 
     let mut order_map = load_packages(&Path::new(&resolve_path(PACKAGES_PATH)), &curr_lang).unwrap();
-    *TTS.borrow_mut() = tts::TtsFactory::load(&curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone());
+
+    const MY_PREFS: VoiceDescr = VoiceDescr { gender: Gender::Male};
+    *TTS.borrow_mut() = tts::TtsFactory::load_with_prefs(&curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &MY_PREFS);
     info!("Using tts {}", TTS.borrow().get_info());
 
     let mut record_device = RecDevice::new().unwrap();
@@ -124,7 +128,7 @@ fn record_loop() {
 
     order_map.call_order("lily_start").unwrap();
 
-    let mut current_speech = crate::audio::Audio{buffer: Vec::new(), samples_per_second: 16000};
+    let mut current_speech = crate::audio::Audio::new_empty(16000);
 
     loop {
         let microphone_data = match record_device.read().unwrap() {
@@ -148,7 +152,7 @@ fn record_loop() {
                 }
             }
             ProgState::Listening => {
-                current_speech.append_audio(microphone_data, 16000);
+                current_speech.append_raw(microphone_data, 16000);
 
                 match stt.decode(microphone_data).unwrap() {
                     stt::DecodeState::NotStarted => {},

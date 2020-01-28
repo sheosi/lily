@@ -1,6 +1,4 @@
 use core::fmt::Display;
-use core::cell::RefCell;
-use std::rc::Rc;
 
 use crate::vars::{PICO_DATA_PATH, resolve_path};
 use crate::audio::Audio;
@@ -50,6 +48,16 @@ impl std::fmt::Display for TtsError {
             }
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum Gender {
+    Male,
+    Female
+}
+#[derive(Debug, Clone)]
+pub struct VoiceDescr {
+    pub gender: Gender
 }
 
 pub trait Tts {
@@ -110,8 +118,6 @@ impl Tts for EspeakTts {
 use ttspico as pico;
 
 pub struct PicoTts {
-    sys: Rc<RefCell<pico::System>>,
-    voice: Rc<RefCell<pico::Voice>>,
     engine: pico::Engine
 }
 
@@ -133,6 +139,7 @@ impl PicoTts {
         format!("{}-{}_ta.bin", lang.get_language() , lang.get_region().unwrap())
     }
 
+    // There's only one voice of Pico per language so preferences are not of much use here
     pub fn new(lang: &LanguageIdentifier) -> Self {
         // 1. Create a Pico system
         let lang = Self::lang_neg(lang);
@@ -162,7 +169,7 @@ impl PicoTts {
         // UNSAFE: Creating an engine without attaching the resources will result in a crash!
         let engine = unsafe { pico::Voice::create_engine(voice.clone()).expect("Failed to create engine") };
         //let voice_def = espeak_sys::espeak_VOICE{name: std::ptr::null(), languages: std::ptr::null(), identifier: std::ptr::null(), gender: 0, age: 0, variant: 0, xx1:0, score: 0, spare: std::ptr::null_mut()};
-        PicoTts{sys, voice, engine}
+        PicoTts{engine}
     }
 
     fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
@@ -199,7 +206,7 @@ impl Tts for PicoTts {
             }
         }
 
-        Ok(Audio{buffer: pcm_data, samples_per_second: 16000})
+        Ok(Audio::new_raw(pcm_data, 16000))
     }
 
     fn get_info(&self) -> TtsInfo {
@@ -239,7 +246,7 @@ impl GTts {
 impl Tts for GTts {
     fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
         match self.engine.synth(input, &self.curr_lang) {
-            Ok(_) => {Ok(Audio{buffer:Vec::new(), samples_per_second: 16000})},
+            Ok(buffer) => {Ok(Audio::new_encoded(buffer, 16000))},
             Err(_) => {
                 // If it didn't work try with local
                 self.fallback_tts.synth_text(input)
@@ -262,16 +269,26 @@ struct IbmTts {
 }
 
 impl IbmTts {
-    pub fn new(lang: &LanguageIdentifier, fallback_tts: Box<dyn Tts>, api_gateway: String, api_key: String) -> Self {
-        IbmTts{engine: crate::gtts::IbmTtsEngine::new(api_gateway, api_key), fallback_tts, curr_voice: Self::make_tts_voice(&Self::lang_neg(lang)).to_string()}
+    pub fn new(lang: &LanguageIdentifier, fallback_tts: Box<dyn Tts>, api_gateway: String, api_key: String, prefs: &VoiceDescr) -> Self {
+        IbmTts{engine: crate::gtts::IbmTtsEngine::new(api_gateway, api_key), fallback_tts, curr_voice: Self::make_tts_voice(&Self::lang_neg(lang), prefs).to_string()}
     }
 
     // Accept only negotiated LanguageIdentifiers
-    fn make_tts_voice(lang: &LanguageIdentifier) -> &'static str {
+    fn make_tts_voice(lang: &LanguageIdentifier, prefs: &VoiceDescr) -> &'static str {
         let lang_str = format!("{}-{}", lang.get_language(), lang.get_region().unwrap());
         match lang_str.as_str() {
-            "es-ES" => "es-ES_LauraV3Voice",
-            "en-US" => "en-US_AllisonV3Voice",
+            "es-ES" => {
+                match prefs.gender {
+                    Gender::Male => "es-ES_EnriqueV3Voice",
+                    Gender::Female => "es-ES_LauraV3Voice"
+                }
+            }
+            "en-US" => {
+                match prefs.gender {
+                    Gender::Male => "en-US_MichaelV3Voice",
+                    Gender::Female =>  "en-US_AllisonV3Voice"
+                }
+            }
             _ => ""
         }
     }
@@ -287,7 +304,7 @@ impl IbmTts {
 impl Tts for IbmTts {
     fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
         match self.engine.synth(input, &self.curr_voice) {
-            Ok(_) => {Ok(Audio{buffer:Vec::new(), samples_per_second: 16000})},
+            Ok(buffer) => {Ok(Audio::new_encoded(buffer, 16000))},
             Err(_) => {
                 // If it didn't work try with local
                 self.fallback_tts.synth_text(input)
@@ -328,14 +345,19 @@ impl Tts for DummyTts {
 pub struct TtsFactory;
 
 impl TtsFactory {
-    pub fn load(lang: &LanguageIdentifier, prefer_cloud_tss: bool, gateway_key: Option<(String, String)>) -> Box<dyn Tts> {
-        
+    pub fn load(lang: &LanguageIdentifier, prefer_cloud_tts: bool, gateway_key: Option<(String, String)>) -> Box<dyn Tts> {
+        const DEF_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};
+
+        Self::load_with_prefs(lang, prefer_cloud_tts, gateway_key, &DEF_PREFS)
+    }
+
+    pub fn load_with_prefs(lang: &LanguageIdentifier, prefer_cloud_tts: bool, gateway_key: Option<(String, String)>, prefs: &VoiceDescr) -> Box<dyn Tts> {
         let local_tts = Box::new(PicoTts::new(lang));
 
-        match prefer_cloud_tss {
+        match prefer_cloud_tts {
             true => {
                 if let Some((api_gateway, api_key)) = gateway_key {
-                    Box::new(IbmTts::new(lang, local_tts, api_gateway.to_string(), api_key.to_string()))
+                    Box::new(IbmTts::new(lang, local_tts, api_gateway.to_string(), api_key.to_string(), prefs))
                 }
                 else {
                     local_tts

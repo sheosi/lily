@@ -2,7 +2,7 @@ use core::fmt::Display;
 
 use crate::vars::{STT_DATA_PATH, resolve_path};
 use crate::vad::Vad;
-use crate::audio::Audio;
+use crate::audio::AudioRaw;
 
 use unic_langid::{LanguageIdentifier, langid, langids};
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
@@ -157,14 +157,14 @@ impl Vad for Pocketsphinx {
 
 pub struct SttBatcher<V: Vad, S: SttBatched> {
     vad: V,
-    copy_audio: crate::audio::Audio,
+    copy_audio: crate::audio::AudioRaw,
     batch_stt: S,
     someone_was_talking: bool
 }
 
 impl<V: Vad, S: SttBatched> SttBatcher<V, S> {
     fn new(vad: V, batch_stt: S) -> Self {
-        Self {vad, copy_audio: crate::audio::Audio::new_empty(SOUND_SPS), batch_stt, someone_was_talking: false}
+        Self {vad, copy_audio: crate::audio::AudioRaw::new_empty(SOUND_SPS), batch_stt, someone_was_talking: false}
     }
 }
 
@@ -210,12 +210,12 @@ impl<V: Vad, S: SttBatched> SttStream for SttBatcher<V, S> {
 pub struct SttOnlineInterface<S: SttBatched, F: SttStream> {
     online_stt: S,
     fallback: F,
-    copy_audio: crate::audio::Audio,
+    copy_audio: crate::audio::AudioRaw,
 }
 
 impl<S: SttBatched, F: SttStream> SttOnlineInterface<S, F> {
     fn new(online_stt: S,fallback: F) -> Self {
-        Self{online_stt, fallback, copy_audio: Audio::new_empty(SOUND_SPS)}
+        Self{online_stt, fallback, copy_audio: AudioRaw::new_empty(SOUND_SPS)}
     }
 }
 
@@ -275,7 +275,7 @@ impl IbmStt {
 impl SttBatched for IbmStt {
     
     fn decode(&mut self, audio: &[i16]) -> Result<Option<(String, Option<String>, i32)>, SttError> {
-        Ok(self.engine.decode(&Audio{buffer: audio.to_vec(), samples_per_second: SOUND_SPS}, &self.model).unwrap())
+        Ok(self.engine.decode(&AudioRaw::new_raw(audio.to_vec(), SOUND_SPS), &self.model).unwrap())
     }
 
     fn get_info(&self) -> SttInfo {

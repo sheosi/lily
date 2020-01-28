@@ -39,17 +39,26 @@ impl PlayDevice {
         Some(PlayDevice {device})
     }
     
-    pub fn play(&mut self, buf: &[i16], samples: u32) {
-        let source = rodio::buffer::SamplesBuffer::new(1, samples, buf);
-        rodio::play_raw(&self.device, source.convert_samples());
-    }
-    
     pub fn play_file(&mut self, path: &str) -> Result<(), PlayFileError> {
         let file = std::fs::File::open(path)?;
         let source = rodio::Decoder::new(std::io::BufReader::new(file))?;
         rodio::play_raw(&self.device, source.convert_samples());
 
         Ok(())
+    }
+
+    pub fn play_audio(&mut self, audio: Audio) {
+        match audio.buffer {
+            Data::Raw(raw_data) => {
+                let source = rodio::buffer::SamplesBuffer::new(1, audio.samples_per_second, raw_data);
+                rodio::play_raw(&self.device, source.convert_samples());
+            },
+            Data::Encoded(enc_data) => {
+                let source = rodio::Decoder::new(std::io::Cursor::new(enc_data)).unwrap();
+                rodio::play_raw(&self.device, source.convert_samples());
+
+            }
+        }   
     }
 }
 
@@ -159,32 +168,71 @@ impl Recording for RecDeviceCpal {
     }
 }
 
+enum Data {
+    Raw(Vec<i16>),
+    Encoded(Vec<u8>)
+}
+
+impl Data {
+
+    fn clear(&mut self) {
+        match self {
+            Data::Raw(raw_data) => raw_data.clear(),
+            Data::Encoded(enc_data) => enc_data.clear()
+        }
+    }
+
+    fn append_raw(&mut self, b: &[i16]) {
+        match self {
+            Data::Raw(data_self) => data_self.extend(b),
+            Data::Encoded(_) => std::panic!("Tried to append a raw audio to an encoded audio")
+        }
+    }
+
+    fn is_raw(&self) -> bool {
+        match self {
+            Data::Raw(_) => true,
+            Data::Encoded(_) => false
+        }
+    }
+
+    fn use_writer<T: std::io::Write + std::io::Seek>(&self, writer: &mut hound::WavWriter<T>) -> Result<(), hound::Error> {
+        match self {
+            Data::Raw(data) =>  {
+                for i in 0 .. data.len() {
+                    writer.write_sample(data[i])?;
+                }
+
+                Ok(())
+            },
+            Data::Encoded(_) => panic!("Can't write to wav an encoded audio")
+        }
+    }
+}
+
 // Just some and audio dummy for now
 pub struct Audio {
-    pub buffer: Vec<i16>,
+    buffer: Data,
     pub samples_per_second: u32
 }
 
 impl Audio {
     pub fn new_empty(samples_per_second: u32) -> Self {
-        Self{buffer: Vec::new(), samples_per_second}
+        Self{buffer: Data::Raw(Vec::new()), samples_per_second}
     }
 
-    pub fn join(&self, other: &Audio) -> Option<Audio> {
-        if self.samples_per_second == other.samples_per_second {
-            let new_buffer = [&self.buffer[..], &other.buffer[..]].concat();
-
-            Some(Audio{buffer: new_buffer, samples_per_second: self.samples_per_second})
-        }
-        else {
-            // Can't join if it's not the same sample rate
-            None
-        }
+    pub fn new_raw(buffer: Vec<i16>, samples_per_second: u32) -> Self {
+        Self {buffer: Data::Raw(buffer), samples_per_second}
     }
 
-    pub fn append(&mut self, other: &Audio) -> Option<()> {
-        if self.samples_per_second == other.samples_per_second {
-            self.buffer.extend(&other.buffer);
+    pub fn new_encoded(buffer: Vec<u8>, samples_per_second: u32) -> Self {
+        Self {buffer: Data::Encoded(buffer), samples_per_second}
+    }
+
+
+    pub fn append_raw(&mut self, other: &[i16], samples_per_second: u32) -> Option<()> {
+        if self.samples_per_second == samples_per_second && self.buffer.is_raw() {
+            self.buffer.append_raw(other);
             Some(())
         }
         else {
@@ -193,18 +241,7 @@ impl Audio {
         }
     }
 
-    pub fn append_audio(&mut self, other: &[i16], samples_per_second: u32) -> Option<()> {
-        if self.samples_per_second == samples_per_second {
-            self.buffer.extend(other);
-            Some(())
-        }
-        else {
-            // Can't join if it's not the same sample rate
-            None
-        }
-    }
-
-    pub fn write_wav(&self, filename:&str) -> Result<(), hound::Error> {
+    pub fn write_wav(&self, filename:&str) -> Result<(), WavError> {
 
         let spec = hound::WavSpec {
             channels: 1,
@@ -213,12 +250,49 @@ impl Audio {
             sample_format: hound::SampleFormat::Int,
         };
         let mut writer = hound::WavWriter::create(filename, spec)?;
-        for i in 0 .. self.buffer.len() {
-            writer.write_sample(self.buffer[i])?;
-        }
+        self.buffer.use_writer(&mut writer).unwrap();
+
+        
 
         Ok(())
     }
+
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+    }
+}
+
+
+// For managing Audio only in Raw, much more simple and a little more focused on speed
+pub struct AudioRaw {
+    pub buffer: Vec<i16>,
+    pub samples_per_second: u32
+}
+
+impl AudioRaw {
+    pub fn new_empty(samples_per_second: u32) -> Self {
+        AudioRaw{buffer: Vec:: new(), samples_per_second}
+    }
+
+    pub fn new_raw(buffer: Vec<i16>, samples_per_second: u32) -> Self {
+        AudioRaw{buffer, samples_per_second}
+    }
+
+    pub fn clear(&mut self) {
+        self.buffer.clear()
+    }
+
+    pub fn append_audio(&mut self, other: &[i16], sps: u32) -> bool {
+        if self.samples_per_second == sps {
+            self.buffer.extend(other);
+
+            true
+        }
+        else {
+            false
+        }
+    }
+
 
     pub fn to_wav(&self) -> Result<Vec<u8>, WavError> {
         let spec = hound::WavSpec {
@@ -243,9 +317,6 @@ impl Audio {
         Ok(buffer)
     }
 
-    pub fn clear(&mut self) {
-        self.buffer.clear();
-    }
 }
 
 #[derive(Error, Debug)]
