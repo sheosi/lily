@@ -27,6 +27,7 @@ use log::{info, warn};
 use ref_thread_local::{RefThreadLocal, ref_thread_local};
 use unic_langid::LanguageIdentifier;
 use serde::Deserialize;
+use anyhow::Result;
 
 // To be shared on the same thread
 ref_thread_local! {
@@ -74,7 +75,7 @@ fn load_conf() -> Option<Config> {
 
 
 // Main loop, waits for hotword then records, acts and starts agian
-fn record_loop() {
+fn record_loop() -> Result<()> {
     // Set language
     let config = load_conf().unwrap_or(Config{prefer_online_tts: false, prefer_online_stt: false, ibm_tts_key: None, ibm_stt_key: None, ibm_gateway: None});
     println!("{:?}", config);
@@ -96,7 +97,7 @@ fn record_loop() {
         }
     };
 
-    let mut order_map = load_packages(&Path::new(&resolve_path(PACKAGES_PATH)), &curr_lang).unwrap();
+    let mut order_map = load_packages(&Path::new(&resolve_path(PACKAGES_PATH)), &curr_lang)?;
 
     const MY_PREFS: VoiceDescr = VoiceDescr { gender: Gender::Male};
     *TTS.borrow_mut() = tts::TtsFactory::load_with_prefs(&curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &MY_PREFS);
@@ -131,7 +132,7 @@ fn record_loop() {
     let mut current_speech = crate::audio::Audio::new_empty(16000);
 
     loop {
-        let microphone_data = match record_device.read().unwrap() {
+        let microphone_data = match record_device.read_for_ms(100).unwrap() {
             Some(d) => d,
             None => continue,
         };
@@ -180,7 +181,7 @@ fn record_loop() {
 
                                     // Do action if at least we are 80% confident on
                                     // what we got
-                                    if score >= 0.55 {
+                                    if score >= 0.3 {
                                         info!("Let's call an action");
                                         if let Some(intent_name) = result.intent.intent_name {
                                             order_map.call_order(&intent_name).unwrap();
@@ -208,6 +209,8 @@ fn record_loop() {
             }
         }
     }
+
+    //Ok(())
 }
 
 fn init_log() {
@@ -243,8 +246,10 @@ fn get_locale_default() -> String {
     "".to_string()
 }
 
-fn main() {
+fn main() -> Result<()> {
     init_log();
-    python_init().unwrap();
-    record_loop();
+    python_init()?;
+    record_loop()?;
+
+    Ok(())
 }
