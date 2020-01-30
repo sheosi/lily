@@ -2,10 +2,14 @@ from fluent.runtime import FluentBundle, FluentResource
 import _lily_impl
 from pathlib import Path
 import os
+#import time
+import datetime
+import locale
 
 action_classes = {}
 packages_translations = {}
 
+#locale.setlocale(locale.LC_ALL, 'es_ES.UTF-8')
 
 def action(name):
     def inner_deco(cls):
@@ -55,3 +59,8 @@ class Say():
             what_to_say = args
 
         _lily_impl._say(what_to_say)
+
+@action(name = "play_file")
+class PlayFile():
+    def trigger_action(args):
+        _lily_impl.__play_file(args)
