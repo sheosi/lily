@@ -25,7 +25,7 @@ impl Snowboy {
         let model_path_str = model_path.to_str().ok_or_else(||anyhow!("Failed to transform model path to unicode {:?}", model_path))?;
 
         let detector = rsnowboy::SnowboyDetect::new(res_path_str, model_path_str);
-        detector.set_sensitivity("0.50");
+        detector.set_sensitivity("0.45");
         detector.set_audio_gain(1.0);
         detector.apply_frontend(false);
 
