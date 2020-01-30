@@ -1,4 +1,4 @@
-import lily_ext
+from lily_ext import action
 
 @action(name = "say_date_time")
 class SayTime():
