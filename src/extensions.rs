@@ -143,7 +143,7 @@ impl ActionSet {
             let trig_act = action.obj.getattr(py, "trigger_action").map_err(|py_err|anyhow!("Python error while accessing trigger_action: {:?}", py_err))?; 
             std::env::set_current_dir(action.lily_pkg_path.as_ref())?;
             *crate::python::PYTHON_LILY_PKG_CURR.borrow_mut() = action.lily_pkg_name.clone();
-            trig_act.call(py, PyTuple::new(py, &[action.args.clone_ref(py)]), None).unwrap();
+            trig_act.call(py, PyTuple::new(py, &[action.args.clone_ref(py)]), None).map_err(|py_err|{py_err.clone_ref(py).print(py);anyhow!("Python error while calling action: {:?}", py_err)})?;
             *crate::python::PYTHON_LILY_PKG_CURR.borrow_mut() = PYTHON_LILY_PKG_NONE.borrow().clone();
         }
 
