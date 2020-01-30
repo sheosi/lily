@@ -6,7 +6,7 @@ use crate::audio::PlayDevice;
 
 use unic_langid::LanguageIdentifier;
 use fluent_langneg::negotiate::{negotiate_languages, NegotiationStrategy};
-use cpython::{Python, PyList, PyDict, PyString, PythonObject, PyResult, ToPyObject, py_module_initializer, py_fn, py_method_def, FromPyObject};
+use cpython::{PyClone, Python, PyList, PyDict, PyString, PythonObject, PyResult, ToPyObject, py_module_initializer, py_fn, py_method_def, FromPyObject};
 use yaml_rust::Yaml;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
 use anyhow::{anyhow, Result};
@@ -82,7 +82,7 @@ pub fn try_translate(input: &str) -> Result<String> {
 
             // Remove initial $ from translation
             let call_res_result = lily_ext.call(python, "translate", (&input[1..], PyDict::new(python)), None);
-            let call_res = call_res_result.map_err(|py_err|anyhow!("Somehow translate seems missing in lily_ext, just why? {:?}", py_err))?;
+            let call_res = call_res_result.map_err(|py_err|{py_err.clone_ref(python).print(python);anyhow!("lily_ext's translate failed, most probably you tried to load an inexistent translation, {:?}", py_err)})?;
 
             let trans_lst: PyList = FromPyObject::extract(python, &call_res).map_err(|py_err|anyhow!("translate() didn't return a list: {:?}", py_err))?;
             let res = trans_lst.get_item(python, 0).to_string();
@@ -108,6 +108,7 @@ py_module_initializer!(_lily_impl, init__lily_impl, PyInit__lily_impl, |py, m| {
     m.add(py, "log_warn", py_fn!(py, log_warn(input: &str)))?;
     m.add(py, "log_info", py_fn!(py, log_info(input: &str)))?;
     m.add(py, "__get_curr_lily_package", py_fn!(py, get_current_package()))?;
+    m.add(py, "_PlayFile__play_file", py_fn!(py, play_file(input: &str)))?;
 
     Ok(())
 });
@@ -156,6 +157,12 @@ fn log_error(python: Python, input: &str) -> PyResult<cpython::PyObject>  {
     log::error!("{}", input);
 
     Ok(python.None())
+}
+
+fn play_file(py: Python, input: &str) -> PyResult<cpython::PyObject> {
+    PlayDevice::new().unwrap().play_file(input).unwrap();
+
+    Ok(py.None())
 }
 
 pub fn add_to_sys_path(py: Python, path: &Path) -> Result<()> {

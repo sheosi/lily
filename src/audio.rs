@@ -14,25 +14,15 @@ pub struct PlayDevice {
     device: rodio::Device
 }
 
-
+#[derive(Error, Debug)]
 pub enum PlayFileError {
-    IoErr(std::io::Error),
-    DecoderError(rodio::decoder::DecoderError)
+    #[error("Failed while doing IO")]
+    IoErr(#[from] std::io::Error),
+    #[error("Failed while decoding")]
+    DecoderError(#[from] rodio::decoder::DecoderError)
 }
 
-impl std::convert::From<std::io::Error> for PlayFileError {
-    fn from(err: std::io::Error) -> PlayFileError {
-        PlayFileError::IoErr(err)
-    }
-}
-
-impl std::convert::From<rodio::decoder::DecoderError> for PlayFileError {
-    fn from(err: rodio::decoder::DecoderError) -> PlayFileError {
-        PlayFileError::DecoderError(err)
-    }
-}
-
-impl PlayDevice {
+impl PlayDevice  {
     pub fn new() -> Option<PlayDevice> {
         let device = rodio::default_output_device()?;
         

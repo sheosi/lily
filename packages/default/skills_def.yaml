@@ -2,7 +2,7 @@ include: some_file.yaml # Just a mock up, NYI
 
 say_hello:
   signals:
-    order: Hello
+    order: $order_say_hello
 
   actions:
     say: Hello, dear
@@ -25,6 +25,20 @@ empty_reco: # Called by Lily when active voice ends and nothing is recorded
 
 
 
-# init_reco: # Called by executable when starts listening, the sound is causing problems now so it's disabled
-#   actions:
-#     say: Dime
+init_reco: # Called by executable when starts listening, the sound is causing problems now so it's disabled
+  actions: # We'll play a file for the time being
+    play_file: sounds/beep.ogg
+
+say_time:
+  signals:
+    order: $order_say_time
+
+  actions:
+    say_date_time: $time_format
+
+say_date:
+  signals:
+    order: $order_say_date
+
+  actions:
+    say_date_time: $date_format
