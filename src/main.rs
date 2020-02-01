@@ -34,6 +34,8 @@ ref_thread_local! {
     static managed TTS: Box<dyn crate::tts::Tts> = tts::TtsFactory::dummy();
 }
 
+const HOTWORD_SENSITIVITY: f32 = 0.45;
+
 enum ProgState {
     WaitingForHotword,
     Listening,
@@ -50,7 +52,9 @@ struct Config {
     #[serde(default = "none_str")]
     ibm_stt_key: Option<String>,
     #[serde(default = "none_str")]
-    ibm_gateway: Option<String>
+    ibm_gateway: Option<String>,
+    #[serde(default = "def_hotword_sensitivity")]
+    hotword_sensitivity: f32
 }
 
 fn false_val() -> bool {
@@ -59,6 +63,10 @@ fn false_val() -> bool {
 
 fn none_str() -> Option<String> {
     None
+}
+
+fn def_hotword_sensitivity() -> f32 {
+    HOTWORD_SENSITIVITY
 }
 
 fn load_conf() -> Option<Config> {
@@ -77,7 +85,7 @@ fn load_conf() -> Option<Config> {
 // Main loop, waits for hotword then records, acts and starts agian
 fn record_loop() -> Result<()> {
     // Set language
-    let config = load_conf().unwrap_or(Config{prefer_online_tts: false, prefer_online_stt: false, ibm_tts_key: None, ibm_stt_key: None, ibm_gateway: None});
+    let config = load_conf().unwrap_or(Config{prefer_online_tts: false, prefer_online_stt: false, ibm_tts_key: None, ibm_stt_key: None, ibm_gateway: None, hotword_sensitivity: HOTWORD_SENSITIVITY});
     println!("{:?}", config);
     let curr_lang : LanguageIdentifier = get_locale_default().parse().expect("Locale parsing failed");
     let ibm_tts_gateway_key = {
@@ -113,7 +121,7 @@ fn record_loop() -> Result<()> {
 
     let mut hotword_detector = {
         let snowboy_path = resolve_path(SNOWBOY_DATA_PATH);
-        Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res")).unwrap()
+        Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res"), config.hotword_sensitivity).unwrap()
     };
 
     info!("Init Nlu");
