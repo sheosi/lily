@@ -1,9 +1,9 @@
 use std::time::{SystemTime, Duration, UNIX_EPOCH};
-use std::convert::TryInto;
+use std::io::Write;
 
-use crate::vars::CLOCK_TOO_EARLY_MSG;
 
-use hound;
+use crate::vars::{CLOCK_TOO_EARLY_MSG, LILY_VER};
+
 use rodio::source::Source;
 use thiserror::Error;
 
@@ -185,19 +185,6 @@ impl Data {
             Data::Encoded(_) => false
         }
     }
-
-    fn use_writer<T: std::io::Write + std::io::Seek>(&self, writer: &mut hound::WavWriter<T>) -> Result<(), hound::Error> {
-        match self {
-            Data::Raw(data) =>  {
-                for i in 0 .. data.len() {
-                    writer.write_sample(data[i])?;
-                }
-
-                Ok(())
-            },
-            Data::Encoded(_) => panic!("Can't write to wav an encoded audio")
-        }
-    }
 }
 
 // Just some and audio dummy for now
@@ -231,16 +218,17 @@ impl Audio {
         }
     }
 
-    pub fn write_wav(&self, filename:&str) -> Result<(), WavError> {
+    pub fn write_ogg(&self, filename:&str) -> Result<(), WavError> {
 
-        let spec = hound::WavSpec {
-            channels: 1,
-            sample_rate: self.samples_per_second,
-            bits_per_sample: 16,
-            sample_format: hound::SampleFormat::Int,
-        };
-        let mut writer = hound::WavWriter::create(filename, spec)?;
-        self.buffer.use_writer(&mut writer).unwrap();
+        match &self.buffer {
+            Data::Raw(vec_data) => {
+                let audio_raw = AudioRaw::new_raw(vec_data.clone(), self.samples_per_second);
+                let as_ogg = audio_raw.to_ogg_opus().unwrap();
+                let mut file = std::fs::File::create(filename).unwrap();
+                file.write_all(&as_ogg).unwrap();
+            }
+            Data::Encoded(_) => {panic!("Can't transform to ogg an encoded audio");}
+        }
 
         
 
@@ -283,25 +271,68 @@ impl AudioRaw {
         }
     }
 
+    pub fn to_ogg_opus(&self) -> Result<Vec<u8>, WavError> {
+        const FRAME_TIME_MS: u32 = 20;
+        const FRAME_SAMPLES: u32 = 16000 * 1 * FRAME_TIME_MS / 1000;
 
-    pub fn to_wav(&self) -> Result<Vec<u8>, WavError> {
-        let spec = hound::WavSpec {
-            channels: 1,
-            sample_rate: self.samples_per_second,
-            bits_per_sample: 16,
-            sample_format: hound::SampleFormat::Int,
-        };
         let mut buffer: Vec<u8> = Vec::new();
         {
-            let cursor = std::io::Cursor::new(&mut buffer);
-            let mut writer = hound::WavWriter::new(cursor,spec)?;
-            let mut sample_writer = writer.get_i16_writer(self.buffer.len().try_into().map_err(|_|WavError::TooBig)?);
+            let mut packet_writer = ogg::PacketWriter::new(&mut buffer);
+            let mut opus_encoder = opus::Encoder::new(16000, opus::Channels::Mono, opus::Application::Audio).unwrap();
 
-            for i in 0 .. self.buffer.len() {
-                sample_writer.write_sample(self.buffer[i]);
+            let max = {
+                ((self.buffer.len() as f32 / FRAME_SAMPLES as f32).ceil() as u32) - 1
+            };
+            log::info!("Max {:?}", max);
+
+            fn calc(counter: u32) -> usize {
+                (counter as usize) * (FRAME_SAMPLES as usize)
             }
+            const OPUS_HEAD: [u8; 19] = [
+                b'O', b'p', b'u', b's', b'H', b'e', b'a', b'd', // Magic header
+                1, // Version number, always 1
+                1, // Channels
+                56, 1,//Pre-skip
+                0, 0, 0, 0, // Original Hz (informational)
+                0, 0, // Output gain
+                0, // Channel map
+                // If Channel map != 0, here should go channel mapping table
+            ];
 
-            sample_writer.flush()?;
+            let mut opus_tags : Vec<u8> = Vec::with_capacity(60);
+            let vendor_str = format!("{}, lily {}", opus::version(), LILY_VER);
+            println!("Vendor: {:?}", vendor_str);
+            println!("Len: {:?}", vendor_str.len());
+            opus_tags.extend(b"OpusTags");
+            opus_tags.extend(&[vendor_str.len() as u8,0,0,0]);
+            opus_tags.extend(vendor_str.bytes());
+            opus_tags.extend(&[1,0,0,0]);
+            opus_tags.extend(&[0;12]);
+
+            packet_writer.write_packet(Box::new(OPUS_HEAD), 1, ogg::PacketWriteEndInfo::EndPage, 0).unwrap();
+            packet_writer.write_packet(opus_tags.into_boxed_slice(), 1, ogg::PacketWriteEndInfo::EndPage, 0).unwrap();
+
+            for counter in 0..max - 1{
+                let pos_a: usize = calc(counter);
+                let pos_b: usize = calc(counter + 1);
+
+                
+                let mut temp_buffer = [0; 256];
+                let size = opus_encoder.encode(&self.buffer[pos_a..pos_b], temp_buffer.as_mut()).unwrap();
+                let new_buffer = temp_buffer[0..size].to_owned();
+                
+
+                let end_info = {
+                    if counter != max - 2 {
+                        ogg::PacketWriteEndInfo::NormalPacket
+                    }
+                    else {
+                        ogg::PacketWriteEndInfo::EndStream
+                    }
+                };
+
+                packet_writer.write_packet(new_buffer.into_boxed_slice(), 1, end_info, (calc(counter + 1) as u64)*3).unwrap();
+            }
         }
 
         Ok(buffer)
@@ -311,9 +342,6 @@ impl AudioRaw {
 
 #[derive(Error, Debug)]
 pub enum WavError {
-    #[error("hound error")]
-    Hound(#[from] hound::Error),
-
     #[error("this buffer size is too big ")]
     TooBig
 }

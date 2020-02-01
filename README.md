@@ -73,6 +73,7 @@ Sphinxad
 Python 
 sox (binary) -> for gtts
 libespeak-ng
+libopus
 
 Install english module for NLU:
 sudo snips-nlu download en

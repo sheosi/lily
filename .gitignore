@@ -18,4 +18,4 @@ resources/nlu
 conf.yaml
 
 # Last active listening, saved for debugging purposes
-last_speech.wav
+last_speech.ogg

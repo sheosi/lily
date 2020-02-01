@@ -2,6 +2,8 @@
 use serde::Deserialize;
 use thiserror::Error;
 
+use std::io::Write;
+
 #[derive(Deserialize)]
 struct WattsonResponse {
 
@@ -61,13 +63,13 @@ impl IbmSttEngine {
 		IbmSttEngine{client: reqwest::blocking::Client::new(), api_gateway, api_key}
 	}
 
-	// This one will return a wav
+	// Send all audio in one big chunk
 	pub fn decode(&mut self, audio: &crate::audio::AudioRaw, model: &str) -> Result<Option<(String, Option<String>, i32)>, GttsError> {
 	    let url_str = format!("https://{}/speech-to-text/api/v1/recognize?model=", self.api_gateway);
 	    let url = reqwest::Url::parse(&format!("{}{}", url_str, model))?; 
-	    let as_wav = audio.to_wav()?;
-	    
-	    let res = self.client.post(url).body(as_wav).header("Content-Type", "audio/wav").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send()?.text()?;
+
+	    let as_ogg = audio.to_ogg_opus().unwrap();	    
+	    let res = self.client.post(url).body(as_ogg).header("Content-Type", "audio/ogg").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send()?.text()?;
 	    log::info!("{}", res);
 	    let response: WattsonResponse = serde_json::from_str(&res)?;
 	    let res = {
@@ -89,7 +91,75 @@ impl IbmSttEngine {
 
 	    Ok(res)
 	}
+
+	pub fn live_process(&mut self, audio: &crate::audio::AudioRaw, model: &str) -> Result<(), GttsError> {
+		let url_str = format!("https://{}/speech-to-text/api/v1/recognize?model=", self.api_gateway);
+	    let url = reqwest::Url::parse(&format!("{}{}", url_str, model))?; 
+
+	    
+	    let as_ogg = audio.to_ogg_opus().unwrap();
+	    //as_ogg.push(b'\r');
+	    //as_ogg.push(b'\n');
+
+	    
+	    log::info!("Ogg len: {}",as_ogg.len());
+	    let mut file = std::fs::File::create("test.ogg").unwrap();
+	    file.write_all(&as_ogg).unwrap();
+
+	    /*let mut len_str = as_ogg.len().to_string().into_bytes();
+	    len_str.push(b'\r');
+	    len_str.push(b'\n');*/
+
+	    
+
+	    //len_str.extend(as_ogg);
+	    //let res = self.client.post(url.clone()).body(len_str).header(reqwest::header::CONTENT_TYPE, "audio/wav").header(reqwest::header::TRANSFER_ENCODING, "chunked").header(reqwest::header::AUTHORIZATION,format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send()?.text()?;
+	    //log::info!("{}", res);
+	    
+	    
+	    let res = self.client.post(url).body(as_ogg).header(reqwest::header::CONTENT_TYPE, "audio/ogg").header(reqwest::header::TRANSFER_ENCODING, "chunked").header(reqwest::header::AUTHORIZATION,format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send()?.text()?;
+	    log::info!("{}", res);
+	    //let response: WattsonResponse = serde_json::from_str(&res)?;
+
+	    Ok(/*res*/())
+	}
+	pub fn live_process_end(&mut self, model: &str) -> Result<Option<(String, Option<String>, i32)>, GttsError> {
+		let url_str = format!("https://{}/speech-to-text/api/v1/recognize?model=", self.api_gateway);
+	    let url = reqwest::Url::parse(&format!("{}{}", url_str, model))?; 
+
+
+	    let res = self.client.post(url.clone()).body("0\r\n").header(reqwest::header::CONTENT_TYPE, "audio/ogg").header(reqwest::header::TRANSFER_ENCODING, "chunked").header(reqwest::header::AUTHORIZATION,format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send()?.text()?;
+	    log::info!("{}", res);
+	    
+	    // let mut buffer = crate::audio::AudioWav::empty_wav(16000)?;
+	   	// buffer.push(b'\r');
+	    // buffer.push(b'\n');
+
+	    // let res = self.client.post(url).body(buffer).header(reqwest::header::CONTENT_TYPE, "audio/wav").header(reqwest::header::TRANSFER_ENCODING, "chunked").header(reqwest::header::AUTHORIZATION,format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send()?.text()?;
+	    // log::info!("{}", res);
+	    let response: WattsonResponse = serde_json::from_str(&res)?;
+	    let res = {
+	    	if !response.results.is_empty() {
+		    	let alternatives = &response.results[response.result_index as usize].alternatives;
+
+		    	if !alternatives.is_empty() {
+		    		let res_str = &alternatives[0].transcript;
+		    		Some((res_str.to_string() , None, 0))
+		    	}
+		    	else {
+		    		None
+		    	}
+	    	}
+	    	else {
+	    		None
+	    	}
+	    };
+
+	    Ok(res)
+	}
+
 }
+
 
 pub struct IbmTtsEngine {
 	client: reqwest::blocking::Client,

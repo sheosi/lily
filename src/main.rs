@@ -196,7 +196,7 @@ fn record_loop() -> Result<()> {
                                     }
                                     record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
                                     hotword_detector.start_hotword_check();
-                                    current_speech.write_wav(resolve_path(LAST_SPEECH_PATH).to_str().unwrap()).unwrap();
+                                    current_speech.write_ogg(resolve_path(LAST_SPEECH_PATH).to_str().unwrap()).unwrap();
                                     current_speech.clear();
                                 }
                                 else {

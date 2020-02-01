@@ -9,7 +9,7 @@ pub const PICO_DATA_PATH: &str = "resources/tts";
 pub const SNOWBOY_DATA_PATH: &str = "resources/hotword";
 pub const PYTHON_SDK_PATH: &str = "resources/python";
 pub const PACKAGES_PATH: &str = "packages";	
-pub const LAST_SPEECH_PATH: &str = "last_speech.wav";
+pub const LAST_SPEECH_PATH: &str = "last_speech.ogg";
 pub const MAIN_CONF_PATH: &str = "conf.yaml";
 
 
@@ -29,3 +29,7 @@ pub const PACKAGES_PATH_ERR_MSG: &str = "Packages folder can't be read";
 pub const AUDIO_REC_START_ERR_MSG: &str = "Failed while trying to start audio recording, please report this";
 pub const AUDIO_REC_STOP_ERR_MSG: &str = "Failed while trying to stop audio recording, please report this";
 pub const CLOCK_TOO_EARLY_MSG :&str = "Somehow the system's clock time is before unix epoch, this is not supported, revise your system's time and the CMOS battery";
+
+
+// Other
+pub const LILY_VER: &str = "0.1";

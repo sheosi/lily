@@ -41,6 +41,7 @@ impl Display for SttInfo {
     }
 }
 
+#[derive(PartialEq, Debug)]
 pub enum DecodeState {
     NotStarted, 
     StartListening,
@@ -58,6 +59,12 @@ pub trait SttStream {
 // An Stt which accepts only audio batches
 pub trait SttBatched {
     fn decode(&mut self, audio: &[i16]) -> Result<Option<(String, Option<String>, i32)>, SttError>;
+    fn get_info(&self) -> SttInfo;
+}
+
+pub trait SttVadless {
+    fn process(&mut self, audio: &[i16]) -> Result<(), SttError>;
+    fn end_decoding(&mut self) -> Result<Option<(String, Option<String>, i32)>, SttError>;
     fn get_info(&self) -> SttInfo;
 }
 
@@ -113,7 +120,7 @@ impl SttStream for Pocketsphinx {
                 self.is_speech_started = true;
                 Ok(DecodeState::StartListening)
             } else {
-                Ok(DecodeState::NotStarted)
+                Ok(DecodeState::NotFinished)
             }
         } else {
             if self.is_speech_started {
@@ -122,7 +129,7 @@ impl SttStream for Pocketsphinx {
                 Ok(DecodeState::Finished(self.decoder.get_hyp()))
             } else {
                 // TODO: Check this
-                Ok(DecodeState::NotFinished)
+                Ok(DecodeState::NotStarted)
             }
         }
     }
@@ -154,6 +161,8 @@ impl<V: Vad, S: SttBatched> SttBatcher<V, S> {
         Self {vad, copy_audio: crate::audio::AudioRaw::new_empty(SOUND_SPS), batch_stt, someone_was_talking: false}
     }
 }
+
+
 
 impl<V: Vad, S: SttBatched> SttStream for SttBatcher<V, S> {
     fn begin_decoding(&mut self) -> Result<(),SttError> {
@@ -215,8 +224,10 @@ impl<S: SttBatched, F: SttStream> SttStream for SttOnlineInterface<S, F> {
     }
 
     fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
-        self.copy_audio.append_audio(audio, SOUND_SPS);
         let res = self.fallback.decode(audio)?;
+        if res != DecodeState::NotStarted {
+            self.copy_audio.append_audio(audio, SOUND_SPS);
+        }
         match res {
             DecodeState::Finished(local_res) => {
                 match self.online_stt.decode(&self.copy_audio.buffer) {
@@ -270,6 +281,59 @@ impl SttBatched for IbmStt {
     }
 }
 
+impl SttVadless for IbmStt {
+    fn process(&mut self, audio: &[i16]) -> Result<(), SttError> {
+        self.engine.live_process(&AudioRaw::new_raw(audio.to_vec(), 16000), &self.model).unwrap();
+        Ok(())
+    }
+    fn end_decoding(&mut self) -> Result<Option<(String, Option<String>, i32)>, SttError> {
+        println!("End decode ");
+        let res = self.engine.live_process_end(&self.model).unwrap();
+        Ok(res)
+    }
+    fn get_info(&self) -> SttInfo {
+        SttInfo {name: "Ibm's Speech To Text".to_string(), is_online: true}
+    }
+}
+
+pub struct SttVadlessInterface<S: SttVadless, F: SttStream> {
+    online_stt: S,
+    fallback: F,
+}
+
+
+impl<S: SttVadless, F: SttStream> SttVadlessInterface<S, F> {
+    fn new(online_stt: S,fallback: F) -> Self {
+        Self{online_stt, fallback}
+    }
+}
+
+impl<S: SttVadless, F: SttStream> SttStream for SttVadlessInterface<S,F> {
+    fn begin_decoding(&mut self) -> Result<(),SttError> {
+        self.fallback.begin_decoding()?;
+        Ok(())
+
+    }
+
+    fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
+        self.online_stt.process(audio).unwrap();
+        let res = self.fallback.decode(audio)?;
+        match res {
+            DecodeState::Finished(local_res) => {
+                match self.online_stt.end_decoding() {
+                    Ok(ok_res) => Ok(DecodeState::Finished(ok_res)),
+                    Err(_) => Ok(DecodeState::Finished(local_res))
+                }
+
+            },
+            _ => Ok(res)
+        }
+    }
+
+    fn get_info(&self) -> SttInfo {
+        self.online_stt.get_info()
+    }
+}
 
 // Deepspeech
 #[cfg(feature = "devel_deepspeech")]
