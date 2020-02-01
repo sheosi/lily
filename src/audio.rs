@@ -301,8 +301,6 @@ impl AudioRaw {
 
             let mut opus_tags : Vec<u8> = Vec::with_capacity(60);
             let vendor_str = format!("{}, lily {}", opus::version(), LILY_VER);
-            println!("Vendor: {:?}", vendor_str);
-            println!("Len: {:?}", vendor_str.len());
             opus_tags.extend(b"OpusTags");
             opus_tags.extend(&[vendor_str.len() as u8,0,0,0]);
             opus_tags.extend(vendor_str.bytes());
