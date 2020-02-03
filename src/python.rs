@@ -81,8 +81,8 @@ pub fn try_translate(input: &str) -> Result<String> {
             let lily_ext = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
 
             // Remove initial $ from translation
-            let call_res_result = lily_ext.call(python, "translate", (&input[1..], PyDict::new(python)), None);
-            let call_res = call_res_result.map_err(|py_err|{py_err.clone_ref(python).print(python);anyhow!("lily_ext's translate failed, most probably you tried to load an inexistent translation, {:?}", py_err)})?;
+            let call_res_result = lily_ext.call(python, "_translate_impl", (&input[1..], PyDict::new(python)), None);
+            let call_res = call_res_result.map_err(|py_err|{py_err.clone_ref(python).print(python);anyhow!("lily_ext's translate_impl failed, most probably you tried to load an inexistent translation, {:?}", py_err)})?;
 
             let trans_lst: PyList = FromPyObject::extract(python, &call_res).map_err(|py_err|anyhow!("translate() didn't return a list: {:?}", py_err))?;
             let res = trans_lst.get_item(python, 0).to_string();
@@ -174,6 +174,16 @@ pub fn add_to_sys_path(py: Python, path: &Path) -> Result<()> {
     
     let path_str = path.to_str().ok_or_else(||anyhow!("Couldn't transform given path to add to sys.path into an str"))?;
     sys_path.insert_item(py, 1, PyString::new(py, path_str).into_object());
+
+    Ok(())
+}
+
+pub fn set_python_locale(py: Python, lang_id: &LanguageIdentifier) -> Result<()> {
+    let locale = py.import("locale").map_err(|py_err|anyhow!("Failed while importing locale package: {:?}", py_err))?;
+    let lc_all = locale.get(py, "LC_ALL").map_err(|py_err|anyhow!("Failed to get LC_ALL from locale: {:?}", py_err))?;
+    let local_str = format!("{}.UTF-8", lang_id.to_string().replacen("-", "_", 1));
+    println!("Curr locale: {:?}", local_str);
+    locale.call(py, "setlocale", (lc_all, local_str), None).map_err(|py_err|anyhow!("Failed the call to setlocale: {:?}", py_err))?;
 
     Ok(())
 }

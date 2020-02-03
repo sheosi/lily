@@ -43,22 +43,26 @@ def __set_translations(curr_lang_str):
         log_warn("Translations not present in " + os.getcwd())
 
 
-def translate(trans_name, dict_args):
+def _translate_impl(trans_name, dict_args):
     translations = packages_translations[_lily_impl.__get_curr_lily_package()]
     return translations.format_pattern(translations.get_message(trans_name).value, dict_args)
 
+def translate(trans_name, dict_args):
+    if trans_name[0] == '$':
+        (what_to_say,_) = _translate_impl(trans_name[1:], dict_args)
+    else:
+        what_to_say = trans_name
+
+    return what_to_say
+
+def answer(output):
+    _lily_impl._say(output)
 
 
 @action(name = "say")
 class Say():
     def trigger_action(args):
-
-        if args[0] == '$':
-            (what_to_say,_) = translate(args[1:], {})
-        else:
-            what_to_say = args
-
-        _lily_impl._say(what_to_say)
+        answer(translate(args, {}))
 
 @action(name = "play_file")
 class PlayFile():

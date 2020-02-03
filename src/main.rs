@@ -88,6 +88,12 @@ fn record_loop() -> Result<()> {
     let config = load_conf().unwrap_or(Config{prefer_online_tts: false, prefer_online_stt: false, ibm_tts_key: None, ibm_stt_key: None, ibm_gateway: None, hotword_sensitivity: HOTWORD_SENSITIVITY});
     println!("{:?}", config);
     let curr_lang : LanguageIdentifier = get_locale_default().parse().expect("Locale parsing failed");
+    {
+        let gil = cpython::Python::acquire_gil();
+        let py = gil.python();
+
+        crate::python::set_python_locale(py, &curr_lang)?;
+    }
     let ibm_tts_gateway_key = {
         if config.ibm_gateway.is_some() && config.ibm_tts_key.is_some() {
             Some((config.ibm_gateway.clone().unwrap(), config.ibm_tts_key.unwrap().clone()))
