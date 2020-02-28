@@ -6,11 +6,12 @@ say_hello_i18n = Hola, querido
 
 lily_start = Lily lista para la acción
 
-say_name = Dime tu nombre
-    .a_1 = Di tu nombre
-    .a_2 = Como te llamas
-    .a_3 = Quien eres
+order_say_name = Dime tu nombre
+	.a_1 = Di tu nombre
+	.a_2 = Como te llamas
+	.a_3 = Quien eres
 
+say_name = Mi nombre es lily
 
 order_say_time = Qué hora es
     .a_1 = Dime la hora

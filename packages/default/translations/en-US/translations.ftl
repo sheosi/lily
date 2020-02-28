@@ -5,7 +5,9 @@ say_hello_i18n = Hello, dear
     .a_1 = Hello, my dear
 
 lily_start = Lily ready for action
-say_name = Tell me your name
+order_say_name = Tell me your name
+
+say_name = My name is Lily
 
 order_say_time = What time is it
 	.a_1 = Tell me the time

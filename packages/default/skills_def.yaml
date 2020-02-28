@@ -5,7 +5,7 @@ say_hello:
     order: $order_say_hello
 
   actions:
-    say: Hello, dear
+    say: $say_hello_i18n
 
 lily_start: # Called by lily executable when it's ready to serve petitions
   actions:
@@ -14,10 +14,10 @@ lily_start: # Called by lily executable when it's ready to serve petitions
 
 say_name:
   signals:
-    order: $say_name
+    order: $order_say_name
 
   actions:
-    say: My name is Lily
+    say: $say_name
 
 empty_reco: # Called by Lily when active voice ends and nothing is recorded
   actions:
