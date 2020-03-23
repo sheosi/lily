@@ -16,7 +16,7 @@ use std::path::Path;
 // This crate
 use crate::audio::{RecDevice, PlayDevice, Recording};
 use crate::hotword::{HotwordDetector, Snowboy};
-use crate::nlu::Nlu;
+use crate::nlu::{Nlu, NluFactory};
 use crate::vars::*;
 use crate::packages::load_packages;
 use crate::python::python_init;
@@ -28,6 +28,8 @@ use ref_thread_local::{RefThreadLocal, ref_thread_local};
 use unic_langid::LanguageIdentifier;
 use serde::Deserialize;
 use anyhow::Result;
+use cpython::PyDict;
+use snips_nlu_ontology::Slot;
 
 // To be shared on the same thread
 ref_thread_local! {
@@ -81,6 +83,20 @@ fn load_conf() -> Option<Config> {
 
 }
 
+fn add_slots(base_context: &PyDict, slots: Vec<Slot>) -> PyDict {
+    let gil = cpython::Python::acquire_gil();
+    let py = gil.python();
+
+    // What to do here if this fails?
+    let result = base_context.copy(py).unwrap();
+
+    for slot in slots.into_iter() {
+        result.set_item(py, slot.slot_name, slot.raw_value).unwrap();
+    }
+
+    result
+
+}
 
 // Main loop, waits for hotword then records, acts and starts agian
 fn record_loop() -> Result<()> {
@@ -131,7 +147,7 @@ fn record_loop() -> Result<()> {
     };
 
     info!("Init Nlu");
-    let nlu = Nlu::new(&resolve_path(NLU_ENGINE_PATH)).unwrap();
+    let nlu = NluFactory::new_nlu(&resolve_path(NLU_ENGINE_PATH)).unwrap();
     let mut current_state = ProgState::WaitingForHotword;
 
 
@@ -141,7 +157,15 @@ fn record_loop() -> Result<()> {
     record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
     hotword_detector.start_hotword_check();
 
-    order_map.call_order("lily_start").unwrap();
+    let base_context = {
+        let gil = cpython::Python::acquire_gil();
+        let py = gil.python();
+
+        PyDict::new(py)
+    };
+
+    order_map.call_order("lily_start", &base_context).unwrap();
+    
 
     let mut current_speech = crate::audio::Audio::new_empty(16000);
 
@@ -160,7 +184,7 @@ fn record_loop() -> Result<()> {
                         current_state = ProgState::Listening;
                         stt.begin_decoding().unwrap();
                         info!("Hotword detected");
-                        order_map.call_order("init_reco").unwrap();
+                        order_map.call_order("init_reco", &base_context).unwrap();
                         record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
                     }
                     _ => {}
@@ -188,8 +212,8 @@ fn record_loop() -> Result<()> {
 
                                     }*/
                                     let result = nlu.parse(&hypothesis).unwrap();
-                                    let result_json = Nlu::to_json(&result).unwrap();
-                                    info!("{}", result_json);
+                                    //let result_json = Nlu::to_json(&result).unwrap();
+                                    info!("{:?}", result);
                                     let score = result.intent.confidence_score;
                                     info!("Score: {}",score);
 
@@ -198,15 +222,16 @@ fn record_loop() -> Result<()> {
                                     if score >= 0.3 {
                                         info!("Let's call an action");
                                         if let Some(intent_name) = result.intent.intent_name {
-                                            order_map.call_order(&intent_name).unwrap();
+                                            let slots_context = add_slots(&base_context,result.slots);
+                                            order_map.call_order(&intent_name, &slots_context).unwrap();
                                             info!("Action called");
                                         }
                                         else {
-                                            order_map.call_order("unrecognized").unwrap();
+                                            order_map.call_order("unrecognized", &base_context).unwrap();
                                         }
                                     }
                                     else {
-                                        order_map.call_order("unrecognized").unwrap();
+                                        order_map.call_order("unrecognized", &base_context).unwrap();
                                     }
                                     record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
                                     hotword_detector.start_hotword_check();
@@ -214,7 +239,7 @@ fn record_loop() -> Result<()> {
                                     current_speech.clear();
                                 }
                                 else {
-                                    order_map.call_order("empty_reco").unwrap();
+                                    order_map.call_order("empty_reco", &base_context).unwrap();
                                 }
                             }   
                         }

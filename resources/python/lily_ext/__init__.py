@@ -5,11 +5,11 @@ import os
 #import time
 import datetime
 import locale
+import random
+from enum import Enum
 
 action_classes = {}
 packages_translations = {}
-
-#locale.setlocale(locale.LC_ALL, 'es_ES.UTF-8')
 
 def action(name):
     def inner_deco(cls):
@@ -40,16 +40,51 @@ def __set_translations(curr_lang_str):
                     trans_ftl = f.read()
                 translations.add_resource(FluentResource(trans_ftl))
     else:
-        log_warn("Translations not present in " + os.getcwd())
+        _lily_impl.log_warn("Translations not present in " + os.getcwd())
 
+
+def _gen_trans_list(trans_name):
+    translations = packages_translations[_lily_impl.__get_curr_lily_package()]
+
+    trans = translations.get_message(trans_name)
+    print(trans_name + ":" + str(trans.attributes))
+    all_trans = list(trans.attributes.values())
+    all_trans.insert(0, trans.value)
+
+    return (translations, all_trans)
+
+def _translate_all_impl(trans_name, dict_args):
+    translations, all_trans = _gen_trans_list(trans_name)
+    
+
+    def extract_trans(element):
+        trans, err = translations.format_pattern(element, dict_args)
+        return trans
+
+    res = list(map(extract_trans, all_trans))
+    return res
 
 def _translate_impl(trans_name, dict_args):
-    translations = packages_translations[_lily_impl.__get_curr_lily_package()]
-    return translations.format_pattern(translations.get_message(trans_name).value, dict_args)
+    translations, all_trans = _gen_trans_list(trans_name)
+    print(str(all_trans))
+    sel_trans = random.choice(all_trans)
+    trans, err = translations.format_pattern(sel_trans, dict_args)
+
+    return trans
+
+
+def translate_all(trans_name, dict_args):
+    if trans_name[0] == '$':
+        what_to_say = _translate_all_impl(trans_name[1:], dict_args)
+    else:
+        what_to_say = [trans_name]
+
+    return what_to_say
 
 def translate(trans_name, dict_args):
+    """Returns a translated element, if multiple exist one at random is selected"""
     if trans_name[0] == '$':
-        (what_to_say,_) = _translate_impl(trans_name[1:], dict_args)
+        what_to_say = _translate_impl(trans_name[1:], dict_args)
     else:
         what_to_say = trans_name
 
@@ -61,10 +96,10 @@ def answer(output):
 
 @action(name = "say")
 class Say():
-    def trigger_action(args):
-        answer(translate(args, {}))
+    def trigger_action(args, context):
+        answer(translate(args, context))
 
 @action(name = "play_file")
 class PlayFile():
-    def trigger_action(args):
+    def trigger_action(args, _context):
         _lily_impl.__play_file(args)

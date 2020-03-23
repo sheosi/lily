@@ -89,6 +89,8 @@ impl Pocketsphinx {
                 stt_path.join(&iso_str).join(iso_str.to_string() + ".lm.bin").to_str().unwrap(),
                 "-dict",
                 stt_path.join(&iso_str).join("cmudict-".to_owned() + &iso_str + ".dict").to_str().unwrap(),
+                "-logfn", "nul" // This is to silence pocketpshinx, however without it it spits all params
+                                // so is pretty useful
             ],
         )
         .unwrap();

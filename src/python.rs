@@ -7,7 +7,7 @@ use crate::audio::PlayDevice;
 use unic_langid::LanguageIdentifier;
 use fluent_langneg::negotiate::{negotiate_languages, NegotiationStrategy};
 use cpython::{PyClone, Python, PyList, PyDict, PyString, PythonObject, PyResult, ToPyObject, py_module_initializer, py_fn, py_method_def, FromPyObject};
-use yaml_rust::Yaml;
+use serde_yaml::Value;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
 use anyhow::{anyhow, Result};
 
@@ -16,18 +16,22 @@ ref_thread_local! {
     pub static managed PYTHON_LILY_PKG_CURR: Rc<String> = PYTHON_LILY_PKG_NONE.borrow().clone();
 }
 
-pub fn yaml_to_python(yaml: &yaml_rust::Yaml, py: Python) -> cpython::PyObject {
+pub fn yaml_to_python(yaml: &serde_yaml::Value, py: Python) -> cpython::PyObject {
     // If for some reason we can't transform, just panic, but the odds should be really small
 
     match yaml {
-        Yaml::Real(string) => { // This should always parse into a float
-            string.parse::<f64>().unwrap().into_py_object(py).into_object()
-        }
-        Yaml::Integer(int) => {
-            int.into_py_object(py).into_object()
+        Value::Number(num) => {
+            if let Some(int) = num.as_u64() {
+                int.into_py_object(py).into_object()
+            }
+            else {
+                // This should be an f64 for sure, so we are sure about the unwrap
+                // Note: Inf and NaN cases haven't been tested
+                num.as_f64().unwrap().into_py_object(py).into_object()    
+            }
 
         }
-        Yaml::Boolean(boolean) => {
+        Value::Bool(boolean) => {
             if *boolean {
                 cpython::Python::True(py).into_object()
             }
@@ -35,31 +39,25 @@ pub fn yaml_to_python(yaml: &yaml_rust::Yaml, py: Python) -> cpython::PyObject {
                 cpython::Python::False(py).into_object()
             }
         }
-        Yaml::String(string) => {
+        Value::String(string) => {
             string.into_py_object(py).into_object()
         }
-        Yaml::Array(array) => {
-            let vec: Vec<_> = array.iter().map(|data| yaml_to_python(data, py)).collect();
+        Value::Sequence(seq) => {
+            let vec: Vec<_> = seq.iter().map(|data| yaml_to_python(data, py)).collect();
             cpython::PyList::new(py, &vec).into_object()
 
         }
-        Yaml::Hash(hash) => {
+        Value::Mapping(mapping) => {
             let dict = PyDict::new(py);
-            for (key, value) in hash.iter() { // There shouldn't be a problem with this either
+            for (key, value) in mapping.iter() { // There shouldn't be a problem with this either
                 dict.set_item(py, yaml_to_python(key,py), yaml_to_python(value, py)).unwrap();
             }
             
             dict.into_object()
 
         }
-        Yaml::Null => {
+        Value::Null => {
             cpython::Python::None(py)
-        }
-        Yaml::BadValue => {
-            panic!("Received a BadValue");
-        }
-        Yaml::Alias(index) => { // Alias are not supported right now, they are insecure and problematic anyway
-            format!("Alias, index: {}", index).into_py_object(py).into_object()
         }
     }
 }
@@ -71,7 +69,7 @@ pub fn python_init() -> Result<()> {
     Ok(())
 }
 
-pub fn try_translate(input: &str) -> Result<String> {
+pub fn try_translate_all(input: &str) -> Result<Vec<String>> {
     if let Some(first_letter) = input.chars().nth(0) {
         if first_letter == '$' {
             // Get GIL
@@ -81,21 +79,19 @@ pub fn try_translate(input: &str) -> Result<String> {
             let lily_ext = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
 
             // Remove initial $ from translation
-            let call_res_result = lily_ext.call(python, "_translate_impl", (&input[1..], PyDict::new(python)), None);
+            let call_res_result = lily_ext.call(python, "_translate_all_impl", (&input[1..], PyDict::new(python)), None);
             let call_res = call_res_result.map_err(|py_err|{py_err.clone_ref(python).print(python);anyhow!("lily_ext's translate_impl failed, most probably you tried to load an inexistent translation, {:?}", py_err)})?;
 
-            let trans_lst: PyList = FromPyObject::extract(python, &call_res).map_err(|py_err|anyhow!("translate() didn't return a list: {:?}", py_err))?;
-            let res = trans_lst.get_item(python, 0).to_string();
-            println!("Translation:{:?}", res);
-
-            Ok(res)
+            let trans_lst:Vec<String> = FromPyObject::extract(python, &call_res).map_err(|py_err|anyhow!("translate() didn't return a list: {:?}", py_err))?;
+            
+            Ok(trans_lst)
         }
         else {
-            Ok(input.to_string())
+            Ok(vec![input.to_string()])
         }
     }
     else {
-            Ok(input.to_string())
+            Ok(vec![input.to_string()])
     }
 }
 
@@ -182,7 +178,7 @@ pub fn set_python_locale(py: Python, lang_id: &LanguageIdentifier) -> Result<()>
     let locale = py.import("locale").map_err(|py_err|anyhow!("Failed while importing locale package: {:?}", py_err))?;
     let lc_all = locale.get(py, "LC_ALL").map_err(|py_err|anyhow!("Failed to get LC_ALL from locale: {:?}", py_err))?;
     let local_str = format!("{}.UTF-8", lang_id.to_string().replacen("-", "_", 1));
-    println!("Curr locale: {:?}", local_str);
+    log::info!("Curr locale: {:?}", local_str);
     locale.call(py, "setlocale", (lc_all, local_str), None).map_err(|py_err|anyhow!("Failed the call to setlocale: {:?}", py_err))?;
 
     Ok(())
