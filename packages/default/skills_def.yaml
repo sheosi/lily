@@ -1,5 +1,3 @@
-include: some_file.yaml # Just a mock up, NYI
-
 say_hello:
   signals:
     order: $order_say_hello
@@ -24,6 +22,22 @@ empty_reco: # Called by Lily when active voice ends and nothing is recorded
     say: $say_hello_i18n
 
 
+repeat:
+  signals:
+    order:
+      text: $order_repeat
+      entities:
+        what_to_repeat:
+          kind: 
+            data:
+              - $data1
+              - $data2
+                  
+          example: $data1
+
+    
+  actions:
+    say: $say_repeat
 
 init_reco: # Called by executable when starts listening, the sound is causing problems now so it's disabled
   actions: # We'll play a file for the time being
