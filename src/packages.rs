@@ -2,10 +2,11 @@
 use std::path::Path;
 use std::rc::Rc;
 use std::collections::HashMap;
+use std::convert::TryInto;
 
 // This crate
 use crate::vars::{resolve_path, NLU_TRAIN_SET_PATH, NLU_ENGINE_PATH, PYTHON_SDK_PATH, PACKAGES_PATH_ERR_MSG, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
-use crate::nlu::{NluManager, NluFactory, NluUtterance, EntityDef, EntityInstance};
+use crate::nlu::{NluManager, NluFactory, NluUtterance, EntityDef, EntityData, EntityInstance};
 use crate::python::{try_translate_all, PYTHON_LILY_PKG_NONE, PYTHON_LILY_PKG_CURR};
 use crate::extensions::{OrderMap, ActionSet, ActionRegistry};
 
@@ -18,10 +19,15 @@ use anyhow::{anyhow, Result};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
+struct YamlEntityDef {
+    data: Vec<String>
+}
+
+#[derive(Deserialize)]
 #[serde(untagged)]
 enum OrderKind {
     Ref(String),
-    Def(EntityDef)
+    Def(YamlEntityDef)
 }
 
 #[derive(Deserialize)]
@@ -48,6 +54,22 @@ impl IntoMapping for serde_yaml::Value {
             serde_yaml::Value::Mapping(mapping) => Some(mapping),
             _ => None
         }
+    }
+}
+
+impl TryInto<EntityDef> for YamlEntityDef {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<EntityDef> {
+        let mut data = Vec::new();
+
+        for trans_data in self.data.into_iter(){
+            let mut translations = try_translate_all(&trans_data)?;
+            let value = translations.swap_remove(0);
+            data.push(EntityData{value, synonyms: translations});
+        }
+
+        Ok(EntityDef{data, use_synonyms: true, automatically_extensible: true})
     }
 }
 
@@ -153,7 +175,7 @@ pub fn load_package<N: NluManager>(order_map: &mut OrderMap, nlu_man: &mut N, ac
                                         },
                                         OrderKind::Def(def) => {
                                             let name = format!("_{}__{}_", pkg_name, ent_name);
-                                            nlu_man.add_entity(&name, def);
+                                            nlu_man.add_entity(&name, def.try_into()?);
                                             name
                                         }
                                     };
@@ -172,7 +194,7 @@ pub fn load_package<N: NluManager>(order_map: &mut OrderMap, nlu_man: &mut N, ac
                 order_map.add_order(skill_name, act_set);
             }
             else {
-                warn!("Incorrect Yaml format for skill: {}, won't be loaded", key.clone().as_str().expect(WRONG_YAML_KEY_MSG));
+                warn!("Incorrect Yaml format for skill: \"{}\", won't be loaded", key.clone().as_str().expect(WRONG_YAML_KEY_MSG));
             }
         }
     }

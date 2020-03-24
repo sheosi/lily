@@ -69,9 +69,14 @@ pub fn python_init() -> Result<()> {
     Ok(())
 }
 
-pub fn try_translate_all(input: &str) -> Result<Vec<String>> {
+
+//Have to repeat implementation because can't be genericiced on FromPyObject because
+//it requires a lifetime (because of some implementations) which means we can't drop
+//the reference to call_res
+pub fn try_translate(input: &str) -> Result<String> {
     if let Some(first_letter) = input.chars().nth(0) {
         if first_letter == '$' {
+                        
             // Get GIL
             let gil = Python::acquire_gil();
             let python = gil.python();
@@ -79,10 +84,36 @@ pub fn try_translate_all(input: &str) -> Result<Vec<String>> {
             let lily_ext = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
 
             // Remove initial $ from translation
-            let call_res_result = lily_ext.call(python, "_translate_all_impl", (&input[1..], PyDict::new(python)), None);
-            let call_res = call_res_result.map_err(|py_err|{py_err.clone_ref(python).print(python);anyhow!("lily_ext's translate_impl failed, most probably you tried to load an inexistent translation, {:?}", py_err)})?;
+            let call_res_result = lily_ext.call(python, "_translate_impl", (&input[1..], PyDict::new(python)), None);
+            let call_res = call_res_result.map_err(|py_err|{py_err.clone_ref(python).print(python);anyhow!("lily_ext's \"__translate_impl\" failed, most probably you tried to load an inexistent translation, {:?}", py_err)})?;
 
-            let trans_lst:Vec<String> = FromPyObject::extract(python, &call_res).map_err(|py_err|anyhow!("translate() didn't return a list: {:?}", py_err))?;
+            let trans_lst: String = FromPyObject::extract(python, &call_res).map_err(|py_err|anyhow!("_translate_impl() didn't return a string: {:?}", py_err))?;
+            
+            Ok(trans_lst)
+        }
+        else {
+            Ok(input.to_string())
+        }
+    }
+    else {
+            Ok(input.to_string())
+    }
+}
+
+pub fn try_translate_all(input: &str) -> Result<Vec<String>> {
+    if let Some(first_letter) = input.chars().nth(0) {
+        if first_letter == '$' {
+                // Get GIL
+            let gil = Python::acquire_gil();
+            let python = gil.python();
+
+            let lily_ext = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
+
+            // Remove initial $ from translation
+            let call_res_result = lily_ext.call(python, "_translate_all_impl", (&input[1..], PyDict::new(python)), None);
+            let call_res = call_res_result.map_err(|py_err|{py_err.clone_ref(python).print(python);anyhow!("lily_ext's \"__translate_all_impl\" failed, most probably you tried to load an inexistent translation, {:?}", py_err)})?;
+
+            let trans_lst: Vec<String> = FromPyObject::extract(python, &call_res).map_err(|py_err|anyhow!("_translate_all_impl() didn't return a list: {:?}", py_err))?;
             
             Ok(trans_lst)
         }

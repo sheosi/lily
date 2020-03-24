@@ -2,13 +2,15 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::io::{Read, Write, Seek, SeekFrom};
 
+use crate::python::try_translate;
+
 use unic_langid::LanguageIdentifier;
-use serde::{Serialize, Deserialize};
+use serde::Serialize;
 use snips_nlu_lib::SnipsNluEngine;
 use anyhow::{anyhow, Result};
 use regex::Regex;
 
-
+//// NluManager ///////////////////////////////////////////////////////////////////////////////////
 #[derive(Serialize)]
 struct NluTrainSet {
     entities: HashMap<String, EntityDef>,
@@ -37,25 +39,17 @@ struct UtteranceData {
     slot_name: Option<String>
 }
 
-fn bool_true() -> bool {true}
-fn empty_vec() -> Vec<String> {Vec::new()}
-#[derive(Deserialize, Serialize)]
+#[derive(Serialize)]
 pub struct EntityData {
-    value: String,
-
-    #[serde(default="empty_vec")]
-    synonyms: Vec<String>
+    pub value: String,
+    pub synonyms: Vec<String>
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Serialize)]
 pub struct EntityDef {
-    data: Vec<EntityData>,
-
-    #[serde(default="bool_true")]
-    use_synonyms: bool,
-
-    #[serde(default="bool_true")]
-    automatically_extensible: bool
+    pub data: Vec<EntityData>,
+    pub use_synonyms: bool,
+    pub automatically_extensible: bool
 }
 
 #[derive(Serialize)]
@@ -99,6 +93,38 @@ enum SplitCapKind {
     Text, Entity
 }
 
+impl Into<Utterance> for NluUtterance {
+    fn into(self) -> Utterance {
+        // Capture "{something}" but ignore "\{something}", "something}" will also be ignored
+        let re = Regex::new(r"[^\\]\{\s*\$([^}]+)\s*\}").unwrap();
+
+        // Prepare data
+        match self {
+            NluUtterance::Direct(text) => {
+                Utterance{data: vec![UtteranceData{text: text.to_string(), entity: None, slot_name: None}]}
+            },
+            NluUtterance::WithEntities {text, entities} => {                    
+
+                let construct_utt = |(text, kind):&(&str, SplitCapKind)| {
+                    match kind {
+                        SplitCapKind::Text => UtteranceData{text: text.to_string(), entity: None, slot_name: None},
+                        SplitCapKind::Entity => {
+                            println!("Entity: {:?}", text);
+                            let ent_data = &entities[&text.to_string()];
+                            UtteranceData{text: try_translate(&ent_data.example).unwrap(), entity: Some(ent_data.kind.clone()), slot_name: Some(text.to_string())}
+                        }
+                    }
+                };
+                
+                Utterance{data: split_captures(&re, &text).iter().map(construct_utt).collect()}
+            }
+        }
+            
+        
+    }
+}
+
+
 fn split_captures<'a>(re: &'a Regex, input: &'a str) ->  Vec<(&'a str, SplitCapKind)>{
     let mut cap_loc = re.capture_locations();
     let mut last_pos = 0;
@@ -131,6 +157,21 @@ fn split_captures<'a>(re: &'a Regex, input: &'a str) ->  Vec<(&'a str, SplitCapK
     result
 }
 
+impl SnipsNluManager {
+    fn make_train_set_json(self, lang: &LanguageIdentifier) -> Result<String> {
+        let mut intents: HashMap<String, Intent> = HashMap::new();
+        for (name, utts) in self.intents.into_iter() {
+            let utterances: Vec<Utterance> = utts.into_iter().map(|utt| utt.into()).collect();
+            intents.insert(name.to_string(), Intent{utterances});
+        }
+
+        let train_set = NluTrainSet{entities: self.entities, intents, language: lang.get_language().to_string()};
+
+        // Output JSON
+        Ok(serde_json::to_string(&train_set)?)
+
+    }
+}
 
 impl NluManager for SnipsNluManager {
     fn add_intent(&mut self, order_name: &str, phrases: Vec<NluUtterance>) {
@@ -143,44 +184,7 @@ impl NluManager for SnipsNluManager {
 
     fn train(self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<()> {
 
-        // Capture "{something}" but ignore "\{something}", "something}" will also be ignored
-        let re = Regex::new(r"[^\\]\{\s*\$([^}]+)\s*\}")?;
-
-    	// Prepare data
-    	let make_utt = |input: &NluUtterance| {
-            match input {
-                NluUtterance::Direct(text) => {
-                    Utterance{data: vec![UtteranceData{text: text.to_string(), entity: None, slot_name: None}]}
-                },
-                NluUtterance::WithEntities {text, entities} => {                    
-
-                    let construct_utt = |(text, kind):&(&str, SplitCapKind)| {
-                        match kind {
-                            SplitCapKind::Text => UtteranceData{text: text.to_string(), entity: None, slot_name: None},
-                            SplitCapKind::Entity => {
-                                println!("Entity: {:?}", text);
-                                let ent_data = &entities[&text.to_string()];
-                                UtteranceData{text: ent_data.example.clone(), entity: Some(ent_data.kind.clone()), slot_name: Some(text.to_string())}
-                            }
-                        }
-                    };
-                    
-                    Utterance{data: split_captures(&re, text).iter().map(construct_utt).collect()}
-                }
-            }
-    		
-    	};
-
-    	let mut intents: HashMap<String, Intent> = HashMap::new();
-    	for (name, utts) in self.intents.iter() {
-    		let utterances = utts.into_iter().map(make_utt).collect();
-    		intents.insert(name.to_string(), Intent{utterances});
-    	}
-
-    	let train_set = NluTrainSet{entities: self.entities, intents, language: lang.get_language().to_string()};
-
-    	// Output JSON
-    	let train_set = serde_json::to_string(&train_set)?;
+    	let train_set = self.make_train_set_json(lang)?;
 
     	// Write to file
     	let mut train_file = std::fs::OpenOptions::new().read(true).write(true).create(true).open(train_set_path);
@@ -209,7 +213,7 @@ impl NluManager for SnipsNluManager {
                 std::fs::create_dir_all(path_parent)?;
             }
 
-            //Clean engine folder
+            // Clean engine folder
             if engine_path.is_dir() {
                 std::fs::remove_dir_all(engine_path)?;
             }
@@ -229,6 +233,8 @@ impl NluManager for SnipsNluManager {
     }
 }
 
+/// Nlu ////////////////////////////////////////////////////////////////////////////////////////////
+
 pub struct SnipsNlu {
     engine: SnipsNluEngine,
 }
@@ -242,6 +248,8 @@ impl SnipsNlu {
 }
 
 impl Nlu for SnipsNlu {
+    type NluResult = snips_nlu_ontology::IntentParserResult;
+
     fn parse(&self, input: &str) -> snips_nlu_lib::Result<snips_nlu_ontology::IntentParserResult> {
         self.engine.parse_with_alternatives(&input, None, None, 3, 3)
     }
@@ -253,8 +261,9 @@ impl Nlu for SnipsNlu {
 }
 
 pub trait Nlu {
-    fn parse(&self, input: &str) -> snips_nlu_lib::Result<snips_nlu_ontology::IntentParserResult>;
-    //fn to_json(res: &snips_nlu_ontology::IntentParserResult ) -> Result<String>;
+    type NluResult;
+
+    fn parse(&self, input: &str) -> snips_nlu_lib::Result<Self::NluResult>;
 }
 
 pub struct NluFactory {}

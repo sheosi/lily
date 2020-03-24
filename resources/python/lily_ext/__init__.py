@@ -47,7 +47,6 @@ def _gen_trans_list(trans_name):
     translations = packages_translations[_lily_impl.__get_curr_lily_package()]
 
     trans = translations.get_message(trans_name)
-    print(trans_name + ":" + str(trans.attributes))
     all_trans = list(trans.attributes.values())
     all_trans.insert(0, trans.value)
 
@@ -66,7 +65,6 @@ def _translate_all_impl(trans_name, dict_args):
 
 def _translate_impl(trans_name, dict_args):
     translations, all_trans = _gen_trans_list(trans_name)
-    print(str(all_trans))
     sel_trans = random.choice(all_trans)
     trans, err = translations.format_pattern(sel_trans, dict_args)
 
