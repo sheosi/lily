@@ -6,7 +6,7 @@ use crate::audio::PlayDevice;
 
 use unic_langid::LanguageIdentifier;
 use fluent_langneg::negotiate::{negotiate_languages, NegotiationStrategy};
-use cpython::{PyClone, Python, PyList, PyDict, PyString, PythonObject, PyResult, ToPyObject, py_module_initializer, py_fn, py_method_def, FromPyObject};
+use cpython::{PyClone, Python, PyList, PyDict, PyString, PythonObject, PyResult, ToPyObject, py_module_initializer, py_fn, FromPyObject};
 use serde_yaml::Value;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
 use anyhow::{anyhow, Result};
@@ -200,7 +200,7 @@ pub fn add_to_sys_path(py: Python, path: &Path) -> Result<()> {
     };
     
     let path_str = path.to_str().ok_or_else(||anyhow!("Couldn't transform given path to add to sys.path into an str"))?;
-    sys_path.insert_item(py, 1, PyString::new(py, path_str).into_object());
+    sys_path.insert(py, 1, PyString::new(py, path_str).into_object());
 
     Ok(())
 }

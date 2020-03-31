@@ -126,7 +126,7 @@ impl PicoTts {
 
     // Just accept a negotiated LanguageIdentifier
     fn sg_name(lang: &LanguageIdentifier) -> &'static str {
-        let lang_str = format!("{}-{}", lang.get_language(), lang.get_region().unwrap());
+        let lang_str = format!("{}-{}", lang.language(), lang.region().unwrap());
         match lang_str.as_str()  {
             "es-ES" => "es-ES_zl0_sg.bin",
             "en-US" => "en-US_lh0_sg.bin",
@@ -136,7 +136,7 @@ impl PicoTts {
     }
 
     fn ta_name(lang: &LanguageIdentifier) -> String {
-        format!("{}-{}_ta.bin", lang.get_language() , lang.get_region().unwrap())
+        format!("{}-{}_ta.bin", lang.language() , lang.region().unwrap())
     }
 
     // There's only one voice of Pico per language so preferences are not of much use here
@@ -275,7 +275,7 @@ impl IbmTts {
 
     // Accept only negotiated LanguageIdentifiers
     fn make_tts_voice(lang: &LanguageIdentifier, prefs: &VoiceDescr) -> &'static str {
-        let lang_str = format!("{}-{}", lang.get_language(), lang.get_region().unwrap());
+        let lang_str = format!("{}-{}", lang.language(), lang.region().unwrap());
         match lang_str.as_str() {
             "es-ES" => {
                 match prefs.gender {
@@ -297,7 +297,7 @@ impl IbmTts {
     fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
         let available_langs = langids!("es-ES", "en-US");
         let default = langid!("en-US");
-        negotiate_languages(&[lang],&available_langs, Some(&default), NegotiationStrategy::Filtering)[0].clone()
+        negotiate_languages(&[&lang],&available_langs, Some(&default), NegotiationStrategy::Filtering)[0].clone()
     }
 }
 

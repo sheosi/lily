@@ -165,7 +165,7 @@ impl SnipsNluManager {
             intents.insert(name.to_string(), Intent{utterances});
         }
 
-        let train_set = NluTrainSet{entities: self.entities, intents, language: lang.get_language().to_string()};
+        let train_set = NluTrainSet{entities: self.entities, intents, language: lang.language().to_string()};
 
         // Output JSON
         Ok(serde_json::to_string(&train_set)?)
@@ -250,7 +250,7 @@ impl SnipsNlu {
 impl Nlu for SnipsNlu {
     type NluResult = snips_nlu_ontology::IntentParserResult;
 
-    fn parse(&self, input: &str) -> snips_nlu_lib::Result<snips_nlu_ontology::IntentParserResult> {
+    fn parse(&self, input: &str) -> snips_nlu_lib::Result<Self::NluResult> {
         self.engine.parse_with_alternatives(&input, None, None, 3, 3)
     }
 
