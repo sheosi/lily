@@ -9,6 +9,7 @@ use serde::Serialize;
 use snips_nlu_lib::SnipsNluEngine;
 use anyhow::{anyhow, Result};
 use regex::Regex;
+use log::warn;
 
 //// NluManager ///////////////////////////////////////////////////////////////////////////////////
 #[derive(Serialize)]
@@ -96,7 +97,7 @@ enum SplitCapKind {
 impl Into<Utterance> for NluUtterance {
     fn into(self) -> Utterance {
         // Capture "{something}" but ignore "\{something}", "something}" will also be ignored
-        let re = Regex::new(r"[^\\]\{\s*\$([^}]+)\s*\}").unwrap();
+        let re = Regex::new(r"[^\\]\{\s*\$([^}]+)\s*\}").expect("Error on regex");
 
         // Prepare data
         match self {
@@ -111,7 +112,15 @@ impl Into<Utterance> for NluUtterance {
                         SplitCapKind::Entity => {
                             println!("Entity: {:?}", text);
                             let ent_data = &entities[&text.to_string()];
-                            UtteranceData{text: try_translate(&ent_data.example).unwrap(), entity: Some(ent_data.kind.clone()), slot_name: Some(text.to_string())}
+                             match try_translate(&ent_data.example) {
+                                Ok(trans) =>  {
+                                    UtteranceData{text: trans, entity: Some(ent_data.kind.clone()), slot_name: Some(text.to_string())}
+                                }
+                                Err(err) => {
+                                    warn!("Failed to do translation of \"{}\", error: {:?}", &ent_data.example, err);
+                                    UtteranceData{text: ent_data.example.clone(), entity: Some(ent_data.kind.clone()), slot_name: Some(text.to_string())}
+                                }
+                            }
                         }
                     }
                 };
@@ -131,8 +140,8 @@ fn split_captures<'a>(re: &'a Regex, input: &'a str) ->  Vec<(&'a str, SplitCapK
     let mut result = Vec::new();
 
     while {re.captures_read_at(&mut cap_loc, input, last_pos); cap_loc.get(1).is_some()} {
-        let (whole_s, whole_e) = cap_loc.get(0).unwrap();
-        let (name_s, name_e) = cap_loc.get(1).unwrap();
+        let (whole_s, whole_e) = cap_loc.get(0).expect("What? Couldn't get whole capture?");
+        let (name_s, name_e) = cap_loc.get(1).expect("Please make sure that the regex a mandatory capture group");
 
         if whole_s != last_pos {
             // We need a character before '{' to check that is not '\{' since look-behind

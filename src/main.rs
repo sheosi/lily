@@ -10,6 +10,7 @@ mod packages;
 mod vad;
 mod extensions;
 mod config;
+mod path_ext;
 
 // Standard library
 use std::path::Path;
@@ -86,7 +87,7 @@ fn record_loop() -> Result<()> {
 
     let mut order_map = load_packages(&Path::new(&resolve_path(PACKAGES_PATH)), &curr_lang)?;
 
-    const VOICE_PREFS: VoiceDescr = VoiceDescr { gender: Gender::Male};
+    const VOICE_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};
     *TTS.borrow_mut() = tts::TtsFactory::load_with_prefs(&curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS)?;
     info!("Using tts {}", TTS.borrow().get_info());
 
@@ -94,7 +95,7 @@ fn record_loop() -> Result<()> {
     let mut _play_device = PlayDevice::new();
 
 
-    let mut stt = stt::SttFactory::load(&curr_lang, config.prefer_online_stt, ibm_stt_gateway_key);
+    let mut stt = stt::SttFactory::load(&curr_lang, config.prefer_online_stt, ibm_stt_gateway_key)?;
     info!("Using stt {}", stt.get_info());
 
     let mut hotword_detector = {
@@ -122,7 +123,7 @@ fn record_loop() -> Result<()> {
     info!("Start Recording");
     // Start recording
     record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
-    hotword_detector.start_hotword_check();    
+    hotword_detector.start_hotword_check()?;    
 
 
 
@@ -195,7 +196,7 @@ fn record_loop() -> Result<()> {
                                     order_map.call_order("empty_reco", &base_context)?;
                                 }
 
-                                hotword_detector.start_hotword_check();
+                                hotword_detector.start_hotword_check()?;
                             }   
                         }
                     }

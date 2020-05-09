@@ -1,11 +1,11 @@
 use std::path::Path;
-use crate::vad::Vad;
+use crate::vad::{Vad, VadError};
 use log::{debug, info};
 use anyhow::{anyhow, Result};
 use thiserror::Error;
 
 pub trait HotwordDetector {
-    fn start_hotword_check(&mut self);
+    fn start_hotword_check(&mut self) -> Result<(), VadError>;
     fn check_hotword(&mut self, audio: &[i16]) -> Result<bool>;
 }
 
@@ -19,7 +19,7 @@ pub struct Snowboy {
 impl Snowboy {
     pub fn new(model_path: &Path, res_path: &Path, sensitivity: f32) -> Result<Snowboy> {
 
-        let vad = crate::vad::SnowboyVad::new(res_path);
+        let vad = crate::vad::SnowboyVad::new(res_path)?;
 
         let res_path_str = res_path.to_str().ok_or_else(||anyhow!("Failed to transform resource path to unicode {:?}", res_path))?;
         let model_path_str = model_path.to_str().ok_or_else(||anyhow!("Failed to transform model path to unicode {:?}", model_path))?;
@@ -38,11 +38,13 @@ impl Snowboy {
 }
 
 impl HotwordDetector for Snowboy {
-    fn start_hotword_check(&mut self) {
+    fn start_hotword_check(&mut self) -> Result<(), VadError> {
         self.detector.reset();
-        self.vad.reset();
+        self.vad.reset()?;
         //self.someone_talking = false;
         info!("WaitingForHotword");
+
+        Ok(())
     }
 
     fn check_hotword(&mut self, audio: &[i16]) -> Result<bool> {
