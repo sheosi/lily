@@ -1,8 +1,9 @@
 use core::fmt::Display;
 
 use crate::vars::{STT_DATA_PATH, resolve_path};
-use crate::vad::Vad;
+use crate::vad::{Vad, VadError};
 use crate::audio::AudioRaw;
+use crate::path_ext::{NotUnicodeError, ToStrResult};
 
 use unic_langid::{LanguageIdentifier, langid, langids};
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
@@ -14,16 +15,32 @@ const SOUND_SPS: u32 = 16000;
 #[derive(Error, Debug)]
 pub enum SttError {
     #[error("PocketSphinx error, see log for details")]
-    Unknown,
+    PocketsphinxError(#[from] pocketsphinx::Error),
 
     #[error("Error while sending to online service")]
-    OnlineError(#[from] crate::gtts::GttsError)
+    OnlineError(#[from] crate::gtts::GttsError),
+
+    #[error("Error from the vad")]
+    Vad(#[from] crate::vad::VadError)
 }
 
-impl std::convert::From<pocketsphinx::Error> for SttError {
-    fn from(_err: pocketsphinx::Error) -> Self {
-        SttError::Unknown
-    }
+#[derive(Error, Debug)]
+pub enum SttConstructionError {
+    #[error("The input language identifier has no region")]
+    NoRegion,
+
+    #[error("PocketSphinx error, see log for details")]
+    PocketsphinxError(#[from] pocketsphinx::Error),
+
+    #[error("Input path was not unicode")]
+    NotUnicodeError(#[from] NotUnicodeError),
+
+    #[cfg(feature = "devel_deepspeech")]
+    #[error("Can't load files")]
+    CantLoadFiles,
+
+    #[error("Input is not a valid utf-8")]
+    FromUtf8Error(#[from] std::string::FromUtf8Error)
 }
 
 #[derive(Debug, Clone)]
@@ -76,10 +93,11 @@ pub struct Pocketsphinx {
     is_speech_started: bool,
 }
 
+
 impl Pocketsphinx {
-    pub fn new(lang: &LanguageIdentifier) -> Self {
+    pub fn new(lang: &LanguageIdentifier) -> Result<Self, SttConstructionError> {
         let lang = Self::lang_neg(lang);
-        let iso_str = format!("{}-{}", lang.language(), lang.region().unwrap().to_lowercase());
+        let iso_str = format!("{}-{}", lang.language(), lang.region().ok_or(SttConstructionError::NoRegion)?.to_lowercase());
         let stt_path = resolve_path(STT_DATA_PATH);
 
         let config = pocketsphinx::CmdLn::init(
@@ -87,23 +105,22 @@ impl Pocketsphinx {
             &[  
                 //"pocketsphinx",
                 "-hmm",
-                stt_path.join(&iso_str).join(&iso_str).to_str().unwrap(),
+                stt_path.join(&iso_str).join(&iso_str).to_str_res()?,
                 "-lm",
-                stt_path.join(&iso_str).join(iso_str.to_string() + ".lm.bin").to_str().unwrap(),
+                stt_path.join(&iso_str).join(iso_str.to_string() + ".lm.bin").to_str_res()?,
                 "-dict",
-                stt_path.join(&iso_str).join("cmudict-".to_owned() + &iso_str + ".dict").to_str().unwrap(),
-                //"-logfn", "nul", // This is to silence pocketpshinx, however without it it spits all params
+                stt_path.join(&iso_str).join("cmudict-".to_owned() + &iso_str + ".dict").to_str_res()?,
+                "-logfn", "nul", // This is to silence pocketpshinx, however without it it spits all params
                                  // so is pretty useful
                 "-vad_threshold", "3.5"
             ],
-        )
-        .unwrap();
+        )?;
         let decoder = pocketsphinx::PsDecoder::init(config);
 
-        Pocketsphinx {
+        Ok(Pocketsphinx {
             decoder,
             is_speech_started: false
-        }
+        })
     }
 
     fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
@@ -145,12 +162,13 @@ impl SttStream for Pocketsphinx {
 }
 
 impl Vad for Pocketsphinx {
-    fn reset(&mut self) {
-        self.begin_decoding().unwrap();
+    fn reset(&mut self) -> Result<(), VadError> {
+        self.begin_decoding().map_err(|_|VadError::Unknown)?;
+        Ok(())
     }
 
-    fn is_someone_talking(&mut self, audio: &[i16]) -> anyhow::Result<bool> {
-        self.decode(audio)?;
+    fn is_someone_talking(&mut self, audio: &[i16]) -> Result<bool, VadError> {
+        self.decode(audio).map_err(|_|VadError::Unknown)?;
         Ok(self.is_speech_started)
     }
 }
@@ -173,7 +191,7 @@ impl<V: Vad, S: SttBatched> SttBatcher<V, S> {
 impl<V: Vad, S: SttBatched> SttStream for SttBatcher<V, S> {
     fn begin_decoding(&mut self) -> Result<(),SttError> {
         self.copy_audio.clear();
-        self.vad.reset();
+        self.vad.reset()?;
         self.someone_was_talking = false;
 
         Ok(())
@@ -181,7 +199,7 @@ impl<V: Vad, S: SttBatched> SttStream for SttBatcher<V, S> {
 
     fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
         self.copy_audio.append_audio(audio, SOUND_SPS);
-        if self.vad.is_someone_talking(audio).unwrap() {
+        if self.vad.is_someone_talking(audio)? {
             if self.someone_was_talking {
                 // We are still getting talke
                 Ok(DecodeState::NotFinished)
@@ -260,13 +278,13 @@ pub struct IbmStt {
 
 impl IbmStt {
 
-    pub fn new(lang: &LanguageIdentifier, api_gateway: String, api_key: String) -> Self {
-        IbmStt{engine: crate::gtts::IbmSttEngine::new(api_gateway, api_key), model: Self::model_from_lang(lang).to_string()}
+    pub fn new(lang: &LanguageIdentifier, api_gateway: String, api_key: String) -> Result<Self, SttConstructionError> {
+        Ok(IbmStt{engine: crate::gtts::IbmSttEngine::new(api_gateway, api_key), model: Self::model_from_lang(lang)?.to_string()})
     }
 
-    fn model_from_lang(lang: &LanguageIdentifier) -> String {
+    fn model_from_lang(lang: &LanguageIdentifier) -> Result<String, SttConstructionError> {
         let lang = Self::lang_neg(lang);
-        format!("{}-{}_BroadbandModel", lang.language(), lang.region().unwrap())
+        Ok(format!("{}-{}_BroadbandModel", lang.language(), lang.region().ok_or(SttConstructionError::NoRegion)?))
     }
 
     fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
@@ -322,7 +340,7 @@ impl<S: SttVadless, F: SttStream> SttStream for SttVadlessInterface<S,F> {
     }
 
     fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
-        self.online_stt.process(audio).unwrap();
+        self.online_stt.process(audio)?;
         let res = self.fallback.decode(audio)?;
         match res {
             DecodeState::Finished(local_res) => {
@@ -349,13 +367,12 @@ pub struct DeepSpeechStt {
 
 #[cfg(feature = "devel_deepspeech")]
 impl DeepspeechStt { 
-    pub fn new() -> Self { 
+    pub fn new() -> Result<Self, SttConstructionError> { 
         const BEAM_WIDTH:u16 = 500;
         const LM_WEIGHT:f32 = 16_000;
 
-        let mut model = deepspeech::Model::load_from_files(&dir_path.join("output_graph.pb"), BEAM_WIDTH).unwrap();
+        let mut model = deepspeech::Model::load_from_files(&dir_path.join("output_graph.pb"), BEAM_WIDTH).map_err(|_| SttError::CantLoadFiles)?;
         model.enable_decoder_with_lm(&dir_path.join("lm.binary"),&dir_path.join("trie"), LM_WEIGHT, VALID_WORD_COUNT_WEIGHT);
-
 
         Self {model}
     }
@@ -364,7 +381,7 @@ impl DeepspeechStt {
 #[cfg(feature = "devel_deepspeech")]
 impl SttBatched for DeepspeechStt {
     fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
-        Ok(DecodeState::Finished(m.speech_to_text(&audio_buf).unwrap()))
+        Ok(DecodeState::Finished(m.speech_to_text(&audio_buf)?))
     }
 
     fn get_info() -> SttInfo {
@@ -375,21 +392,21 @@ impl SttBatched for DeepspeechStt {
 pub struct SttFactory;
 
 impl SttFactory {
-	pub fn load(lang: &LanguageIdentifier, prefer_cloud: bool, gateway_key: Option<(String, String)>) -> Box<dyn SttStream> {
+	pub fn load(lang: &LanguageIdentifier, prefer_cloud: bool, gateway_key: Option<(String, String)>) -> Result<Box<dyn SttStream>, SttConstructionError> {
 
-		let local_stt = Pocketsphinx::new(lang);
+		let local_stt = Pocketsphinx::new(lang)?;
         if prefer_cloud {
             info!("Prefer online Stt");
             if let Some((api_gateway, api_key)) = gateway_key {
                 info!("Construct online Stt");
-                Box::new(SttOnlineInterface::new(IbmStt::new(lang, api_gateway.to_string(), api_key.to_string()), local_stt))
+                Ok(Box::new(SttOnlineInterface::new(IbmStt::new(lang, api_gateway.to_string(), api_key.to_string())?, local_stt)))
             }
             else {
-                Box::new(local_stt)
+                Ok(Box::new(local_stt))
             }
         }
         else {
-            Box::new(local_stt)
+            Ok(Box::new(local_stt))
         }
 	}
 }

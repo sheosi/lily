@@ -2,6 +2,7 @@ use core::fmt::Display;
 
 use crate::vars::{PICO_DATA_PATH, resolve_path};
 use crate::audio::Audio;
+use crate::path_ext::{NotUnicodeError,ToStrResult};
 
 use thiserror::Error;
 use unic_langid::{LanguageIdentifier, langid, langids};
@@ -21,11 +22,17 @@ pub struct TtsInfo {
 
 #[derive(Error, Debug, Clone)]
 pub enum TtsConstructionError {
-       #[error("No voice with the selected gender is available")]
-       WrongGender,
+        #[error("No voice with the selected gender is available")]
+        WrongGender,
 
-       #[error("This engine is not available in this language")]
-       IncompatibleLanguage
+        #[error("This engine is not available in this language")]
+        IncompatibleLanguage,
+
+        #[error("Input language has no region")]
+        NoRegion,
+
+        #[error("Input is not unicode")]
+        NotUnicode(#[from] NotUnicodeError)
 }
 
 impl Display for TtsInfo {
@@ -136,18 +143,18 @@ pub struct PicoTts {
 impl PicoTts {
 
     // Just accept a negotiated LanguageIdentifier
-    fn sg_name(lang: &LanguageIdentifier) -> &'static str {
-        let lang_str = format!("{}-{}", lang.language(), lang.region().unwrap());
+    fn sg_name(lang: &LanguageIdentifier) -> Result<&'static str, TtsConstructionError> {
+        let lang_str = format!("{}-{}", lang.language(), lang.region().ok_or(TtsConstructionError::NoRegion)?);
         match lang_str.as_str()  {
-            "es-ES" => "es-ES_zl0_sg.bin",
-            "en-US" => "en-US_lh0_sg.bin",
-            _ => ""
+            "es-ES" => Ok("es-ES_zl0_sg.bin"),
+            "en-US" => Ok("en-US_lh0_sg.bin"),
+            _ => Err(TtsConstructionError::IncompatibleLanguage)
         }
 
     }
 
-    fn ta_name(lang: &LanguageIdentifier) -> String {
-        format!("{}-{}_ta.bin", lang.language() , lang.region().unwrap())
+    fn ta_name(lang: &LanguageIdentifier) -> Result<String, TtsConstructionError> {
+        Ok(format!("{}-{}_ta.bin", lang.language() , lang.region().ok_or(TtsConstructionError::NoRegion)?))
     }
 
     // There's only one voice of Pico per language so preferences are not of much use here
@@ -161,9 +168,9 @@ impl PicoTts {
 
         // 2. Load Text Analysis (TA) and Speech Generation (SG) resources for the voice you want to use
         let ta_res = 
-            pico::System::load_resource(sys.clone(), lang_path.join(Self::ta_name(&lang)).to_str().unwrap())
+            pico::System::load_resource(sys.clone(), lang_path.join(Self::ta_name(&lang)?).to_str_res()?)
             .expect("Failed to load TA");
-        let sg_res = pico::System::load_resource(sys.clone(), lang_path.join(Self::sg_name(&lang)).to_str().unwrap())
+        let sg_res = pico::System::load_resource(sys.clone(), lang_path.join(Self::sg_name(&lang)?).to_str_res()?)
             .expect("Failed to load SG");
 
 
@@ -308,27 +315,27 @@ struct IbmTts {
 }
 
 impl IbmTts {
-    pub fn new(lang: &LanguageIdentifier, fallback_tts: Box<dyn Tts>, api_gateway: String, api_key: String, prefs: &VoiceDescr) -> Self {
-        IbmTts{engine: crate::gtts::IbmTtsEngine::new(api_gateway, api_key), fallback_tts, curr_voice: Self::make_tts_voice(&Self::lang_neg(lang), prefs).to_string()}
+    pub fn new(lang: &LanguageIdentifier, fallback_tts: Box<dyn Tts>, api_gateway: String, api_key: String, prefs: &VoiceDescr) -> Result<Self, TtsConstructionError> {
+        Ok(IbmTts{engine: crate::gtts::IbmTtsEngine::new(api_gateway, api_key), fallback_tts, curr_voice: Self::make_tts_voice(&Self::lang_neg(lang), prefs)?.to_string()})
     }
 
     // Accept only negotiated LanguageIdentifiers
-    fn make_tts_voice(lang: &LanguageIdentifier, prefs: &VoiceDescr) -> &'static str {
-        let lang_str = format!("{}-{}", lang.language(), lang.region().unwrap());
+    fn make_tts_voice(lang: &LanguageIdentifier, prefs: &VoiceDescr) -> Result<&'static str, TtsConstructionError> {
+        let lang_str = format!("{}-{}", lang.language(), lang.region().ok_or(TtsConstructionError::NoRegion)?);
         match lang_str.as_str() {
             "es-ES" => {
-                match prefs.gender {
+                Ok(match prefs.gender {
                     Gender::Male => "es-ES_EnriqueV3Voice",
                     Gender::Female => "es-ES_LauraV3Voice"
-                }
+                })
             }
             "en-US" => {
-                match prefs.gender {
+                Ok(match prefs.gender {
                     Gender::Male => "en-US_MichaelV3Voice",
                     Gender::Female =>  "en-US_AllisonV3Voice"
-                }
+                })
             }
-            _ => ""
+            _ => Err(TtsConstructionError::IncompatibleLanguage)
         }
     }
 
@@ -398,19 +405,13 @@ impl TtsStatic for DummyTts {
 pub struct TtsFactory;
 
 impl TtsFactory {
-    pub fn load(lang: &LanguageIdentifier, prefer_cloud_tts: bool, gateway_key: Option<(String, String)>) -> Result<Box<dyn Tts>, TtsConstructionError> {
-        const DEF_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};
-
-        Self::load_with_prefs(lang, prefer_cloud_tts, gateway_key, &DEF_PREFS)
-    }
-
     pub fn load_with_prefs(lang: &LanguageIdentifier, prefer_cloud_tts: bool, gateway_key: Option<(String, String)>, prefs: &VoiceDescr) -> Result<Box<dyn Tts>, TtsConstructionError> {
         let local_tts = Box::new(PicoTts::new(lang, prefs)?);
 
         match prefer_cloud_tts {
             true => {
                 if let Some((api_gateway, api_key)) = gateway_key {
-                    Ok(Box::new(IbmTts::new(lang, local_tts, api_gateway.to_string(), api_key.to_string(), prefs)))
+                    Ok(Box::new(IbmTts::new(lang, local_tts, api_gateway.to_string(), api_key.to_string(), prefs)?))
                 }
                 else {
                     Ok(local_tts)

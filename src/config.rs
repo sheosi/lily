@@ -49,7 +49,6 @@ fn load_conf() -> Result<Config> {
 impl Config {
     pub fn extract_ibm_tts_data(&self) -> Option<(String, String)> {
         if self.ibm_gateway.is_some() && self.ibm_tts_key.is_some() {
-            // Those unwrap cannot fail
             Some((self.ibm_gateway.clone().unwrap(), self.ibm_tts_key.clone().unwrap()))
         }
         else {
