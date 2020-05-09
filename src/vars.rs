@@ -33,3 +33,7 @@ pub const CLOCK_TOO_EARLY_MSG :&str = "Somehow the system's clock time is before
 
 // Other
 pub const LILY_VER: &str = "0.1";
+pub const DEFAULT_HOTWORD_SENSITIVITY: f32 = 0.45;
+pub const MIN_SCORE_FOR_ACTION: f32 = 0.3;
+pub const DEFAULT_SAMPLES_PER_SECOND: u32 = 16000;
+pub const HOTWORD_CHECK_INTERVAL_MS: u16 = 100; // Larger = less CPU, more wait time

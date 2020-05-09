@@ -1,10 +1,10 @@
 use std::time::{SystemTime, Duration, UNIX_EPOCH};
 use std::io::Write;
-
+use std::thread::sleep;
 
 use crate::vars::{CLOCK_TOO_EARLY_MSG, LILY_VER};
 
-use rodio::source::Source;
+use rodio::{source::Source, decoder::DecoderError};
 use thiserror::Error;
 
 #[cfg(feature = "devel_cpal_rec")]
@@ -37,18 +37,28 @@ impl PlayDevice  {
         Ok(())
     }
 
-    pub fn play_audio(&mut self, audio: Audio) {
+    pub fn play_audio(&mut self, audio: Audio) -> Result<(), DecoderError> {
         match audio.buffer {
             Data::Raw(raw_data) => {
                 let source = rodio::buffer::SamplesBuffer::new(1, audio.samples_per_second, raw_data);
                 rodio::play_raw(&self.device, source.convert_samples());
+                Ok(())
             },
             Data::Encoded(enc_data) => {
-                let source = rodio::Decoder::new(std::io::Cursor::new(enc_data)).unwrap();
+                let source = rodio::Decoder::new(std::io::Cursor::new(enc_data))?;
                 rodio::play_raw(&self.device, source.convert_samples());
-
+                Ok(())
             }
         }   
+    }
+
+    pub fn wait_audio(&mut self, audio: Audio) -> Result<(), DecoderError> {
+        let seconds = audio.len_s();
+        self.play_audio(audio)?;
+        let ms_wait = (seconds * 1000.0).ceil() as u64;
+        sleep(Duration::from_millis(ms_wait));
+
+        Ok(())
     }
 }
 
@@ -140,7 +150,8 @@ impl Recording for RecDeviceCpal {
     fn read(&mut self) -> Option<&[i16]> {
         None
         // NYI
-        //self.device.read(&mut self.buffer[..]).unwrap()
+        //
+        //self.device.read(&mut self.buffer[..])
     }
     fn read_for_ms(&mut self, milis: u16) -> Option<&[i16]> {
         None
@@ -185,6 +196,13 @@ impl Data {
             Data::Encoded(_) => false
         }
     }
+
+    fn len(&self) -> usize {
+        match self {
+            Data::Raw(buffer) => buffer.len(),
+            Data::Encoded(buffer) => buffer.len()
+        }
+    }
 }
 
 // Just some and audio dummy for now
@@ -218,14 +236,14 @@ impl Audio {
         }
     }
 
-    pub fn write_ogg(&self, filename:&str) -> Result<(), WavError> {
+    pub fn write_ogg(&self, filename:&str) -> Result<(), AudioError> {
 
         match &self.buffer {
             Data::Raw(vec_data) => {
                 let audio_raw = AudioRaw::new_raw(vec_data.clone(), self.samples_per_second);
-                let as_ogg = audio_raw.to_ogg_opus().unwrap();
-                let mut file = std::fs::File::create(filename).unwrap();
-                file.write_all(&as_ogg).unwrap();
+                let as_ogg = audio_raw.to_ogg_opus()?;
+                let mut file = std::fs::File::create(filename)?;
+                file.write_all(&as_ogg)?;
             }
             Data::Encoded(_) => {panic!("Can't transform to ogg an encoded audio");}
         }
@@ -237,6 +255,12 @@ impl Audio {
 
     pub fn clear(&mut self) {
         self.buffer.clear();
+    }
+
+    // Length in seconds
+    pub fn len_s(&self) -> f32 {
+        let len = self.buffer.len();
+        (len as f32)/(self.samples_per_second as f32)
     }
 }
 
@@ -271,14 +295,14 @@ impl AudioRaw {
         }
     }
 
-    pub fn to_ogg_opus(&self) -> Result<Vec<u8>, WavError> {
+    pub fn to_ogg_opus(&self) -> Result<Vec<u8>, AudioError> {
         const FRAME_TIME_MS: u32 = 20;
         const FRAME_SAMPLES: u32 = 16000 * 1 * FRAME_TIME_MS / 1000;
 
         let mut buffer: Vec<u8> = Vec::new();
         {
             let mut packet_writer = ogg::PacketWriter::new(&mut buffer);
-            let mut opus_encoder = opus::Encoder::new(16000, opus::Channels::Mono, opus::Application::Audio).unwrap();
+            let mut opus_encoder = opus::Encoder::new(16000, opus::Channels::Mono, opus::Application::Audio)?;
 
             let max = {
                 ((self.buffer.len() as f32 / FRAME_SAMPLES as f32).ceil() as u32) - 1
@@ -307,8 +331,8 @@ impl AudioRaw {
             opus_tags.extend(&[1,0,0,0]);
             opus_tags.extend(&[0;12]);
 
-            packet_writer.write_packet(Box::new(OPUS_HEAD), 1, ogg::PacketWriteEndInfo::EndPage, 0).unwrap();
-            packet_writer.write_packet(opus_tags.into_boxed_slice(), 1, ogg::PacketWriteEndInfo::EndPage, 0).unwrap();
+            packet_writer.write_packet(Box::new(OPUS_HEAD), 1, ogg::PacketWriteEndInfo::EndPage, 0)?;
+            packet_writer.write_packet(opus_tags.into_boxed_slice(), 1, ogg::PacketWriteEndInfo::EndPage, 0)?;
 
             for counter in 0..max - 1{
                 let pos_a: usize = calc(counter);
@@ -316,7 +340,7 @@ impl AudioRaw {
 
                 
                 let mut temp_buffer = [0; 256];
-                let size = opus_encoder.encode(&self.buffer[pos_a..pos_b], temp_buffer.as_mut()).unwrap();
+                let size = opus_encoder.encode(&self.buffer[pos_a..pos_b], temp_buffer.as_mut())?;
                 let new_buffer = temp_buffer[0..size].to_owned();
                 
 
@@ -329,7 +353,7 @@ impl AudioRaw {
                     }
                 };
 
-                packet_writer.write_packet(new_buffer.into_boxed_slice(), 1, end_info, (calc(counter + 1) as u64)*3).unwrap();
+                packet_writer.write_packet(new_buffer.into_boxed_slice(), 1, end_info, (calc(counter + 1) as u64)*3)?;
             }
         }
 
@@ -339,7 +363,9 @@ impl AudioRaw {
 }
 
 #[derive(Error, Debug)]
-pub enum WavError {
-    #[error("this buffer size is too big ")]
-    TooBig
+pub enum AudioError {
+    #[error("Io Error")]
+    IOError(#[from] std::io::Error),
+    #[error("Encoding error")]
+    OpusError(#[from] opus::Error)
 }

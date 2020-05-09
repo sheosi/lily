@@ -65,8 +65,9 @@ impl IbmSttEngine {
 
 	// Send all audio in one big chunk
 	pub fn decode(&mut self, audio: &crate::audio::AudioRaw, model: &str) -> Result<Option<(String, Option<String>, i32)>, GttsError> {
-	    let url_str = format!("https://{}/speech-to-text/api/v1/recognize?model=", self.api_gateway);
-	    let url = reqwest::Url::parse(&format!("{}{}", url_str, model))?; 
+	    let url_str = format!("https://{}/speech-to-text/api/v1/recognize?model={}", self.api_gateway, model);
+	    println!("{}", url_str);
+	    let url = reqwest::Url::parse(&url_str)?; 
 
 	    let as_ogg = audio.to_ogg_opus().unwrap();	    
 	    let res = self.client.post(url).body(as_ogg).header("Content-Type", "audio/ogg").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send()?.text()?;
@@ -194,7 +195,7 @@ pub enum GttsError {
 	UrlParse(#[from] url::ParseError),
 
 	#[error("wav conversion")]
-	WavConvert(#[from] crate::audio::WavError),
+	WavConvert(#[from] crate::audio::AudioError),
 
 	#[error("json parsing")]
 	JsonParse(#[from] serde_json::Error)

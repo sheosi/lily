@@ -164,7 +164,8 @@ fn negotiate_lang(py: Python, input: &str, available: Vec<String>) -> PyResult<c
 
 fn python_say(python: Python, input: &str) -> PyResult<cpython::PyObject> {
     let audio = TTS.borrow_mut().synth_text(input).map_err(|err|make_err(python, err))?;
-    PlayDevice::new().ok_or_else(||make_err(python, "Couldn't obtain play stream"))?.play_audio(audio);
+    // If this fails at this point is not because of Python, just unwrap, we can't do much
+    PlayDevice::new().ok_or_else(||make_err(python, "Couldn't obtain play stream"))?.wait_audio(audio).unwrap();
     Ok(python.None())
 }
 

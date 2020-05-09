@@ -54,7 +54,7 @@ impl ActionRegistry {
             let entry = entry?;
             if entry.path().is_dir() {
                 let mod_name = entry.file_name().into_string().map_err(|os_str|anyhow!("Failed to transform module name into Unicode: {:?}", os_str))?.to_string();
-                python.import(&mod_name).map_err(|py_err|anyhow!("Failed to import a package's python module: {:?}", py_err))?;
+                python.import(&mod_name).map_err(|py_err|anyhow!("Failed to import a package's python module: {:?}, {:?}", actions_path, py_err))?;
             }
         }
         
