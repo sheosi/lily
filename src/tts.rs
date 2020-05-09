@@ -3,23 +3,29 @@ use core::fmt::Display;
 use crate::vars::{PICO_DATA_PATH, resolve_path};
 use crate::audio::Audio;
 
+use thiserror::Error;
 use unic_langid::{LanguageIdentifier, langid, langids};
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 
-#[derive(Debug, Clone)]
-pub enum TtsErrCause {
-    StringHadInternalNul
-}
-
-#[derive(Debug, Clone)]
-pub struct TtsError {
-    cause: TtsErrCause
+#[derive(Error, Debug, Clone)]
+pub enum TtsError {
+    #[error("Input string had a nul character")]
+    StringHadInternalNul(#[from] std::ffi::NulError)
 }
 
 #[derive(Debug, Clone)]
 pub struct TtsInfo {
     pub name: String,
     pub is_online: bool
+}
+
+#[derive(Error, Debug, Clone)]
+pub enum TtsConstructionError {
+       #[error("No voice with the selected gender is available")]
+       WrongGender,
+
+       #[error("This engine is not available in this language")]
+       IncompatibleLanguage
 }
 
 impl Display for TtsInfo {
@@ -34,23 +40,8 @@ impl Display for TtsInfo {
     }
 }
 
-impl std::convert::From<std::ffi::NulError> for TtsError {
-    fn from(_nul_err: std::ffi::NulError) -> Self {
-        TtsError{cause: TtsErrCause::StringHadInternalNul}
-    }
-}
 
-impl std::fmt::Display for TtsError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self.cause {
-            TtsErrCause::StringHadInternalNul => {
-                write!(f, "The string you asked for had internal nulls ('\0') which is incompatible with C")
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Gender {
     Male,
     Female
@@ -63,6 +54,10 @@ pub struct VoiceDescr {
 pub trait Tts {
     fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError>;
     fn get_info(&self) -> TtsInfo;
+}
+
+pub trait TtsStatic {
+    fn check_compatible(descr: &VoiceDescr) -> Result<(), TtsConstructionError>;
 }
 
 #[cfg(feature = "extra_langs_tts")]
@@ -89,6 +84,22 @@ impl Tts for EspeakTts {
         unsafe {espeak_sys::espeak_Synth(synth_cstr.as_ptr() as *const std::ffi::c_void , input.len() as libc::size_t, 0, espeak_sys::espeak_POSITION_TYPE::POS_CHARACTER, 0, synth_flags, std::ptr::null_mut(), std::ptr::null_mut());}
 
         Ok(Audio {buffer:vec![], samples_per_second: 16000})
+    }
+
+    fn get_info(&self) -> TtsInfo {
+        TtsInfo {
+            name: "Espeak TTS",
+            is_online: false
+        }   
+    }
+}
+
+#[cfg(feature = "extra_langs_tts")]
+impl TtsStatic for EspeakTts {
+    fn check_compatible(_descr: &VoiceDescr) -> bool {
+        // Espeak is really onfigurable so it has no problem with what we might
+        // want
+        Ok(())
     }
 
 }
@@ -140,9 +151,11 @@ impl PicoTts {
     }
 
     // There's only one voice of Pico per language so preferences are not of much use here
-    pub fn new(lang: &LanguageIdentifier) -> Self {
+    pub fn new(lang: &LanguageIdentifier, prefs: &VoiceDescr) -> Result<Self, TtsConstructionError> {
+        Self::check_compatible(prefs)?; // Check voice description compatibility
+
         // 1. Create a Pico system
-        let lang = Self::lang_neg(lang);
+        let lang = Self::lang_neg(lang)?;
         let sys = pico::System::new(4 * 1024 * 1024).expect("Could not init system");
         let lang_path = resolve_path(PICO_DATA_PATH);
 
@@ -169,13 +182,20 @@ impl PicoTts {
         // UNSAFE: Creating an engine without attaching the resources will result in a crash!
         let engine = unsafe { pico::Voice::create_engine(voice.clone()).expect("Failed to create engine") };
         //let voice_def = espeak_sys::espeak_VOICE{name: std::ptr::null(), languages: std::ptr::null(), identifier: std::ptr::null(), gender: 0, age: 0, variant: 0, xx1:0, score: 0, spare: std::ptr::null_mut()};
-        PicoTts{engine}
+        Ok(PicoTts{engine})
     }
 
-    fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
+    fn lang_neg(lang: &LanguageIdentifier) -> Result<LanguageIdentifier, TtsConstructionError> {
         let available_langs = langids!("es-ES", "en-US");
         let default = langid!("en-US");
-        negotiate_languages(&[lang],&available_langs, Some(&default), NegotiationStrategy::Filtering)[0].clone()
+
+        let langs = negotiate_languages(&[lang],&available_langs, Some(&default), NegotiationStrategy::Filtering);
+        if !langs.is_empty() {
+            Ok(langs[0].clone())
+        }
+        else {
+            Err(TtsConstructionError::IncompatibleLanguage)
+        }
     }
 }
 
@@ -213,6 +233,18 @@ impl Tts for PicoTts {
         TtsInfo {
             name: "Pico Tts".to_string(),
             is_online: false
+        }
+    }
+}
+
+impl TtsStatic for PicoTts {
+    fn check_compatible(descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
+        //Only has female voices (by default)
+        if descr.gender != Gender::Female {
+            Err(TtsConstructionError::WrongGender)
+        }
+        else {
+            Ok(())
         }
     }
 }
@@ -259,6 +291,13 @@ impl Tts for GTts {
             name: "Google Translate".to_string(),
             is_online: true
         }
+    }
+}
+
+#[cfg(feature = "google_tts")]
+impl TtsStatic for GTts {
+    fn is_compatible(descr: &VoiceDescr) -> bool {
+        true
     }
 }
 
@@ -321,6 +360,13 @@ impl Tts for IbmTts {
 }
 
 
+impl TtsStatic for IbmTts {
+    fn check_compatible(_descr: &VoiceDescr) -> Result<(),TtsConstructionError> {
+        // Ibm has voices for both genders in all supported languages
+        Ok(())
+    }
+}
+
 pub struct DummyTts{}
 
 impl DummyTts {
@@ -342,28 +388,37 @@ impl Tts for DummyTts {
     }
 }
 
+impl TtsStatic for DummyTts {
+    fn check_compatible(_descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
+        // Just a dummy, won't output anything anyway
+        Ok(())
+    }
+}
+
 pub struct TtsFactory;
 
 impl TtsFactory {
-    pub fn load(lang: &LanguageIdentifier, prefer_cloud_tts: bool, gateway_key: Option<(String, String)>) -> Box<dyn Tts> {
+    pub fn load(lang: &LanguageIdentifier, prefer_cloud_tts: bool, gateway_key: Option<(String, String)>) -> Result<Box<dyn Tts>, TtsConstructionError> {
         const DEF_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};
 
         Self::load_with_prefs(lang, prefer_cloud_tts, gateway_key, &DEF_PREFS)
     }
 
-    pub fn load_with_prefs(lang: &LanguageIdentifier, prefer_cloud_tts: bool, gateway_key: Option<(String, String)>, prefs: &VoiceDescr) -> Box<dyn Tts> {
-        let local_tts = Box::new(PicoTts::new(lang));
+    pub fn load_with_prefs(lang: &LanguageIdentifier, prefer_cloud_tts: bool, gateway_key: Option<(String, String)>, prefs: &VoiceDescr) -> Result<Box<dyn Tts>, TtsConstructionError> {
+        let local_tts = Box::new(PicoTts::new(lang, prefs)?);
 
         match prefer_cloud_tts {
             true => {
                 if let Some((api_gateway, api_key)) = gateway_key {
-                    Box::new(IbmTts::new(lang, local_tts, api_gateway.to_string(), api_key.to_string(), prefs))
+                    Ok(Box::new(IbmTts::new(lang, local_tts, api_gateway.to_string(), api_key.to_string(), prefs)))
                 }
                 else {
-                    local_tts
+                    Ok(local_tts)
                 }
             },
-            false => {local_tts}
+            false => {
+                Ok(local_tts)
+            }
         }
     }
 

@@ -11,10 +11,13 @@ use thiserror::Error;
 
 const SOUND_SPS: u32 = 16000;
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum SttError {
     #[error("PocketSphinx error, see log for details")]
-    Unknown
+    Unknown,
+
+    #[error("Error while sending to online service")]
+    OnlineError(#[from] crate::gtts::GttsError)
 }
 
 impl std::convert::From<pocketsphinx::Error> for SttError {
@@ -81,7 +84,7 @@ impl Pocketsphinx {
 
         let config = pocketsphinx::CmdLn::init(
             true,
-            &[
+            &[  
                 //"pocketsphinx",
                 "-hmm",
                 stt_path.join(&iso_str).join(&iso_str).to_str().unwrap(),
@@ -89,8 +92,9 @@ impl Pocketsphinx {
                 stt_path.join(&iso_str).join(iso_str.to_string() + ".lm.bin").to_str().unwrap(),
                 "-dict",
                 stt_path.join(&iso_str).join("cmudict-".to_owned() + &iso_str + ".dict").to_str().unwrap(),
-                "-logfn", "nul" // This is to silence pocketpshinx, however without it it spits all params
-                                // so is pretty useful
+                //"-logfn", "nul", // This is to silence pocketpshinx, however without it it spits all params
+                                 // so is pretty useful
+                "-vad_threshold", "3.5"
             ],
         )
         .unwrap();
@@ -275,7 +279,7 @@ impl IbmStt {
 impl SttBatched for IbmStt {
     
     fn decode(&mut self, audio: &[i16]) -> Result<Option<(String, Option<String>, i32)>, SttError> {
-        Ok(self.engine.decode(&AudioRaw::new_raw(audio.to_vec(), SOUND_SPS), &self.model).unwrap())
+        Ok(self.engine.decode(&AudioRaw::new_raw(audio.to_vec(), SOUND_SPS), &self.model)?)
     }
 
     fn get_info(&self) -> SttInfo {
@@ -285,12 +289,12 @@ impl SttBatched for IbmStt {
 
 impl SttVadless for IbmStt {
     fn process(&mut self, audio: &[i16]) -> Result<(), SttError> {
-        self.engine.live_process(&AudioRaw::new_raw(audio.to_vec(), 16000), &self.model).unwrap();
+        self.engine.live_process(&AudioRaw::new_raw(audio.to_vec(), 16000), &self.model)?;
         Ok(())
     }
     fn end_decoding(&mut self) -> Result<Option<(String, Option<String>, i32)>, SttError> {
         println!("End decode ");
-        let res = self.engine.live_process_end(&self.model).unwrap();
+        let res = self.engine.live_process_end(&self.model)?;
         Ok(res)
     }
     fn get_info(&self) -> SttInfo {

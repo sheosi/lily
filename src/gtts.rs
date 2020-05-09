@@ -198,5 +198,8 @@ pub enum GttsError {
 	WavConvert(#[from] crate::audio::AudioError),
 
 	#[error("json parsing")]
-	JsonParse(#[from] serde_json::Error)
+	JsonParse(#[from] serde_json::Error),
+
+	#[error("opus encoding")]
+	OpusEncode(#[from] opus::Error)
 }

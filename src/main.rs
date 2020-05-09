@@ -87,7 +87,7 @@ fn record_loop() -> Result<()> {
     let mut order_map = load_packages(&Path::new(&resolve_path(PACKAGES_PATH)), &curr_lang)?;
 
     const VOICE_PREFS: VoiceDescr = VoiceDescr { gender: Gender::Male};
-    *TTS.borrow_mut() = tts::TtsFactory::load_with_prefs(&curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS);
+    *TTS.borrow_mut() = tts::TtsFactory::load_with_prefs(&curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS)?;
     info!("Using tts {}", TTS.borrow().get_info());
 
     let mut record_device = RecDevice::new()?;
