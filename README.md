@@ -4,28 +4,36 @@ A local open-source voice assistant with an NLU
 
 Lily is written in Rust + Python.
 
-## Building:
+## Building
 
-### Dependencies:
+### Dependencies
 
-Dependencies needed at compile time and runtime:
+#### Dependencies needed at compile time and runtime:
+
+```
 - libpocketsphinx-dev
 - (also needs sphinxad, but is the same pacakge on debina)
 - python3-all-dev
 - libespeak-ng-dev
 - libopus-dev
+```
 
-Python dependencies (needed for runtime):
+#### Python dependencies (needed for runtime):
+
+```
 - snips-nlu
 - fluent.runtime
+```
 
-Install english module for NLU:
-sudo snips-nlu download en
+#### Install english module for NLU:
 
-Install spanish module for NLU:
-sudo snips-nlu download es
+`sudo snips-nlu download en`
 
-### Build process:
+#### Install spanish module for NLU:**
+
+`sudo snips-nlu download es`
+
+### Build process
 Once you hace at least the compile time dependencies you can compile lily, you'll
 need rust and cargo for this.
 
