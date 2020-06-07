@@ -1,8 +1,8 @@
 from fluent.runtime import FluentBundle, FluentResource
 import _lily_impl
+from _lily_impl import conf
 from pathlib import Path
 import os
-#import time
 import datetime
 import locale
 import random

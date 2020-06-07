@@ -28,8 +28,10 @@ pub const WRONG_YAML_SECTION_TYPE_MSG: &str = "A skill section must be a hash";
 pub const PACKAGES_PATH_ERR_MSG: &str = "Packages folder can't be read";
 pub const AUDIO_REC_START_ERR_MSG: &str = "Failed while trying to start audio recording, please report this";
 pub const AUDIO_REC_STOP_ERR_MSG: &str = "Failed while trying to stop audio recording, please report this";
-pub const CLOCK_TOO_EARLY_MSG :&str = "Somehow the system's clock time is before unix epoch, this is not supported, revise your system's time and the CMOS battery";
-
+pub const CLOCK_TOO_EARLY_MSG :&str = "Somehow the system's clock time is before unix epoch, this is not supported, check your system's time and the CMOS battery";
+pub const PYDICT_SET_ERR_MSG :&str = "Failed while assigning an entry in PyDict";
+pub const NO_KEY_MSG: &str = "This shouldn't happen, a key checked beforehand is None";
+pub const NO_YAML_FLOAT_MSG: &str = "This shouldn't happen, a Yaml was checked as a number which is not an u64 was not an f64 either";
 
 // Other
 pub const LILY_VER: &str = "0.1";

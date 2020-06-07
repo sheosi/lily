@@ -3,10 +3,11 @@ use std::path::Path;
 
 use crate::TTS;
 use crate::audio::PlayDevice;
+use crate::vars::{PYDICT_SET_ERR_MSG, NO_YAML_FLOAT_MSG};
 
 use unic_langid::LanguageIdentifier;
 use fluent_langneg::negotiate::{negotiate_languages, NegotiationStrategy};
-use cpython::{PyClone, Python, PyList, PyDict, PyString, PythonObject, PyResult, ToPyObject, py_module_initializer, py_fn, FromPyObject};
+use cpython::{PyErr, PyClone, Python, PyList, PyDict, PyString, PythonObject, PyResult, ToPyObject, py_module_initializer, py_fn, FromPyObject, exc};
 use serde_yaml::Value;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
 use anyhow::{anyhow, Result};
@@ -25,9 +26,9 @@ pub fn yaml_to_python(yaml: &serde_yaml::Value, py: Python) -> cpython::PyObject
                 int.into_py_object(py).into_object()
             }
             else {
-                // This should be an f64 for sure, so we are sure about the unwrap
+                // This should be an f64 for sure, so we are sure about the expect
                 // Note: Inf and NaN cases haven't been tested
-                num.as_f64().unwrap().into_py_object(py).into_object()    
+                num.as_f64().expect(NO_YAML_FLOAT_MSG).into_py_object(py).into_object()    
             }
 
         }
@@ -49,8 +50,9 @@ pub fn yaml_to_python(yaml: &serde_yaml::Value, py: Python) -> cpython::PyObject
         }
         Value::Mapping(mapping) => {
             let dict = PyDict::new(py);
-            for (key, value) in mapping.iter() { // There shouldn't be a problem with this either
-                dict.set_item(py, yaml_to_python(key,py), yaml_to_python(value, py)).unwrap();
+            for (key, value) in mapping.iter() { 
+                // There shouldn't be a problem with this either
+                dict.set_item(py, yaml_to_python(key,py), yaml_to_python(value, py)).expect(PYDICT_SET_ERR_MSG);
             }
             
             dict.into_object()
@@ -136,6 +138,7 @@ py_module_initializer!(_lily_impl, init__lily_impl, PyInit__lily_impl, |py, m| {
     m.add(py, "log_info", py_fn!(py, log_info(input: &str)))?;
     m.add(py, "__get_curr_lily_package", py_fn!(py, get_current_package()))?;
     m.add(py, "_PlayFile__play_file", py_fn!(py, play_file(input: &str)))?;
+    m.add(py, "conf", py_fn!(py,get_conf_string(input: &str)))?;
 
     Ok(())
 });
@@ -146,7 +149,7 @@ fn get_current_package(py: Python) -> PyResult<cpython::PyString> {
 }
 
 fn make_err<T: std::fmt::Debug>(py: Python, err: T) -> cpython::PyErr {
-    cpython::PyErr::new::<PyString, String>(py, format!("{:?}", err))
+    cpython::PyErr::new::<exc::AttributeError, _>(py, format!("{:?}", err))
 }
 
 fn negotiate_lang(py: Python, input: &str, available: Vec<String>) -> PyResult<cpython::PyString> {
@@ -162,11 +165,12 @@ fn negotiate_lang(py: Python, input: &str, available: Vec<String>) -> PyResult<c
     Ok(negotiate_languages(&[in_lang],&available_langs, None, NegotiationStrategy::Filtering)[0].to_string().into_py_object(py))
 }
 
-fn python_say(python: Python, input: &str) -> PyResult<cpython::PyObject> {
-    let audio = TTS.borrow_mut().synth_text(input).map_err(|err|make_err(python, err))?;
-    // If this fails at this point is not because of Python, just unwrap, we can't do much
-    PlayDevice::new().ok_or_else(||make_err(python, "Couldn't obtain play stream"))?.wait_audio(audio).unwrap();
-    Ok(python.None())
+fn python_say(py: Python, input: &str) -> PyResult<cpython::PyObject> {
+    let audio = TTS.borrow_mut().synth_text(input).map_err(|err|make_err(py, err))?;
+    match PlayDevice::new().ok_or_else(||make_err(py, "Couldn't obtain play stream"))?.wait_audio(audio) {
+        Ok(()) => Ok(py.None()),
+        Err(err) => Err(PyErr::new::<exc::OSError,_>(py, ""))
+    }   
 }
 
 fn log_info(python: Python, input: &str) -> PyResult<cpython::PyObject> {
@@ -188,9 +192,27 @@ fn log_error(python: Python, input: &str) -> PyResult<cpython::PyObject>  {
 }
 
 fn play_file(py: Python, input: &str) -> PyResult<cpython::PyObject> {
-    PlayDevice::new().unwrap().play_file(input).unwrap();
+    if let Some(mut play_dev) = PlayDevice::new() {
+        if let Err(err) = play_dev.play_file(input) {
+            Err(PyErr::new::<exc::OSError, _>(py, format!("Couldn't play file \"{}\": {}",input, err)))
+        }
+        else {
+            Ok(py.None())
+        }
+    }
+    else {
+        Err(PyErr::new::<exc::OSError, _>(py, "Couldn't obtain play stream"))
+    }
+}
 
-    Ok(py.None())
+fn get_conf_string(py: Python, input: &str) -> PyResult<cpython::PyObject> {
+    let curr_pkg_string = &*PYTHON_LILY_PKG_CURR.borrow().clone();
+    let curr_conf = crate::config::GLOBAL_CONF.borrow();
+    let conf_data = curr_conf.get_package_path(curr_pkg_string, input);
+    Ok(match conf_data {
+        Some(string) => string.to_py_object(py).into_object(),
+        None => py.None()
+    })
 }
 
 pub fn add_to_sys_path(py: Python, path: &Path) -> Result<()> {

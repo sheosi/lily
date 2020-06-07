@@ -71,7 +71,6 @@ Snips nlu python module (sudo pip3 install snips-nlu)
 PocketSphinx 
 Sphinxad
 Python 
-sox (binary) -> for gtts
 libespeak-ng
 libopus
 
@@ -81,6 +80,9 @@ sudo snips-nlu download en
 Install spanish module for NLU:
 sudo snips-nlu download es
 
+Python dependencies:
+snips-nlu
+
 ## Current state:
 
-Very very early phase, it's still a prototype. It will be buggy and there are a ton of unwrap() all around.
+Very very early phase, it's still a prototype. It will be buggy (though there aren't many unwraps)

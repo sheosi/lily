@@ -242,6 +242,9 @@ fn get_locale_default() -> String {
 }
 
 fn main() -> Result<()> {
+    ctrlc::set_handler(move || {
+        std::process::exit(0);
+    }).expect("Error setting Ctrl-C handler");
     init_log();
     python_init()?;
     record_loop()?;
