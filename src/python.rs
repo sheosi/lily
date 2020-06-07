@@ -169,7 +169,7 @@ fn python_say(py: Python, input: &str) -> PyResult<cpython::PyObject> {
     let audio = TTS.borrow_mut().synth_text(input).map_err(|err|make_err(py, err))?;
     match PlayDevice::new().ok_or_else(||make_err(py, "Couldn't obtain play stream"))?.wait_audio(audio) {
         Ok(()) => Ok(py.None()),
-        Err(err) => Err(PyErr::new::<exc::OSError,_>(py, ""))
+        Err(err) => Err(PyErr::new::<exc::OSError,_>(py, format!("Error while playing audio: {:?}", err)))
     }   
 }
 

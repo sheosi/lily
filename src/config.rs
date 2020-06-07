@@ -27,7 +27,7 @@ pub struct Config {
     #[serde(default = "false_val")]
     pub debug_record_active_speech: bool,
 
-    #[serde(default = "empty_map", flatten)]
+    #[serde(flatten)]
     pub pkgs_conf: HashMap<String, Value>
 }
 
@@ -37,10 +37,6 @@ fn false_val() -> bool {
 
 fn none_str() -> Option<String> {
     None
-}
-
-fn empty_map() -> HashMap<String,HashMap<Value, Value>> {
-    HashMap::new()
 }
 
 fn def_hotword_sensitivity() -> f32 {
