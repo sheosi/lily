@@ -144,7 +144,7 @@ impl PicoTts {
 
     // Just accept a negotiated LanguageIdentifier
     fn sg_name(lang: &LanguageIdentifier) -> Result<&'static str, TtsConstructionError> {
-        let lang_str = format!("{}-{}", lang.language(), lang.region().ok_or(TtsConstructionError::NoRegion)?);
+        let lang_str = format!("{}-{}", lang.language, lang.region.ok_or(TtsConstructionError::NoRegion)?);
         match lang_str.as_str()  {
             "es-ES" => Ok("es-ES_zl0_sg.bin"),
             "en-US" => Ok("en-US_lh0_sg.bin"),
@@ -154,7 +154,7 @@ impl PicoTts {
     }
 
     fn ta_name(lang: &LanguageIdentifier) -> Result<String, TtsConstructionError> {
-        Ok(format!("{}-{}_ta.bin", lang.language() , lang.region().ok_or(TtsConstructionError::NoRegion)?))
+        Ok(format!("{}-{}_ta.bin", lang.language , lang.region.ok_or(TtsConstructionError::NoRegion)?.as_str()))
     }
 
     // There's only one voice of Pico per language so preferences are not of much use here
@@ -321,7 +321,7 @@ impl IbmTts {
 
     // Accept only negotiated LanguageIdentifiers
     fn make_tts_voice(lang: &LanguageIdentifier, prefs: &VoiceDescr) -> Result<&'static str, TtsConstructionError> {
-        let lang_str = format!("{}-{}", lang.language(), lang.region().ok_or(TtsConstructionError::NoRegion)?);
+        let lang_str = format!("{}-{}", lang.language, lang.region.ok_or(TtsConstructionError::NoRegion)?.as_str());
         match lang_str.as_str() {
             "es-ES" => {
                 Ok(match prefs.gender {

@@ -20,35 +20,35 @@ rsnowboy = {git = "https://github.com/sheosi/rsnowboy"} # Hotword detector
 pocketsphinx = "^0.6.0" # Offline Stt
 #deepspeech = {version = "^0.6", optional = true} # More correct and better (also slower) Stt 
 sphinxad = "^0.1" # Recording library
-cpal = {version = "^0.10", optional = true} # For recording (future substitute of sphinxad)
+cpal = {version = "^0.11", optional = true} # For recording (future substitute of sphinxad)
 ogg = "^0.7" # Send to web services audio and to save into disk
 opus = "^0.2"
 
 snips-nlu-lib = { git = "https://github.com/snipsco/snips-nlu-rs", branch = "master" } # NLU
 snips-nlu-ontology = { git = "https://github.com/snipsco/snips-nlu-ontology", tag = "0.67.1"  } # NLU-related things
 serde_json ="^1.0" # Used in nlu output and to get text from IBM's Wattson
-cpython = "^0.4" # Load actions, in the future when Pyo3 works with stable we'll change this
-python3-sys = "^0.4" # For PyImport_AppendInitTab
+cpython = "^0.5" # Load actions, in the future when Pyo3 works with stable we'll change this
+python3-sys = "^0.5" # For PyImport_AppendInitTab
 
 ref_thread_local = "^0.0" # For having the TTS as a global in a thread local way
 ttspico = "^0.1" # Main Tts (only for some languages)
 espeak-sys = {version = "^0.0", optional = true} # Auxiliar Tts (speaks any language)
 libc = "^0.2" # Required to interface with espeak-sys
-rodio = "^0.10" # Playback library
+rodio = "^0.11" # Playback library
 
 syslog = "^5.0" # Linux log interface
 log = "^0.4" # Common API for logging so we can change backend easily
 
 #Cloud-based
 google_translate_tts = "0.1.2" # Format TTS URLs
-reqwest = {version="0.10.0-alpha.2", features=["default-tls", "blocking"]} # HTTP client
+reqwest = {version="^0.10", features=["default-tls", "blocking"]} # HTTP client
 url = "^2.1"
 base64 = "^0.12" # For sending data to the online TTS and STT
 
 # Localization
-unic-langid = {version="^0.8", features = ["macros"]} # For parsing Unicode Language Identifiers
+unic-langid = {version="^0.9", features = ["macros"]} # For parsing Unicode Language Identifiers
 locale_config = "*" # Interact with the system locale, the * is suggestednby it's author
-fluent-langneg = "^0.12" # Language negotiation
+fluent-langneg = "^0.13" # Language negotiation
 
 [features]
 default = []

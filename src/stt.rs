@@ -97,7 +97,7 @@ pub struct Pocketsphinx {
 impl Pocketsphinx {
     pub fn new(lang: &LanguageIdentifier) -> Result<Self, SttConstructionError> {
         let lang = Self::lang_neg(lang);
-        let iso_str = format!("{}-{}", lang.language(), lang.region().ok_or(SttConstructionError::NoRegion)?.to_lowercase());
+        let iso_str = format!("{}-{}", lang.language, lang.region.ok_or(SttConstructionError::NoRegion)?.as_str().to_lowercase());
         let stt_path = resolve_path(STT_DATA_PATH);
 
         let config = pocketsphinx::CmdLn::init(
@@ -284,7 +284,7 @@ impl IbmStt {
 
     fn model_from_lang(lang: &LanguageIdentifier) -> Result<String, SttConstructionError> {
         let lang = Self::lang_neg(lang);
-        Ok(format!("{}-{}_BroadbandModel", lang.language(), lang.region().ok_or(SttConstructionError::NoRegion)?))
+        Ok(format!("{}-{}_BroadbandModel", lang.language, lang.region.ok_or(SttConstructionError::NoRegion)?))
     }
 
     fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {

@@ -174,7 +174,7 @@ impl SnipsNluManager {
             intents.insert(name.to_string(), Intent{utterances});
         }
 
-        let train_set = NluTrainSet{entities: self.entities, intents, language: lang.language().to_string()};
+        let train_set = NluTrainSet{entities: self.entities, intents, language: lang.language.to_string()};
 
         // Output JSON
         Ok(serde_json::to_string(&train_set)?)
