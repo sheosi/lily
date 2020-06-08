@@ -1,24 +1,33 @@
 use std::path::PathBuf;
-use ref_thread_local::{RefThreadLocal, ref_thread_local};
+use lazy_static::lazy_static;
 
 // Paths
-pub const NLU_ENGINE_PATH: &str = "resources/nlu/engine";
-pub const NLU_TRAIN_SET_PATH: &str = "resources/nlu/train-set.json";
-pub const STT_DATA_PATH: &str = "resources/stt";
-pub const PICO_DATA_PATH: &str = "resources/tts";
-pub const SNOWBOY_DATA_PATH: &str = "resources/hotword";
-pub const PYTHON_SDK_PATH: &str = "resources/python";
-pub const PACKAGES_PATH: &str = "packages";	
-pub const LAST_SPEECH_PATH: &str = "last_speech.ogg";
-pub const MAIN_CONF_PATH: &str = "conf.yaml";
+pub const NLU_ENGINE_PATH: PathRef = PathRef::new("resources/nlu/engine");
+pub const NLU_TRAIN_SET_PATH: PathRef = PathRef::new("resources/nlu/train-set.json");
+pub const STT_DATA_PATH: PathRef = PathRef::new("resources/stt");
+pub const PICO_DATA_PATH: PathRef = PathRef::new("resources/tts");
+pub const SNOWBOY_DATA_PATH: PathRef = PathRef::new("resources/hotword");
+pub const PYTHON_SDK_PATH: PathRef = PathRef::new("resources/python");
+pub const PACKAGES_PATH: PathRef = PathRef::new("packages");
+pub const LAST_SPEECH_PATH: PathRef = PathRef::new("last_speech.ogg");
+pub const MAIN_CONF_PATH: PathRef = PathRef::new("conf.yaml");
 
-
-ref_thread_local! {
-    static managed ORG_PATH: PathBuf = std::env::current_dir().expect("Couldn't get current_dir").canonicalize().expect("Failed to canonicalize current_dir");
+lazy_static! {
+    static ref ORG_PATH: PathBuf = std::env::current_dir().expect("Couldn't get current_dir").canonicalize().expect("Failed to canonicalize current_dir");
 }
 
-pub fn resolve_path(path: &str) -> PathBuf {
-	ORG_PATH.borrow().join(path)
+pub struct PathRef {
+    path_ref: &'static str
+}
+
+impl PathRef {
+    const fn new(path_ref: &'static str) -> Self {
+        Self{path_ref}
+    }
+
+    pub fn resolve(&self) -> PathBuf {
+        ORG_PATH.join(self.path_ref)
+    }
 }
 
 // Messages
