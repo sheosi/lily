@@ -881,6 +881,7 @@ dependencies = [
  "espeak-sys",
  "fluent-langneg",
  "google_translate_tts",
+ "lazy_static",
  "libc 0.2.68",
  "locale_config",
  "log",
@@ -888,7 +889,6 @@ dependencies = [
  "opus",
  "pocketsphinx",
  "python3-sys",
- "ref_thread_local",
  "regex",
  "reqwest",
  "rodio",
@@ -1469,12 +1469,6 @@ name = "redox_syscall"
 version = "0.1.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2439c63f3f6139d1b57529d16bc3b8bb855230c8efcc5d3a896c8bea7c3b1e84"
-
-[[package]]
-name = "ref_thread_local"
-version = "0.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d813022b2e00774a48eaf43caaa3c20b45f040ba8cbf398e2e8911a06668dbe6"
 
 [[package]]
 name = "regex"
