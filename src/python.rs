@@ -1,7 +1,5 @@
-use std::cell::{RefCell, Ref};
 use std::rc::Rc;
 use std::path::Path;
-use std::thread_local;
 
 use crate::TTS;
 use crate::audio::PlayDevice;
@@ -11,42 +9,12 @@ use unic_langid::LanguageIdentifier;
 use fluent_langneg::negotiate::{negotiate_languages, NegotiationStrategy};
 use cpython::{PyErr, PyClone, Python, PyList, PyDict, PyString, PythonObject, PyResult, ToPyObject, py_module_initializer, py_fn, FromPyObject, exc};
 use serde_yaml::Value;
+use ref_thread_local::{ref_thread_local, RefThreadLocal};
 use anyhow::{anyhow, Result};
 
-thread_local! {
-    pub static PYTHON_LILY_PKG: RefString = RefString::new("<None>");
-}
-
-pub struct RefString {
-    current_val: RefCell<Rc<String>>,
-    default_val: Rc<String>
-}
-
-impl RefString {
-    pub fn new(def: &str) -> Self {
-        let default_val = Rc::new(def.to_owned());
-        Self {current_val: RefCell::new(default_val.clone()), default_val}
-    }
-
-    pub fn clear(&self) {
-        self.current_val.replace(self.default_val.clone());
-    }
-
-    pub fn set(&self, val: Rc<String>) {
-        self.current_val.replace(val);
-    }
-
-    pub fn borrow(&self) -> Ref<String> {
-        Ref::map(self.current_val.borrow(), |r|r.as_ref())
-    }
-}
-
-pub fn call_for_pkg<F, R>(name: Rc<String>, f: F) -> R where F: FnOnce() -> R {
-    PYTHON_LILY_PKG.with(|c| c.set(name));
-    let r = f();
-    PYTHON_LILY_PKG.with(|c| c.clear());
-
-    r
+ref_thread_local! {
+    pub static managed PYTHON_LILY_PKG_NONE: Rc<String> = Rc::new("<None>".to_string());
+    pub static managed PYTHON_LILY_PKG_CURR: Rc<String> = PYTHON_LILY_PKG_NONE.borrow().clone();
 }
 
 pub fn yaml_to_python(yaml: &serde_yaml::Value, py: Python) -> cpython::PyObject {
@@ -176,10 +144,8 @@ py_module_initializer!(_lily_impl, init__lily_impl, PyInit__lily_impl, |py, m| {
 });
 
 fn get_current_package(py: Python) -> PyResult<cpython::PyString> {
-    PYTHON_LILY_PKG.with(|n|
-        Ok(n.borrow().clone().into_py_object(py))
-    )
-
+    let curr_pkg_string = &*PYTHON_LILY_PKG_CURR.borrow().clone();
+    Ok(curr_pkg_string.clone().into_py_object(py))
 }
 
 fn make_err<T: std::fmt::Debug>(py: Python, err: T) -> cpython::PyErr {
@@ -200,7 +166,7 @@ fn negotiate_lang(py: Python, input: &str, available: Vec<String>) -> PyResult<c
 }
 
 fn python_say(py: Python, input: &str) -> PyResult<cpython::PyObject> {
-    let audio = TTS.with(|t|t.borrow_mut().synth_text(input).map_err(|err|make_err(py, err)))?;
+    let audio = TTS.borrow_mut().synth_text(input).map_err(|err|make_err(py, err))?;
     match PlayDevice::new().ok_or_else(||make_err(py, "Couldn't obtain play stream"))?.wait_audio(audio) {
         Ok(()) => Ok(py.None()),
         Err(err) => Err(PyErr::new::<exc::OSError,_>(py, format!("Error while playing audio: {:?}", err)))
@@ -240,10 +206,9 @@ fn play_file(py: Python, input: &str) -> PyResult<cpython::PyObject> {
 }
 
 fn get_conf_string(py: Python, input: &str) -> PyResult<cpython::PyObject> {
-    let curr_conf = crate::config::GLOBAL_CONF.with(|c|c.clone());
-    let conf_data = PYTHON_LILY_PKG.with(|n| {
-        curr_conf.get_package_path(&n.borrow(), input)
-    });
+    let curr_pkg_string = &*PYTHON_LILY_PKG_CURR.borrow().clone();
+    let curr_conf = crate::config::GLOBAL_CONF.borrow();
+    let conf_data = curr_conf.get_package_path(curr_pkg_string, input);
     Ok(match conf_data {
         Some(string) => string.to_py_object(py).into_object(),
         None => py.None()

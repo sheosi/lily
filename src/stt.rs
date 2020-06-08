@@ -1,6 +1,6 @@
 use core::fmt::Display;
 
-use crate::vars::STT_DATA_PATH;
+use crate::vars::{STT_DATA_PATH, resolve_path};
 use crate::vad::{Vad, VadError};
 use crate::audio::AudioRaw;
 use crate::path_ext::{NotUnicodeError, ToStrResult};
@@ -98,7 +98,7 @@ impl Pocketsphinx {
     pub fn new(lang: &LanguageIdentifier) -> Result<Self, SttConstructionError> {
         let lang = Self::lang_neg(lang);
         let iso_str = format!("{}-{}", lang.language, lang.region.ok_or(SttConstructionError::NoRegion)?.as_str().to_lowercase());
-        let stt_path = STT_DATA_PATH.resolve();
+        let stt_path = resolve_path(STT_DATA_PATH);
 
         let config = pocketsphinx::CmdLn::init(
             true,

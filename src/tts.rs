@@ -1,6 +1,6 @@
 use core::fmt::Display;
 
-use crate::vars::{PICO_DATA_PATH};
+use crate::vars::{PICO_DATA_PATH, resolve_path};
 use crate::audio::Audio;
 use crate::path_ext::{NotUnicodeError,ToStrResult};
 
@@ -164,7 +164,7 @@ impl PicoTts {
         // 1. Create a Pico system
         let lang = Self::lang_neg(lang)?;
         let sys = pico::System::new(4 * 1024 * 1024).expect("Could not init system");
-        let lang_path = PICO_DATA_PATH.resolve();
+        let lang_path = resolve_path(PICO_DATA_PATH);
 
         // 2. Load Text Analysis (TA) and Speech Generation (SG) resources for the voice you want to use
         let ta_res = 
