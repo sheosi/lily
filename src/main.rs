@@ -11,9 +11,11 @@ mod vad;
 mod extensions;
 mod config;
 mod path_ext;
+mod signals;
 
 // Standard library
 use std::path::Path;
+use std::cell::RefCell;
 
 // This crate
 use crate::audio::{RecDevice, PlayDevice, Recording};
@@ -26,15 +28,14 @@ use crate::tts::{Gender, VoiceDescr};
 
 // Other crates
 use log::{info, warn};
-use ref_thread_local::{RefThreadLocal, ref_thread_local};
 use unic_langid::LanguageIdentifier;
 use anyhow::{anyhow, Result};
 use cpython::PyDict;
 use snips_nlu_ontology::Slot;
 
 // To be shared on the same thread
-ref_thread_local! {
-    static managed TTS: Box<dyn crate::tts::Tts> = tts::TtsFactory::dummy();
+thread_local! {
+    static TTS: RefCell<Box<dyn crate::tts::Tts>> = RefCell::new(tts::TtsFactory::dummy());
 }
 
 enum ProgState {
@@ -85,11 +86,12 @@ fn record_loop() -> Result<()> {
     let ibm_tts_gateway_key = config.extract_ibm_tts_data();
     let ibm_stt_gateway_key = config.extract_ibm_stt_data();
 
-    let mut order_map = load_packages(&Path::new(&resolve_path(PACKAGES_PATH)), &curr_lang)?;
+    let mut order_map = load_packages(&Path::new(&PACKAGES_PATH.resolve()), &curr_lang)?;
 
     const VOICE_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};
-    *TTS.borrow_mut() = tts::TtsFactory::load_with_prefs(&curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS)?;
-    info!("Using tts {}", TTS.borrow().get_info());
+    let new_tts = tts::TtsFactory::load_with_prefs(&curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS)?;
+    TTS.with(|a|(&a).replace(new_tts));
+    info!("Using tts {}", TTS.with(|a|(*a).borrow().get_info()));
 
     let mut record_device = RecDevice::new()?;
     let mut _play_device = PlayDevice::new();
@@ -99,12 +101,12 @@ fn record_loop() -> Result<()> {
     info!("Using stt {}", stt.get_info());
 
     let mut hotword_detector = {
-        let snowboy_path = resolve_path(SNOWBOY_DATA_PATH);
+        let snowboy_path = SNOWBOY_DATA_PATH.resolve();
         Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res"), config.hotword_sensitivity)?
     };
 
     info!("Init Nlu");
-    let nlu = NluFactory::new_nlu(&resolve_path(NLU_ENGINE_PATH))?;
+    let nlu = NluFactory::new_nlu(&NLU_ENGINE_PATH.resolve())?;
     let mut current_state = ProgState::WaitingForHotword;
 
 
@@ -189,7 +191,7 @@ fn record_loop() -> Result<()> {
                                         order_map.call_order("unrecognized", &base_context)?;
                                     }
                                     record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
-                                    save_recording_to_disk(&mut current_speech, resolve_path(LAST_SPEECH_PATH).as_path());
+                                    save_recording_to_disk(&mut current_speech, LAST_SPEECH_PATH.resolve().as_path());
                                     current_speech.clear();
                                 }
                                 else {

@@ -6,12 +6,11 @@ use core::cell::RefCell;
 use std::collections::HashMap;
 
 // This crate
-use crate::python::{yaml_to_python, add_to_sys_path, PYTHON_LILY_PKG_NONE, PYTHON_LILY_PKG_CURR};
+use crate::python::{yaml_to_python, add_to_sys_path, call_for_pkg};
 
 // Other crates
 use cpython::{Python, PyDict, ObjectProtocol, PyClone};
 use log::info;
-use ref_thread_local::RefThreadLocal;
 use anyhow::{anyhow, Result};
 
 #[derive(Debug)]
@@ -118,9 +117,7 @@ impl ActionSet {
             // TODO: if an object doesn't implement trigger_action, don't panic, but decide what to do
             let trig_act = action.obj.getattr(py, "trigger_action").map_err(|py_err|anyhow!("Python error while accessing trigger_action: {:?}", py_err))?; 
             std::env::set_current_dir(action.lily_pkg_path.as_ref())?;
-            *PYTHON_LILY_PKG_CURR.borrow_mut() = action.lily_pkg_name.clone();
-            trig_act.call(py, (action.args.clone_ref(py), context.clone_ref(py)), None).map_err(|py_err|{py_err.clone_ref(py).print(py);anyhow!("Python error while calling action: {:?}", py_err)})?;
-            *PYTHON_LILY_PKG_CURR.borrow_mut() = PYTHON_LILY_PKG_NONE.borrow().clone();
+            call_for_pkg(action.lily_pkg_name.clone(), ||trig_act.call(py, (action.args.clone_ref(py), context.clone_ref(py)), None).map_err(|py_err|{py_err.clone_ref(py).print(py);anyhow!("Python error while calling action: {:?}", py_err)}))?;
         }
 
         Ok(())

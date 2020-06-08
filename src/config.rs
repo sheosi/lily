@@ -1,13 +1,12 @@
 use serde::Deserialize;
 use anyhow::{anyhow, Result};
-use crate::vars::{DEFAULT_HOTWORD_SENSITIVITY, MAIN_CONF_PATH, resolve_path, NO_KEY_MSG};
+use crate::vars::{DEFAULT_HOTWORD_SENSITIVITY, MAIN_CONF_PATH, NO_KEY_MSG};
 use std::collections::HashMap;
-use ref_thread_local::ref_thread_local;
 use std::rc::Rc;
 use serde_yaml::Value;
 
-ref_thread_local! {
-     pub static managed GLOBAL_CONF: Rc<Config> = Rc::new(Config::default());
+thread_local! {
+     pub static GLOBAL_CONF: Rc<Config> = Rc::new(Config::default());
 }
 
 #[derive(Deserialize, Debug)]
@@ -48,7 +47,7 @@ pub fn get_conf() -> Config {
 }
 
 fn load_conf() -> Result<Config> {
-    let conf_path = resolve_path(MAIN_CONF_PATH);
+    let conf_path = MAIN_CONF_PATH.resolve();
     if conf_path.is_file() {
         let conf_file = std::fs::File::open(conf_path)?;
         Ok(serde_yaml::from_reader(std::io::BufReader::new(conf_file))?)
