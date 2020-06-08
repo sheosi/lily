@@ -12,10 +12,13 @@ Lily is written in Rust + Python.
 
 ```
 - libpocketsphinx-dev
+- libsphinxbase-dev
 - (also needs sphinxad, but is the same pacakge on debina)
 - python3-all-dev
 - libespeak-ng-dev
 - libopus-dev
+- clang
+- libgsl-dev
 ```
 
 #### Python dependencies (needed for runtime):
@@ -102,4 +105,4 @@ Lily is meant to be run on-device (mostly) even on constrained hardware like a R
 
 ## Current state:
 
-Very very early phase, it's still a prototype. It will be buggy (though there aren't many unwraps)
+Very very early phase, it's still a prototype. It will be buggy (though there aren't many unwraps).
