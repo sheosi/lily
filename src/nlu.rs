@@ -73,7 +73,7 @@ pub struct SnipsNluManager {
 }
 
 impl SnipsNluManager {
-    fn new() -> Self {
+    pub fn new() -> Self {
         SnipsNluManager {intents: vec![], entities:HashMap::new()}
     }
 }
@@ -249,7 +249,7 @@ pub struct SnipsNlu {
 }
 
 impl SnipsNlu {
-    fn new(engine_path: &Path) -> Result<SnipsNlu> {
+    pub fn new(engine_path: &Path) -> Result<SnipsNlu> {
         let engine = SnipsNluEngine::from_path(engine_path).map_err(|err|anyhow!("Error while creating NLU engine, details: {:?}", err))?; 
 
         Ok(SnipsNlu { engine })
@@ -274,16 +274,3 @@ pub trait Nlu {
 
     fn parse(&self, input: &str) -> snips_nlu_lib::Result<Self::NluResult>;
 }
-
-pub struct NluFactory {}
-
-impl NluFactory {
-    pub fn new_nlu(engine_path: &Path) -> Result<SnipsNlu> {
-        SnipsNlu::new(engine_path)
-    }
-
-    pub fn new_manager() -> SnipsNluManager {
-        SnipsNluManager::new()
-    }
-}
-

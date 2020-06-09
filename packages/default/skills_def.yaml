@@ -6,6 +6,9 @@ say_hello:
     say: $say_hello_i18n
 
 lily_start: # Called by lily executable when it's ready to serve petitions
+  signals:
+    event: lily_start
+
   actions:
     say: $lily_start
 
@@ -18,6 +21,9 @@ say_name:
     say: $say_name
 
 empty_reco: # Called by Lily when active voice ends and nothing is recorded
+  signals:
+    event: empty_reco
+
   actions:
     say: $say_hello_i18n
 
@@ -40,6 +46,9 @@ repeat:
     say: $say_repeat
 
 init_reco: # Called by executable when starts listening, the sound is causing problems now so it's disabled
+  signals:
+      event: init_reco
+
   actions: # We'll play a file for the time being
     play_file: sounds/beep.ogg
 

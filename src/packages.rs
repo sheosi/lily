@@ -1,47 +1,18 @@
 // Standard library
 use std::path::Path;
 use std::rc::Rc;
-use std::collections::HashMap;
-use std::convert::TryInto;
 
 // This crate
-use crate::vars::{NLU_TRAIN_SET_PATH, NLU_ENGINE_PATH, PYTHON_SDK_PATH, PACKAGES_PATH_ERR_MSG, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
-use crate::nlu::{NluManager, NluFactory, NluUtterance, EntityDef, EntityData, EntityInstance};
-use crate::python::{try_translate_all, call_for_pkg};
-use crate::extensions::{OrderMap, ActionSet, ActionRegistry};
+use crate::vars::{PYTHON_SDK_PATH, PACKAGES_PATH_ERR_MSG, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
+use crate::python::call_for_pkg;
+use crate::extensions::{ActionSet, ActionRegistry};
+use crate::signals::{SignalOrder, SignalEvent};
 
 // Other crates
 use unic_langid::LanguageIdentifier;
 use log::{info, warn};
 use cpython::Python;
 use anyhow::{anyhow, Result};
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-struct YamlEntityDef {
-    data: Vec<String>
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum OrderKind {
-    Ref(String),
-    Def(YamlEntityDef)
-}
-
-#[derive(Deserialize)]
-struct OrderEntity {
-    kind: OrderKind,
-    example: String
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum OrderData {
-    Direct(String),
-    WithEntities{text: String, entities: HashMap<String, OrderEntity>}
-}
-
 
 trait IntoMapping {
     fn into_mapping(self) -> Option<serde_yaml::Mapping>;
@@ -53,22 +24,6 @@ impl IntoMapping for serde_yaml::Value {
             serde_yaml::Value::Mapping(mapping) => Some(mapping),
             _ => None
         }
-    }
-}
-
-impl TryInto<EntityDef> for YamlEntityDef {
-    type Error = anyhow::Error;
-
-    fn try_into(self) -> Result<EntityDef> {
-        let mut data = Vec::new();
-
-        for trans_data in self.data.into_iter(){
-            let mut translations = try_translate_all(&trans_data)?;
-            let value = translations.swap_remove(0);
-            data.push(EntityData{value, synonyms: translations});
-        }
-
-        Ok(EntityDef{data, use_synonyms: true, automatically_extensible: true})
     }
 }
 
@@ -90,7 +45,7 @@ fn load_trans(python: Python, pkg_path: &Path, curr_lang: &LanguageIdentifier) -
     Ok(())
 }
 
-pub fn load_package<N: NluManager>(order_map: &mut OrderMap, nlu_man: &mut N, action_registry: &ActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) -> Result<()> {
+pub fn load_package(signal_order: &mut SignalOrder, signal_event: &mut SignalEvent, action_registry: &ActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) -> Result<()> {
     info!("Loading package: {}", path.to_str().ok_or_else(|| anyhow!("Failed to get the str from path {:?}", path))?);
 
     // Set current Python module
@@ -99,6 +54,7 @@ pub fn load_package<N: NluManager>(order_map: &mut OrderMap, nlu_man: &mut N, ac
         let pkg_name_str = os_str.to_str().ok_or_else(||anyhow!("Can't transform package path name to str"))?;
         Rc::new(pkg_name_str.to_string())
     };
+
     let pkg_path = Rc::new(path.to_path_buf());
     call_for_pkg::<_, Result<()>>(pkg_name.clone(), ||{
 
@@ -109,9 +65,6 @@ pub fn load_package<N: NluManager>(order_map: &mut OrderMap, nlu_man: &mut N, ac
                 let yaml_str = &std::fs::read_to_string(&yaml_path)?;
                 serde_yaml::from_str(yaml_str)?
             };
-
-            // Multi document support, doc is a yaml::YamlLoader, we just want the first one
-            //let doc = &docs[0];
 
             // Load actions + singals from Yaml
             for (key, data) in doc.into_mapping().expect(WRONG_YAML_ROOT_MSG).into_iter() {
@@ -152,42 +105,15 @@ pub fn load_package<N: NluManager>(order_map: &mut OrderMap, nlu_man: &mut N, ac
                         act_set.borrow_mut().add_action(py, &act_name, &act_arg, &action_registry, pkg_name.clone(), pkg_path.clone())?;
                     }
                     for (sig_name, sig_arg) in signals.into_iter() {
-
                         if sig_name == "order" {
-                            let ord_data: OrderData = serde_yaml::from_value(sig_arg)?;
-                            match ord_data {
-                                OrderData::Direct(order_str) => {
-                                    // into_iter lets us do a move operation
-                                    let utts = try_translate_all(&order_str)?.into_iter().map(|utt| NluUtterance::Direct(utt)).collect();
-                                    nlu_man.add_intent(skill_name, utts);
-                                }
-                                OrderData::WithEntities{text, entities} => {
-
-                                    let mut entities_res = HashMap::new();
-                                    for (ent_name, ent_data) in entities.into_iter() {
-                                        let ent_kind_name = match ent_data.kind {
-                                            OrderKind::Ref(name) => {
-                                                name
-                                            },
-                                            OrderKind::Def(def) => {
-                                                let name = format!("_{}__{}_", pkg_name, ent_name);
-                                                nlu_man.add_entity(&name, def.try_into()?);
-                                                name
-                                            }
-                                        };
-                                        entities_res.insert(ent_name, EntityInstance{kind:ent_kind_name, example:ent_data.example});
-                                    }
-                                    let utts = try_translate_all(&text)?.into_iter().map(|utt| NluUtterance::WithEntities{text:utt, entities: entities_res.clone()}).collect();
-                                    nlu_man.add_intent(skill_name, utts);
-                                }
-                            }
+                            signal_order.add(sig_arg, skill_name, &pkg_name, act_set.clone())?;
                         }
-                        else {
-                            warn!("Unknown signal {} present in conf file", sig_name);
+
+                        if sig_name == "event" {
+                            signal_event.add(skill_name, act_set.clone());
                         }
                     }
 
-                    order_map.add_order(skill_name, act_set);
                 }
                 else {
                     warn!("Incorrect Yaml format for skill: \"{}\", won't be loaded", key.clone().as_str().expect(WRONG_YAML_KEY_MSG));
@@ -200,10 +126,9 @@ pub fn load_package<N: NluManager>(order_map: &mut OrderMap, nlu_man: &mut N, ac
     Ok(())
 }
 
-pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<OrderMap> {
-    let mut order_map = OrderMap::new();
-    let mut nlu_man = NluFactory::new_manager();
-
+pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<(SignalOrder, SignalEvent)> {
+    let mut signal_order = SignalOrder::new();
+    let mut signal_event = SignalEvent::new();
     // Get GIL
     let gil = Python::acquire_gil();
     let py = gil.python();
@@ -216,13 +141,13 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<Orde
         let entry = entry?.path();
         if entry.is_dir() {
             load_trans(py, &entry, curr_lang)?;
-            load_package(&mut order_map, &mut nlu_man, &action_registry.clone_try_adding(py, &entry.join("python"))?, &entry, curr_lang)?;
+            load_package(&mut signal_order, &mut signal_event, &action_registry.clone_try_adding(py, &entry.join("python"))?, &entry, curr_lang)?;
         }
 
         info!("{:?}", action_registry);
     }
 
-    nlu_man.train(&NLU_TRAIN_SET_PATH.resolve(), &NLU_ENGINE_PATH.resolve(), curr_lang)?;
+    signal_order.end_loading(curr_lang)?;
 
-    Ok(order_map)
+    Ok((signal_order, signal_event))
 }
