@@ -1,17 +1,17 @@
 // Standard library
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
-use core::cell::RefCell;
-use std::collections::HashMap;
 
 // This crate
 use crate::python::{yaml_to_python, add_to_sys_path, call_for_pkg};
 
 // Other crates
+use anyhow::{anyhow, Result};
 use cpython::{Python, PyDict, ObjectProtocol, PyClone};
 use log::info;
-use anyhow::{anyhow, Result};
 
 #[derive(Debug)]
 pub struct ActionRegistry {
