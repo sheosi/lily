@@ -25,6 +25,7 @@ use log::{info, warn};
 use anyhow::{Result, anyhow};
 use snips_nlu_ontology::Slot;
 use cpython::PyDict;
+
 #[derive(Deserialize)]
 struct YamlEntityDef {
     data: Vec<String>
@@ -265,8 +266,14 @@ impl SignalOrder {
                         }
                     }
                 }
-            }use std::cell::RefCell;
-use std::collections::HashMap;l();
+            }
+        }
+    }
+}
+
+
+fn add_slots(base_context: &PyDict, slots: Vec<Slot>) -> Result<PyDict> {
+    let gil = cpython::Python::acquire_gil();
     let py = gil.python();
 
     // What to do here if this fails?
