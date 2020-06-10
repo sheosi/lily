@@ -1,24 +1,24 @@
 [package]
 name = "lily"
 version = "0.1.0"
-authors = ["sergio"]
+authors = ["Sergio Tortosa <sertorbe@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 yaml-rust = "^0.4" # Load configuration files from this program and skills
-serde_yaml = "^0.8"
+serde_yaml = "^0.8" # Join serde and Yaml for loading conf and skills
 serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
 anyhow = "^1.0" # For error handling overall in the app
 thiserror = "^1.0" # For error handling in parts that can be made their own crate
 regex = "^1.3" # To parse configuration
-ctrlc = "^3.1"
+ctrlc = "^3.1" # To catch ctrl-c in all platforms and exit the program
 
 rsnowboy = {git = "https://github.com/sheosi/rsnowboy"} # Hotword detector
 #vad = "0.1.5" # Note: Had to be disabled because syntex_syntax was causing problems
 pocketsphinx = "^0.6.0" # Offline Stt
-#deepspeech = {version = "^0.6", optional = true} # More correct and better (also slower) Stt 
+deepspeech = {version = "^0.7", optional = true} # More correct and better (also slower) Stt 
 sphinxad = "^0.1" # Recording library
 cpal = {version = "^0.11", optional = true} # For recording (future substitute of sphinxad)
 ogg = "^0.7" # Send to web services audio and to save into disk
@@ -40,7 +40,7 @@ syslog = "^5.0" # Linux log interface
 log = "^0.4" # Common API for logging so we can change backend easily
 
 #Cloud-based
-google_translate_tts = "0.1.2" # Format TTS URLs
+google_translate_tts = {version = "0.1.2", optional = true} # Format TTS URLs
 reqwest = {version="^0.10", features=["default-tls", "blocking"]} # HTTP client
 url = "^2.1"
 base64 = "^0.12" # For sending data to the online TTS and STT
@@ -53,6 +53,6 @@ fluent-langneg = "^0.13" # Language negotiation
 [features]
 default = []
 extra_langs_tts = ["espeak-ng-sys"]
-google_tts = []
+google_tts = ["google_translate_tts"]
 devel_cpal_rec = ["cpal"]
-devel_deepspeech = []#devel_deepspeech = ["deepspeech"]
+devel_deepspeech = ["deepspeech"]
