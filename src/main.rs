@@ -1,7 +1,6 @@
 mod stt;
 mod tts;
 mod audio;
-mod gtts;
 mod nlu;
 mod vars;
 mod hotword;
