@@ -8,7 +8,7 @@ mod hotword;
 mod python;
 mod packages;
 mod vad;
-mod extensions;
+mod actions;
 mod config;
 mod path_ext;
 mod signals;

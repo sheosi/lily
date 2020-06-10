@@ -5,7 +5,7 @@ use std::rc::Rc;
 // This crate
 use crate::vars::{PYTHON_SDK_PATH, PACKAGES_PATH_ERR_MSG, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
 use crate::python::call_for_pkg;
-use crate::extensions::{ActionSet, ActionRegistry};
+use crate::actions::{ActionSet, ActionRegistry};
 use crate::signals::{SignalOrder, SignalEvent};
 
 // Other crates
