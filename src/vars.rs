@@ -5,6 +5,7 @@ use lazy_static::lazy_static;
 pub const NLU_ENGINE_PATH: PathRef = PathRef::new("resources/nlu/engine");
 pub const NLU_TRAIN_SET_PATH: PathRef = PathRef::new("resources/nlu/train-set.json");
 pub const STT_DATA_PATH: PathRef = PathRef::new("resources/stt");
+pub const DEEPSPEECH_DATA_PATH: PathRef = PathRef::new("resources/stt/deepspeech");
 pub const PICO_DATA_PATH: PathRef = PathRef::new("resources/tts");
 pub const SNOWBOY_DATA_PATH: PathRef = PathRef::new("resources/hotword");
 pub const PYTHON_SDK_PATH: PathRef = PathRef::new("resources/python");
@@ -41,7 +42,7 @@ pub const CLOCK_TOO_EARLY_MSG :&str = "Somehow the system's clock time is before
 pub const PYDICT_SET_ERR_MSG :&str = "Failed while assigning an entry in PyDict";
 pub const NO_KEY_MSG: &str = "This shouldn't happen, a key checked beforehand is None";
 pub const NO_YAML_FLOAT_MSG: &str = "This shouldn't happen, a Yaml was checked as a number which is not an u64 was not an f64 either";
-
+pub const NO_COMPATIBLE_LANG_MSG: &str = "Lang negotiation failed, even though a default lang was provided";
 // Other
 pub const LILY_VER: &str = "0.1";
 pub const DEFAULT_HOTWORD_SENSITIVITY: f32 = 0.45;

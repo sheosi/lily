@@ -1,14 +1,18 @@
 mod bundles;
-mod deepspeech;
 mod error;
 mod ibm;
 mod pocketsphinx;
 
+#[cfg(feature = "devel_deepspeech")]
+mod deepspeech;
+
 pub use self::bundles::*;
-pub use self::deepspeech::*;
 pub use self::error::*;
 pub use self::ibm::*;
 pub use self::pocketsphinx::*;
+
+#[cfg(feature = "devel_deepspeech")]
+pub use self::deepspeech::*;
 
 use core::fmt::Display;
 use unic_langid::LanguageIdentifier;
@@ -63,6 +67,7 @@ pub trait SttVadless {
 pub struct SttFactory;
 
 impl SttFactory {
+    #[cfg(not(feature = "devel_deepspeech"))]
 	pub fn load(lang: &LanguageIdentifier, prefer_cloud: bool, gateway_key: Option<(String, String)>) -> Result<Box<dyn SttStream>, SttConstructionError> {
 
 		let local_stt = Pocketsphinx::new(lang)?;
@@ -79,6 +84,11 @@ impl SttFactory {
         else {
             Ok(Box::new(local_stt))
         }
-	}
+    }
+    
+    #[cfg(feature = "devel_deepspeech")]
+    pub fn load(lang: &LanguageIdentifier, _prefer_cloud: bool, _gateway_key: Option<(String, String)>) -> Result<Box<dyn SttStream>, SttConstructionError> {
+        Ok(Box::new(SttBatcher::new(Pocketsphinx::new(lang)?, DeepSpeechStt::new()?)))
+    }
 }
 

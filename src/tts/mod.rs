@@ -21,8 +21,19 @@ pub use self::google::*;
 use crate::audio::Audio;
 
 use unic_langid::LanguageIdentifier;
+use fluent_langneg::{negotiate_languages, NegotiationStrategy};
+// Traits //////////////////////////////////////////////////////////////////////
+pub trait Tts {
+    fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError>;
+    fn get_info(&self) -> TtsInfo;
+}
 
+pub trait TtsStatic {
+    fn is_descr_compatible(descr: &VoiceDescr) -> Result<(), TtsConstructionError>;
+    fn is_lang_comptaible(lang: &LanguageIdentifier) -> Result<(), TtsConstructionError>;
+}
 
+// Info ////////////////////////////////////////////////////////////////////////
 #[derive(Debug, Clone)]
 pub struct TtsInfo {
     pub name: String,
@@ -41,7 +52,7 @@ impl Display for TtsInfo {
     }
 }
 
-
+// Other ///////////////////////////////////////////////////////////////////////
 #[derive(Debug, Clone, PartialEq)]
 pub enum Gender {
     Male,
@@ -52,15 +63,22 @@ pub struct VoiceDescr {
     pub gender: Gender
 }
 
-pub trait Tts {
-    fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError>;
-    fn get_info(&self) -> TtsInfo;
+fn negotiate_langs_res(
+    input: &LanguageIdentifier,
+    available: &Vec<LanguageIdentifier>,
+    default: Option<&LanguageIdentifier>
+) -> Result<LanguageIdentifier, TtsConstructionError> {
+    let langs = negotiate_languages(&[input], available, default, NegotiationStrategy::Filtering);
+    if !langs.is_empty() {
+        Ok(langs[0].clone())
+    }
+    else {
+        Err(TtsConstructionError::IncompatibleLanguage)
+    }
+
 }
 
-pub trait TtsStatic {
-    fn check_compatible(descr: &VoiceDescr) -> Result<(), TtsConstructionError>;
-}
-
+// Dummy ///////////////////////////////////////////////////////////////////////
 pub struct DummyTts{}
 
 impl DummyTts {
@@ -83,17 +101,38 @@ impl Tts for DummyTts {
 }
 
 impl TtsStatic for DummyTts {
-    fn check_compatible(_descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
+    fn is_descr_compatible(_descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
+        // Just a dummy, won't output anything anyway
+        Ok(())
+    }
+
+    fn is_lang_comptaible(_lang: &LanguageIdentifier) -> Result<(), TtsConstructionError> {
         // Just a dummy, won't output anything anyway
         Ok(())
     }
 }
 
+// Factory /////////////////////////////////////////////////////////////////////
 pub struct TtsFactory;
 
 impl TtsFactory {
+    #[cfg(not(feature = "extra_langs_tts"))]
+    fn make_local_tts (lang: &LanguageIdentifier, prefs: &VoiceDescr) -> Result<Box<dyn Tts>, TtsConstructionError> {
+        Ok(Box::new(PicoTts::new(lang, prefs)?))
+    }
+
+    #[cfg(feature = "extra_langs_tts")]
+    fn make_local_tts (lang: &LanguageIdentifier, prefs: &VoiceDescr) -> Result<Box<dyn Tts>, TtsConstructionError> {
+        if PicoTts::is_descr_compatible(prefs).is_ok() & PicoTts::is_lang_comptaible(lang).is_ok() {
+            Ok(Box::new(PicoTts::new(lang, prefs)?))
+        }
+        else {
+            Ok(Box::new(EspeakTts::new(lang)))
+        }
+    }
+
     pub fn load_with_prefs(lang: &LanguageIdentifier, prefer_cloud_tts: bool, gateway_key: Option<(String, String)>, prefs: &VoiceDescr) -> Result<Box<dyn Tts>, TtsConstructionError> {
-        let local_tts = Box::new(PicoTts::new(lang, prefs)?);
+        let local_tts = Self::make_local_tts(lang, prefs)?;
 
         match prefer_cloud_tts {
             true => {

@@ -20,13 +20,12 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-use crate::tts::{TtsConstructionError, VoiceDescr, TtsError, Tts, TtsInfo, TtsStatic, Gender};
-use crate::vars::PICO_DATA_PATH;
+use crate::tts::{TtsConstructionError, VoiceDescr, TtsError, Tts, TtsInfo, TtsStatic, Gender, negotiate_langs_res};
 use crate::audio::Audio;
 use crate::path_ext::ToStrResult;
+use crate::vars::{PICO_DATA_PATH, NO_COMPATIBLE_LANG_MSG};
 
 use unic_langid::{LanguageIdentifier, langid, langids};
-use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use ttspico as pico;
 
 pub struct PicoTts {
@@ -53,10 +52,10 @@ impl PicoTts {
 
     // There's only one voice of Pico per language so preferences are not of much use here
     pub fn new(lang: &LanguageIdentifier, prefs: &VoiceDescr) -> Result<Self, TtsConstructionError> {
-        Self::check_compatible(prefs)?; // Check voice description compatibility
+        Self::is_descr_compatible(prefs)?; // Check voice description compatibility
 
         // 1. Create a Pico system
-        let lang = Self::lang_neg(lang)?;
+        let lang = Self::lang_neg(lang);
         let sys = pico::System::new(4 * 1024 * 1024).expect("Could not init system");
         let lang_path = PICO_DATA_PATH.resolve();
 
@@ -86,17 +85,14 @@ impl PicoTts {
         Ok(PicoTts{engine})
     }
 
-    fn lang_neg(lang: &LanguageIdentifier) -> Result<LanguageIdentifier, TtsConstructionError> {
-        let available_langs = langids!("es-ES", "en-US");
+    fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
         let default = langid!("en-US");
 
-        let langs = negotiate_languages(&[lang],&available_langs, Some(&default), NegotiationStrategy::Filtering);
-        if !langs.is_empty() {
-            Ok(langs[0].clone())
-        }
-        else {
-            Err(TtsConstructionError::IncompatibleLanguage)
-        }
+        negotiate_langs_res(lang, &Self::available_langs(), Some(&default)).expect(NO_COMPATIBLE_LANG_MSG)
+    }
+
+    fn available_langs() -> Vec<LanguageIdentifier> {
+        langids!("es-ES", "en-US")
     }
 }
 
@@ -139,7 +135,7 @@ impl Tts for PicoTts {
 }
 
 impl TtsStatic for PicoTts {
-    fn check_compatible(descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
+    fn is_descr_compatible(descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
         //Only has female voices (by default)
         if descr.gender != Gender::Female {
             Err(TtsConstructionError::WrongGender)
@@ -147,5 +143,11 @@ impl TtsStatic for PicoTts {
         else {
             Ok(())
         }
+    }
+
+    fn is_lang_comptaible(lang: &LanguageIdentifier) -> Result<(), TtsConstructionError> {
+        let default = langid!("en-US");
+
+        negotiate_langs_res(lang, &Self::available_langs(), Some(&default)).map(|_|())
     }
 }

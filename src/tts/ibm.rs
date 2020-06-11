@@ -1,8 +1,8 @@
-use crate::tts::{Tts, VoiceDescr, TtsConstructionError, Gender, TtsError, TtsInfo, TtsStatic, OnlineTtsError};
+use crate::tts::{Tts, VoiceDescr, TtsConstructionError, Gender, TtsError, TtsInfo, TtsStatic, OnlineTtsError, negotiate_langs_res};
 use crate::audio::Audio;
+use crate::vars::NO_COMPATIBLE_LANG_MSG;
 
 use unic_langid::{LanguageIdentifier, langid, langids};
-use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 
 pub struct IbmTts {
     engine: IbmTtsEngine,
@@ -37,9 +37,12 @@ impl IbmTts {
 
     // Accept only negotiated LanguageIdentifiers
     fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
-        let available_langs = langids!("es-ES", "en-US");
         let default = langid!("en-US");
-        negotiate_languages(&[&lang],&available_langs, Some(&default), NegotiationStrategy::Filtering)[0].clone()
+        negotiate_langs_res(lang, &Self::available_langs(), Some(&default)).expect(NO_COMPATIBLE_LANG_MSG)
+    }
+
+    fn available_langs() -> Vec<LanguageIdentifier> {
+        langids!("es-ES", "en-US")
     }
 }
 
@@ -64,9 +67,13 @@ impl Tts for IbmTts {
 
 
 impl TtsStatic for IbmTts {
-    fn check_compatible(_descr: &VoiceDescr) -> Result<(),TtsConstructionError> {
+    fn is_descr_compatible(_descr: &VoiceDescr) -> Result<(),TtsConstructionError> {
         // Ibm has voices for both genders in all supported languages
         Ok(())
+    }
+
+    fn is_lang_comptaible(lang: &LanguageIdentifier) -> Result<(), TtsConstructionError> {
+        negotiate_langs_res(lang, &Self::available_langs(), None).map(|_|())
     }
 }
 

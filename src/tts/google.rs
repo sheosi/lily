@@ -1,7 +1,7 @@
 use crate::audio::Audio;
-use crate::tts::{OnlineTtsError, Tts, TtsStatic, TtsError, TtsInfo, VoiceDescr, TtsConstructionError};
+use crate::tts::{OnlineTtsError, Tts, TtsStatic, TtsError, TtsInfo, VoiceDescr, TtsConstructionError, negotiate_langs_res};
+use crate::vars::NO_COMPATIBLE_LANG_MSG;
 use unic_langid::{LanguageIdentifier, langid, langids};
-use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 
 pub struct GttsEngine {
 	client: reqwest::blocking::Client
@@ -47,9 +47,12 @@ impl GTts {
     }
 
     fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
-        let available_langs = langids!("es", "en");
         let default = langid!("en");
-        negotiate_languages(&[lang],&available_langs, Some(&default), NegotiationStrategy::Filtering)[0].clone()
+        negotiate_langs_res(lang, &Self::available_langs(), Some(&default)).expect(NO_COMPATIBLE_LANG_MSG)
+    }
+
+    fn available_langs() -> Vec<LanguageIdentifier> {
+        langids!("es", "en")
     }
 }
 
@@ -73,7 +76,11 @@ impl Tts for GTts {
 }
 
 impl TtsStatic for GTts {
-    fn check_compatible(_descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
+    fn is_descr_compatible(_descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
         Ok(())
+    }
+
+    fn is_lang_comptaible(lang: &LanguageIdentifier) -> Result<(), TtsConstructionError> {
+        negotiate_langs_res(lang, &Self::available_langs(), None).map(|_|())
     }
 }

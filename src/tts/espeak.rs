@@ -39,9 +39,14 @@ impl Tts for EspeakTts {
 }
 
 impl TtsStatic for EspeakTts {
-    fn check_compatible(_descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
+    fn is_descr_compatible(_descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
         // Espeak is really onfigurable so it has no problem with what we might
         // want
+        Ok(())
+    }
+
+    fn is_lang_comptaible(_lang: &LanguageIdentifier) -> Result<(), TtsConstructionError> {
+        // I'm not aware of any language that espeak doesn't implement
         Ok(())
     }
 

@@ -108,7 +108,7 @@ pub struct SttVadlessInterface<S: SttVadless, F: SttStream> {
 
 
 impl<S: SttVadless, F: SttStream> SttVadlessInterface<S, F> {
-    fn new(online_stt: S,fallback: F) -> Self {
+    pub fn new(online_stt: S,fallback: F) -> Self {
         Self{online_stt, fallback}
     }
 }
