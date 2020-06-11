@@ -1,11 +1,11 @@
-use crate::stt::{SttInfo, SttConstructionError, SttBatched, OnlineSttError};
+use crate::audio::AudioRaw;
+use crate::stt::{SttInfo, SttConstructionError, SttBatched, OnlineSttError,SttError, SttVadless};
+use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
+
+use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use reqwest::blocking;
 use serde::Deserialize;
 use unic_langid::{LanguageIdentifier, langid, langids};
-use fluent_langneg::{negotiate_languages, NegotiationStrategy};
-use crate::stt::{SttError, SttVadless};
-use crate::audio::AudioRaw;
-use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 pub struct IbmStt {
     engine: IbmSttEngine,
     model: String

@@ -1,18 +1,17 @@
 use crate::tts::{Tts, VoiceDescr, TtsConstructionError, Gender, TtsError, TtsInfo, TtsStatic, OnlineTtsError, negotiate_langs_res};
 use crate::audio::Audio;
-use crate::vars::NO_COMPATIBLE_LANG_MSG;
+use crate::vars::{NO_COMPATIBLE_LANG_MSG, DEFAULT_SAMPLES_PER_SECOND};
 
 use unic_langid::{LanguageIdentifier, langid, langids};
 
 pub struct IbmTts {
     engine: IbmTtsEngine,
-    fallback_tts : Box<dyn Tts>,
     curr_voice: String
 }
 
 impl IbmTts {
-    pub fn new(lang: &LanguageIdentifier, fallback_tts: Box<dyn Tts>, api_gateway: String, api_key: String, prefs: &VoiceDescr) -> Result<Self, TtsConstructionError> {
-        Ok(IbmTts{engine: IbmTtsEngine::new(api_gateway, api_key), fallback_tts, curr_voice: Self::make_tts_voice(&Self::lang_neg(lang), prefs)?.to_string()})
+    pub fn new(lang: &LanguageIdentifier, api_gateway: String, api_key: String, prefs: &VoiceDescr) -> Result<Self, TtsConstructionError> {
+        Ok(IbmTts{engine: IbmTtsEngine::new(api_gateway, api_key), curr_voice: Self::make_tts_voice(&Self::lang_neg(lang), prefs)?.to_string()})
     }
 
     // Accept only negotiated LanguageIdentifiers
@@ -48,13 +47,7 @@ impl IbmTts {
 
 impl Tts for IbmTts {
     fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
-        match self.engine.synth(input, &self.curr_voice) {
-            Ok(buffer) => {Ok(Audio::new_encoded(buffer, 16000))},
-            Err(_) => {
-                // If it didn't work try with local
-                self.fallback_tts.synth_text(input)
-            }
-        }
+        Ok(self.engine.synth(input, &self.curr_voice).map(|b|Audio::new_encoded(b, DEFAULT_SAMPLES_PER_SECOND))?)
     }
 
     fn get_info(&self) -> TtsInfo {

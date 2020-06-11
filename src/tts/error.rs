@@ -1,10 +1,13 @@
 use thiserror::Error;
 use crate::path_ext::NotUnicodeError;
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum TtsError {
     #[error("Input string had a nul character")]
-    StringHadInternalNul(#[from] std::ffi::NulError)
+    StringHadInternalNul(#[from] std::ffi::NulError),
+
+    #[error("Problem with online TTS")]
+    Online(#[from] OnlineTtsError)
 }
 
 #[derive(Error, Debug, Clone)]

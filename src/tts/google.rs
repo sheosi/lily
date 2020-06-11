@@ -1,6 +1,6 @@
 use crate::audio::Audio;
 use crate::tts::{OnlineTtsError, Tts, TtsStatic, TtsError, TtsInfo, VoiceDescr, TtsConstructionError, negotiate_langs_res};
-use crate::vars::NO_COMPATIBLE_LANG_MSG;
+use crate::vars::{NO_COMPATIBLE_LANG_MSG, DEFAULT_SAMPLES_PER_SECOND};
 use unic_langid::{LanguageIdentifier, langid, langids};
 
 pub struct GttsEngine {
@@ -30,16 +30,15 @@ impl GttsEngine {
 	}
 }
 
-struct GTts {
+pub struct GTts {
     engine: GttsEngine,
-    fallback_tts : Box<dyn Tts>,
     curr_lang: String
 }
 
 impl GTts {
 
-    pub fn new(lang: &LanguageIdentifier, fallback_tts: Box<dyn Tts>) -> Self {
-        GTts{engine: GttsEngine::new(), fallback_tts, curr_lang: Self::make_tts_lang(&Self::lang_neg(lang)).to_string()}
+    pub fn new(lang: &LanguageIdentifier) -> Self {
+        GTts{engine: GttsEngine::new(), curr_lang: Self::make_tts_lang(&Self::lang_neg(lang)).to_string()}
     }
 
     fn make_tts_lang<'a>(lang: &'a LanguageIdentifier) -> &'a str {
@@ -58,13 +57,7 @@ impl GTts {
 
 impl Tts for GTts {
     fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
-        match self.engine.synth(input, &self.curr_lang) {
-            Ok(buffer) => {Ok(Audio::new_encoded(buffer, 16000))},
-            Err(_) => {
-                // If it didn't work try with local
-                self.fallback_tts.synth_text(input)
-            }
-        }
+        self.engine.synth(input, &self.curr_lang).map(|b|Ok(Audio::new_encoded(b, DEFAULT_SAMPLES_PER_SECOND)))?
     }
 
     fn get_info(&self) -> TtsInfo {
