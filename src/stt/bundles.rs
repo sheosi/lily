@@ -4,21 +4,21 @@ use crate::vad::Vad;
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
 
-pub struct SttBatcher<V: Vad, S: SttBatched> {
+pub struct SttBatcher<S: SttBatched, V: Vad> {
+    batch_stt: S,
     vad: V,
     copy_audio: AudioRaw,   
-    batch_stt: S,
     someone_was_talking: bool
 }
 
-impl<V: Vad, S: SttBatched> SttBatcher<V, S> {
-    pub fn new(vad: V, batch_stt: S) -> Self {
+impl<S: SttBatched, V: Vad> SttBatcher<S, V> {
+    pub fn new(batch_stt: S, vad: V) -> Self {
         Self {vad, copy_audio: AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND), batch_stt, someone_was_talking: false}
     }
 }
 
 
-impl<V: Vad, S: SttBatched> SttStream for SttBatcher<V, S> {
+impl<S: SttBatched, V: Vad> SttStream for SttBatcher<S, V> {
     fn begin_decoding(&mut self) -> Result<(),SttError> {
         self.copy_audio.clear();
         self.vad.reset()?;
