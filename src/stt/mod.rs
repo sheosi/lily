@@ -18,6 +18,12 @@ use core::fmt::Display;
 use unic_langid::LanguageIdentifier;
 use log::info;
 
+#[cfg(feature = "devel_deepspeech")]
+use crate::vad::SnowboyVad;
+#[cfg(feature = "devel_deepspeech")]
+use crate::vars::SNOWBOY_DATA_PATH;
+
+
 #[derive(Debug, Clone)]
 pub struct SttInfo {
     pub name: String,
@@ -87,11 +93,11 @@ impl SttFactory {
     }
     
     #[cfg(feature = "devel_deepspeech")]
-    pub fn load(lang: &LanguageIdentifier, _prefer_cloud: bool, _gateway_key: Option<(String, String)>) -> Result<Box<dyn SttStream>, SttConstructionError> {
-        Ok(Box::new(SttBatcher::new(DeepSpeechStt::new()?, Pocketsphinx::new(lang)?)))
+    pub fn load(_lang: &LanguageIdentifier, _prefer_cloud: bool, _gateway_key: Option<(String, String)>) -> Result<Box<dyn SttStream>, SttConstructionError> {
+        //Ok(Box::new(SttBatcher::new(DeepSpeechStt::new()?, Pocketsphinx::new(lang)?)))
 
         // Pocketsphinx serves both as Stt and as Vad
-        //Ok(Box::new(SttVadlessInterface::new(DeepSpeechStt::new()?, Pocketsphinx::new(lang)?)))
+        Ok(Box::new(SttVadlessInterface::new(DeepSpeechStt::new()?, SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res")).unwrap())))
     }
 }
 

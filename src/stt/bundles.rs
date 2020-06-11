@@ -42,6 +42,7 @@ impl<S: SttBatched, V: Vad> SttStream for SttBatcher<S, V> {
         else {
             if self.someone_was_talking {
                 let res = self.batch_stt.decode(&self.copy_audio.buffer)?;
+                self.someone_was_talking = false;
                 Ok(DecodeState::Finished(res))
             }
             else {
@@ -101,41 +102,52 @@ impl<S: SttBatched, F: SttStream> SttStream for SttOnlineInterface<S, F> {
 
 }
 
-pub struct SttVadlessInterface<S: SttVadless, F: SttStream> {
-    online_stt: S,
-    fallback: F,
+pub struct SttVadlessInterface<S: SttVadless, V: Vad> {
+    vadless: S,
+    vad: V,
+    someone_was_talking: bool
 }
 
 
-impl<S: SttVadless, F: SttStream> SttVadlessInterface<S, F> {
-    pub fn new(online_stt: S,fallback: F) -> Self {
-        Self{online_stt, fallback}
+impl<S: SttVadless, V: Vad> SttVadlessInterface<S, V> {
+    pub fn new(vadless: S, vad: V) -> Self {
+        Self{vadless, vad, someone_was_talking: false}
     }
 }
 
-impl<S: SttVadless, F: SttStream> SttStream for SttVadlessInterface<S,F> {
+impl<S: SttVadless, V: Vad> SttStream for SttVadlessInterface<S,V> {
     fn begin_decoding(&mut self) -> Result<(),SttError> {
-        self.fallback.begin_decoding()?;
+        self.vad.reset()?;
         Ok(())
 
     }
 
     fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
-        self.online_stt.process(audio)?;
-        let res = self.fallback.decode(audio)?;
-        match res {
-            DecodeState::Finished(local_res) => {
-                match self.online_stt.end_decoding() {
-                    Ok(ok_res) => Ok(DecodeState::Finished(ok_res)),
-                    Err(_) => Ok(DecodeState::Finished(local_res))
-                }
+        self.vadless.process(audio)?;
+        if self.vad.is_someone_talking(audio)? {
+            if self.someone_was_talking {
+                // We are still getting talke
+                Ok(DecodeState::NotFinished)
+            }
+            else {
+                self.someone_was_talking = true;
+                Ok(DecodeState::StartListening)
+            }
+        }
+        else {
+            if self.someone_was_talking {
+                let res = self.vadless.end_decoding()?;
+                self.someone_was_talking = false;
+                Ok(DecodeState::Finished(res))
+            }
+            else {
+                Ok(DecodeState::NotStarted)
+            }
 
-            },
-            _ => Ok(res)
         }
     }
 
     fn get_info(&self) -> SttInfo {
-        self.online_stt.get_info()
+        self.vadless.get_info()
     }
 }
