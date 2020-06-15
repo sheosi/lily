@@ -1,6 +1,6 @@
 use std::mem::replace;
 use crate::stt::{SttConstructionError, SttError, SttBatched, SttInfo, SttVadless};
-use crate::vars::DEEPSPEECH_DATA_PATH;
+use crate::vars::{DEEPSPEECH_DATA_PATH, ALPHA_BETA_MSG, SET_BEAM_MSG};
 use deepspeech::{CandidateTranscript, Model, Stream};
 
 // Deepspeech
@@ -19,15 +19,22 @@ fn transcript_to_string(tr: &CandidateTranscript) -> String {
 }
 
 impl DeepSpeechStt {
-    pub fn new() -> Result<Self, SttConstructionError> { 
-        //const BEAM_WIDTH:u16 = 500;
-        //const LM_WEIGHT:f32 = 16_000f32;
+    pub fn new(curr_lang: &LanguageIdentifier) -> Result<Self, SttConstructionError> {
+        const BEAM_WIDTH:u16 = 500;
 
-        let dir_path = DEEPSPEECH_DATA_PATH.resolve();
-        let model = Model::load_from_files(&dir_path.join("output_graph.pb")).map_err(|_| SttConstructionError::CantLoadFiles)?;
-        //model.enable_decoder_with_lm(&dir_path.join("lm.binary"),&dir_path.join("trie"), LM_WEIGHT, VALID_WORD_COUNT_WEIGHT);
+        let lang_str = curr_lang.to_String();
+        let dir_path = DEEPSPEECH_DATA_PATH.resolve().join(&lang_str);
+        if dir_path.is_dir() {
+            let model = Model::load_from_files(&dir_path.join(&format!("{}.pbmm", &lang_str))).map_err(|_| SttConstructionError::CantLoadFiles)?;
+            model.enable_external_scorer(dir_path.join(&format!("{}.scorer", &lang_str)));
+            model.set_scorer_alpha_beta(0.931289039105002f32, 1.1834137581510284f32).expect(ALPHA_BETA_MSG);
+            model.set_model_beam_width(BEAM_WIDTH).expect(SET_BEAM_MSG);
 
-        Ok(Self {model, current_stream: None})
+            Ok(Self {model, current_stream: None})
+        }
+        else {
+            Err(SttConstructionError::LangIncompatible)
+        }
     }
 }
 

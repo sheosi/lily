@@ -24,12 +24,16 @@ pub enum SttConstructionError {
     #[error("Input path was not unicode")]
     NotUnicodeError(#[from] NotUnicodeError),
 
+    #[error("Input is not a valid utf-8")]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
+
+    #[cfg(feature = "devel_deepsopeech")]
+    #[error("Language not compatible")]
+    LangIncompatible,
+
     #[cfg(feature = "devel_deepspeech")]
     #[error("Can't load files")]
     CantLoadFiles,
-
-    #[error("Input is not a valid utf-8")]
-    FromUtf8Error(#[from] std::string::FromUtf8Error)
 }
 
 #[derive(Error,Debug)]

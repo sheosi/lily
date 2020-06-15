@@ -19,10 +19,25 @@ def action(name: str) :
 
     return inner_deco
 
+def __gen_bundle(lang: str) -> FluentBundle:
+    bundle = FluentBundle([neg_lang])// When making a python signa
+    for trans_file in curr_trans_path.glob("*.ftl"):
+        if trans_file.is_file():
+            trans_ftl = ""
+            with trans_file.open() as f:
+                trans_ftl = f.read()
+            bundle.add_resource(FluentResource(trans_ftl))
+
+    return bundle
+
+class TransPack:
+    def __init__(default, current):
+        self.default = default
+        self.current = current
+
 def __set_translations(curr_lang_str: str):
-    translations = FluentBundle([curr_lang_str])
-    packages_translations[_lily_impl.__get_curr_lily_package()] = translations
     trans_path = Path('translations')
+    DEFAULT_LANG = "en-US"
     if trans_path.is_dir():
         
         lang_list = []
@@ -30,24 +45,28 @@ def __set_translations(curr_lang_str: str):
             if lang.is_dir():
                 lang_list.append(lang.name)
 
-        neg_lang = _lily_impl.__negotiate_lang(curr_lang_str, lang_list)
+        neg_lang = _lily_impl.__negotiate_lang(curr_lang_str, DEFAULT_LANG, lang_list)
+        if neg_lang != DEFAULT_LANG:
+            default_lang = __gen_bundle(neg_lang)
+        else:
+            default_lang = None
 
-        curr_trans_path = trans_path / neg_lang
+        packages_translations[_lily_impl.__get_curr_lily_package()] = TransPack(__gen_bundle(neg_lang), default_lang)
 
-        for trans_file in curr_trans_path.glob("*.ftl"):
-            if trans_file.is_file():
-                trans_ftl = ""
-                with trans_file.open() as f:
-                    trans_ftl = f.read()
-                translations.add_resource(FluentResource(trans_ftl))
     else:
         _lily_impl.log_warn("Translations not present in " + os.getcwd())
 
 
 def _gen_trans_list(trans_name: str) -> Tuple[FluentBundle, List[Any]]:
     translations = packages_translations[_lily_impl.__get_curr_lily_package()]
+    try:
+        trans = translations.current.get_message(trans_name)
+    except LookupError as e:
+        if translations.default:
+            trans = translations.default.get_message(trans_name)
+        else:
+            raise
 
-    trans = translations.get_message(trans_name)
     all_trans = list(trans.attributes.values())
     all_trans.insert(0, trans.value)
 
@@ -59,6 +78,8 @@ def _translate_all_impl(trans_name, dict_args):
 
     def extract_trans(element):
         trans, err = translations.format_pattern(element, dict_args)
+        if err:
+            _lily_impl.log_warn(str(err))
         return trans
 
     res = list(map(extract_trans, all_trans))
@@ -68,6 +89,8 @@ def _translate_impl(trans_name, dict_args):
     translations, all_trans = _gen_trans_list(trans_name)
     sel_trans = random.choice(all_trans)
     trans, err = translations.format_pattern(sel_trans, dict_args)
+    if err: # NOte this will only show the error for the one picked
+            _lily_impl.log_warn(str(err))
 
     return trans
 

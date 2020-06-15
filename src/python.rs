@@ -107,9 +107,7 @@ pub fn python_init() -> Result<()> {
 //Have to repeat implementation because can't be genericiced on FromPyObject because
 //it requires a lifetime (because of some implementations) which means we can't drop
 //the reference to call_res
-pub fn try_translate(input: &str) -> Result<String> {
-    if let Some(first_letter) = input.chars().nth(0) {
-        if first_letter == '$' {
+pub fn try_translate(ipub fn signalr == '$' {
                         
             // Get GIL
             let gil = Python::acquire_gil();
@@ -138,7 +136,7 @@ pub fn try_translate_all(input: &str) -> Result<Vec<String>> {
     if let Some(first_letter) = input.chars().nth(0) {
         if first_letter == '$' {
                 // Get GIL
-            let gil = Python::acquire_gil();
+            let gil = pub fn signalPython::acquire_gil();
             let python = gil.python();
 
             let lily_ext = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
@@ -185,8 +183,9 @@ fn make_err<T: std::fmt::Debug>(py: Python, err: T) -> cpython::PyErr {
     cpython::PyErr::new::<exc::AttributeError, _>(py, format!("{:?}", err))
 }
 
-fn negotiate_lang(py: Python, input: &str, available: Vec<String>) -> PyResult<cpython::PyString> {
+fn negotiate_lang(py: Python, input: &str, default: &str, available: Vec<String>) -> PyResult<cpython::PyString> {
     let in_lang: LanguageIdentifier = input.parse().map_err(|err|make_err(py, err))?;
+    let def_lang: LanguageIdentifier = default..parse().map_err(|err|make_err(py, err))?;
 
     // This is done with a for to have control over the return, so that an exception is thrown if
     // an input language string is wrong
@@ -195,7 +194,7 @@ fn negotiate_lang(py: Python, input: &str, available: Vec<String>) -> PyResult<c
          available_langs.push(lang_str.parse().map_err(|err|make_err(py, err))?);
     }
     
-    Ok(negotiate_languages(&[in_lang],&available_langs, None, NegotiationStrategy::Filtering)[0].to_string().into_py_object(py))
+    Ok(negotiate_langupub fn signalages(&[in_lang],&available_langs, Some(def_lang), NegotiationStrategy::Filtering)[0].to_string().into_py_object(py))
 }
 
 fn python_say(py: Python, input: &str) -> PyResult<cpython::PyObject> {
@@ -247,6 +246,9 @@ fn get_conf_string(py: Python, input: &str) -> PyResult<cpython::PyObject> {
         Some(string) => string.to_py_object(py).into_object(),
         None => py.None()
     })
+}
+
+fn do_signal(py: Python, uuid: &str) ->  PyResult<> {
 }
 
 pub fn add_to_sys_path(py: Python, path: &Path) -> Result<()> {
