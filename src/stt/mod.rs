@@ -93,11 +93,11 @@ impl SttFactory {
     }
     
     #[cfg(feature = "devel_deepspeech")]
-    pub fn load(_lang: &LanguageIdentifier, _prefer_cloud: bool, _gateway_key: Option<(String, String)>) -> Result<Box<dyn SttStream>, SttConstructionError> {
+    pub fn load(lang: &LanguageIdentifier, _prefer_cloud: bool, _gateway_key: Option<(String, String)>) -> Result<Box<dyn SttStream>, SttConstructionError> {
         //Ok(Box::new(SttBatcher::new(DeepSpeechStt::new()?, Pocketsphinx::new(lang)?)))
 
         // Pocketsphinx serves both as Stt and as Vad
-        Ok(Box::new(SttVadlessInterface::new(DeepSpeechStt::new()?, SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res")).unwrap())))
+        Ok(Box::new(SttVadlessInterface::new(DeepSpeechStt::new(lang)?, SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res")).unwrap())))
     }
 }
 
