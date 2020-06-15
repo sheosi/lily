@@ -18,6 +18,9 @@ use crate::stt::{SttFactory, DecodeState, SttStream};
 use crate::tts::{VoiceDescr, Gender, TtsFactory};
 use crate::vars::*;
 
+#[cfg(feature="devel_rasa_nlu")]
+use crate::nlu::{RasaNlu, RasaNluManager};
+
 // Other crates
 use anyhow::{Result, anyhow};
 use cpython::PyDict;
@@ -104,17 +107,35 @@ pub fn add_order<N: NluManager>(
 }
 
 // Answers to a user order (either by voice or by text)
+#[cfg(not(feature = "devel_rasa_nlu"))]
 pub struct SignalOrder {
     order_map: OrderMap,
     nlu_man: Option<SnipsNluManager>,
     nlu: Option<SnipsNlu>
 }
 
+#[cfg(feature = "devel_rasa_nlu")]
+pub struct SignalOrder {
+    order_map: OrderMap,
+    nlu_man: Option<RasaNluManager>,
+    nlu: Option<RasaNlu>
+}
+
 impl SignalOrder {
+    #[cfg(not(feature = "devel_rasa_nlu"))]
     pub fn new() -> Self {
         SignalOrder {
             order_map: OrderMap::new(),
             nlu_man: Some(SnipsNluManager::new()),
+            nlu: None
+        }
+    }
+
+    #[cfg(feature = "devel_rasa_nlu")]
+    pub fn new() -> Self {
+        SignalOrder {
+            order_map: OrderMap::new(),
+            nlu_man: Some(RasaNluManager::new()),
             nlu: None
         }
     }

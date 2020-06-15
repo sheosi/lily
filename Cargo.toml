@@ -21,6 +21,7 @@ pocketsphinx = "^0.6.0" # Offline Stt
 deepspeech = {version = "^0.7", optional = true} # More correct and better (also slower) Stt 
 sphinxad = "^0.1" # Recording library
 cpal = {version = "^0.11", optional = true} # For recording (future substitute of sphinxad)
+ringbuf = {version = "^0.2", optional = true}
 ogg = "^0.7" # Send to web services audio and to save into disk
 opus = "^0.2"
 
@@ -54,5 +55,6 @@ fluent-langneg = "^0.13" # Language negotiation
 default = []
 extra_langs_tts = ["espeak-ng-sys"]
 google_tts = ["google_translate_tts"]
-devel_cpal_rec = ["cpal"]
+devel_cpal_rec = ["cpal", "ringbuf"]
 devel_deepspeech = ["deepspeech"]
+devel_rasa_nlu= []

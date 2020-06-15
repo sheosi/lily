@@ -3,6 +3,7 @@ use std::path::Path;
 use std::io::{Read, Write, Seek, SeekFrom};
 
 use crate::python::try_translate;
+use crate::nlu::{Nlu, NluManager, NluUtterance};
 
 use unic_langid::LanguageIdentifier;
 use serde::Serialize;
@@ -59,14 +60,6 @@ pub struct EntityValue {
     synonnyms: String
 }
 
-pub trait NluManager {
-    fn add_intent(&mut self, order_name: &str, phrases: Vec<NluUtterance>);
-    fn add_entity(&mut self, name:&str, def: EntityDef);
-
-    // Consume the struct so that we can reuse memory
-    fn train(self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<()>; 
-}
-
 pub struct SnipsNluManager {
     intents: Vec<(String, Vec<NluUtterance>)>,
     entities: HashMap<String, EntityDef>
@@ -82,11 +75,6 @@ impl SnipsNluManager {
 pub struct EntityInstance {
     pub kind: String,
     pub example: String
-}
-
-pub enum NluUtterance{
-    Direct(String),
-    WithEntities {text: String, entities: HashMap<String, EntityInstance>}
 }
 
 #[derive(Debug)]
@@ -267,10 +255,4 @@ impl Nlu for SnipsNlu {
     /*fn to_json(res: &snips_nlu_ontology::IntentParserResult ) -> Result<String> {
         Ok(serde_json::to_string_pretty(&res)?)
     }*/
-}
-
-pub trait Nlu {
-    type NluResult;
-
-    fn parse(&self, input: &str) -> snips_nlu_lib::Result<Self::NluResult>;
 }
