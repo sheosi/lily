@@ -152,7 +152,7 @@ impl TtsFactory {
             Ok(Box::new(PicoTts::new(lang, prefs)?))
         }
         else {
-            Ok(Box::new(EspeakTts::new(lang)))
+            Ok(Box::new(EspeakTts::new(lang, prefs)))
         }
     }
 

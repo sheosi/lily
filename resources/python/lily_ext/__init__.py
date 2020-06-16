@@ -19,9 +19,9 @@ def action(name: str) :
 
     return inner_deco
 
-def __gen_bundle(lang: str) -> FluentBundle:
-    bundle = FluentBundle([neg_lang])// When making a python signa
-    for trans_file in curr_trans_path.glob("*.ftl"):
+def __gen_bundle(lang: str, trans_path: Path) -> FluentBundle:
+    bundle = FluentBundle([lang])
+    for trans_file in trans_path.glob("*.ftl"):
         if trans_file.is_file():
             trans_ftl = ""
             with trans_file.open() as f:
@@ -31,7 +31,7 @@ def __gen_bundle(lang: str) -> FluentBundle:
     return bundle
 
 class TransPack:
-    def __init__(default, current):
+    def __init__(self, current, default):
         self.default = default
         self.current = current
 
@@ -47,11 +47,11 @@ def __set_translations(curr_lang_str: str):
 
         neg_lang = _lily_impl.__negotiate_lang(curr_lang_str, DEFAULT_LANG, lang_list)
         if neg_lang != DEFAULT_LANG:
-            default_lang = __gen_bundle(neg_lang)
+            default_lang = __gen_bundle(DEFAULT_LANG, trans_path/DEFAULT_LANG)
         else:
             default_lang = None
 
-        packages_translations[_lily_impl.__get_curr_lily_package()] = TransPack(__gen_bundle(neg_lang), default_lang)
+        packages_translations[_lily_impl.__get_curr_lily_package()] = TransPack(__gen_bundle(neg_lang, trans_path/neg_lang), default_lang)
 
     else:
         _lily_impl.log_warn("Translations not present in " + os.getcwd())
@@ -61,16 +61,19 @@ def _gen_trans_list(trans_name: str) -> Tuple[FluentBundle, List[Any]]:
     translations = packages_translations[_lily_impl.__get_curr_lily_package()]
     try:
         trans = translations.current.get_message(trans_name)
+        translator = translations.current
     except LookupError as e:
+        _lily_impl.log_warn("Translation not present in selected lang")
         if translations.default:
             trans = translations.default.get_message(trans_name)
+            translator = translations.default
         else:
             raise
 
     all_trans = list(trans.attributes.values())
     all_trans.insert(0, trans.value)
 
-    return (translations, all_trans)
+    return (translator, all_trans)
 
 def _translate_all_impl(trans_name, dict_args):
     translations, all_trans = _gen_trans_list(trans_name)
