@@ -9,7 +9,7 @@ use std::rc::Rc;
 use crate::actions::ActionSet;
 use crate::config::Config;
 use crate::interfaces::DirectVoiceInterface;
-use crate::nlu::{Nlu, SnipsNlu, SnipsNluManager, NluManager, NluUtterance, EntityInstance, EntityDef, EntityData};
+use crate::nlu::{Nlu, SnipsNlu, SnipsNluManager, NluManager, NluResponseSlot, NluUtterance, EntityInstance, EntityDef, EntityData};
 use crate::python::try_translate_all;
 use crate::signals::{OrderMap, SignalEvent};
 use crate::vars::*;
@@ -22,7 +22,6 @@ use anyhow::{Result, anyhow};
 use cpython::PyDict;
 use log::{info, warn};
 use serde::Deserialize;
-use snips_nlu_ontology::Slot;
 use unic_langid::LanguageIdentifier;
 
 #[derive(Deserialize)]
@@ -146,6 +145,7 @@ impl SignalOrder {
         }
     }
 
+    #[cfg(not(feature = "devel_rasa_nlu"))]
     pub fn end_loading(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
         let res = match mem::replace(&mut self.nlu_man, None) {
             Some(nlu_man) => {
@@ -161,6 +161,27 @@ impl SignalOrder {
         
         res
     }
+    
+
+    #[cfg(feature = "devel_rasa_nlu")]
+    pub fn end_loading(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
+        let model_path = NLU_RASA_PATH.resolve().join("data");
+        let train_path = NLU_RASA_PATH.resolve().join("models").join("main_model.tar.gz");
+        let res = match mem::replace(&mut self.nlu_man, None) {
+            Some(nlu_man) => {
+                nlu_man.train(&train_path, &model_path.join("main_model.json"), curr_lang)
+            }
+            None => {
+                panic!("Called end_loading twice");
+            }
+        };
+
+        info!("Init Nlu");
+        self.nlu = Some(RasaNlu::new(&train_path));
+        
+        res
+    }
+
 
     fn received_order(&mut self, decode_res: Option<(String, Option<String>, i32)>, event_signal: &mut SignalEvent, base_context: &PyDict) -> Result<()> {
         match decode_res {
@@ -173,14 +194,14 @@ impl SignalOrder {
                         Some(ref mut nlu) => {
                             let result = nlu.parse(&hypothesis).map_err(|err|anyhow!("Failed to parse: {:?}", err))?;
                             info!("{:?}", result);
-                            let score = result.intent.confidence_score;
+                            let score = result.confidence;
                             info!("Score: {}",score);
 
                             // Do action if at least we are 80% confident on
                             // what we got
                             if score >= MIN_SCORE_FOR_ACTION {
                                 info!("Let's call an action");
-                                if let Some(intent_name) = result.intent.intent_name {
+                                if let Some(intent_name) = result.name {
                                     let slots_context = add_slots(base_context,result.slots)?;
                                     self.order_map.call_order(&intent_name, &slots_context)?;
                                     info!("Action called");
@@ -214,7 +235,7 @@ impl SignalOrder {
 }
 
 
-fn add_slots(base_context: &PyDict, slots: Vec<Slot>) -> Result<PyDict> {
+fn add_slots(base_context: &PyDict, slots: Vec<NluResponseSlot>) -> Result<PyDict> {
     let gil = cpython::Python::acquire_gil();
     let py = gil.python();
 
@@ -222,7 +243,7 @@ fn add_slots(base_context: &PyDict, slots: Vec<Slot>) -> Result<PyDict> {
     let result = base_context.copy(py).map_err(|py_err|anyhow!("Python error while copying base context: {:?}", py_err))?;
 
     for slot in slots.into_iter() {
-        result.set_item(py, slot.slot_name, slot.raw_value).map_err(
+        result.set_item(py, slot.name, slot.value).map_err(
             |py_err|anyhow!("Couldn't set name in base context: {:?}", py_err)
         )?;
     }

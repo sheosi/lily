@@ -1,16 +1,17 @@
 use std::collections::HashMap;
+use std::convert::Into;
 use std::path::Path;
 use std::io::{Read, Write, Seek, SeekFrom};
 
 use crate::python::try_translate;
-use crate::nlu::{Nlu, NluManager, NluUtterance};
+use crate::nlu::{EntityDef, Nlu, NluManager, NluResponse, NluResponseSlot, NluUtterance};
 
-use unic_langid::LanguageIdentifier;
+use anyhow::{anyhow, Result};
+use log::warn;
+use regex::Regex;
 use serde::Serialize;
 use snips_nlu_lib::SnipsNluEngine;
-use anyhow::{anyhow, Result};
-use regex::Regex;
-use log::warn;
+use unic_langid::LanguageIdentifier;
 
 //// NluManager ///////////////////////////////////////////////////////////////////////////////////
 #[derive(Serialize)]
@@ -42,19 +43,6 @@ struct UtteranceData {
 }
 
 #[derive(Serialize)]
-pub struct EntityData {
-    pub value: String,
-    pub synonyms: Vec<String>
-}
-
-#[derive(Serialize)]
-pub struct EntityDef {
-    pub data: Vec<EntityData>,
-    pub use_synonyms: bool,
-    pub automatically_extensible: bool
-}
-
-#[derive(Serialize)]
 pub struct EntityValue {
     value: String,
     synonnyms: String
@@ -69,12 +57,6 @@ impl SnipsNluManager {
     pub fn new() -> Self {
         SnipsNluManager {intents: vec![], entities:HashMap::new()}
     }
-}
-
-#[derive(Clone)]
-pub struct EntityInstance {
-    pub kind: String,
-    pub example: String
 }
 
 #[derive(Debug)]
@@ -244,15 +226,28 @@ impl SnipsNlu {
     }
 }
 
+
 impl Nlu for SnipsNlu {
-    type NluResult = snips_nlu_ontology::IntentParserResult;
 
-    fn parse(&self, input: &str) -> snips_nlu_lib::Result<Self::NluResult> {
+    fn parse(&self, input: &str) -> Result<NluResponse> {
         self.engine.parse_with_alternatives(&input, None, None, 3, 3)
+        .map(|r|r.into())
+        .map_err(|_|anyhow!("Failed snips NLU"))
     }
-
 
     /*fn to_json(res: &snips_nlu_ontology::IntentParserResult ) -> Result<String> {
         Ok(serde_json::to_string_pretty(&res)?)
     }*/
+}
+
+impl Into<NluResponse> for snips_nlu_ontology::IntentParserResult {
+    fn into(self) -> NluResponse {
+        NluResponse {
+            name: self.intent.intent_name,
+            confidence: self.intent.confidence_score,
+            slots: self.slots.into_iter()
+                             .map(|slt|NluResponseSlot{value: slt.raw_value, name: slt.slot_name})
+                             .collect()
+        }
+    }
 }
