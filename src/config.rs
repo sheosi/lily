@@ -21,10 +21,13 @@ pub struct Config {
     pub ibm_stt_key: Option<String>,
     #[serde(default = "none_str")]
     pub ibm_gateway: Option<String>,
+    #[serde(default = "none_str")]
+    pub language: Option<String>,
     #[serde(default = "def_hotword_sensitivity")]
     pub hotword_sensitivity: f32,
     #[serde(default = "false_val")]
     pub debug_record_active_speech: bool,
+
 
     #[serde(flatten)]
     pub pkgs_conf: HashMap<String, Value>
@@ -66,6 +69,7 @@ impl Config {
             ibm_tts_key: None,
             ibm_stt_key: None,
             ibm_gateway: None,
+            language: None,
             hotword_sensitivity: DEFAULT_HOTWORD_SENSITIVITY,
             debug_record_active_speech: false,
             pkgs_conf: HashMap::new()

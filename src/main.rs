@@ -72,7 +72,18 @@ fn main() -> Result<()> {
     // Set language
     let config = get_conf();
     println!("{:?}", config);
-    let curr_lang : LanguageIdentifier = get_locale_default().parse().expect("Locale parsing failed");
+
+    let curr_lang : LanguageIdentifier = {
+        let as_str =
+            if let Some(ref lang) =  config.language {
+                lang.clone()
+            }
+            else {
+                get_locale_default()
+            };
+
+        as_str.parse().expect("Locale parsing failed")
+    };
     {
         let gil = cpython::Python::acquire_gil();
         let py = gil.python();

@@ -4,6 +4,7 @@ use core::convert::TryInto;
 use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::ptr::null;
+use std::sync::Mutex;
 
 use crate::audio::Audio;
 use crate::tts::{Gender, TtsError, TtsConstructionError,  VoiceDescr, TtsInfo, Tts, TtsStatic};
@@ -16,7 +17,7 @@ use log::warn;
 use unic_langid::LanguageIdentifier;
 
 lazy_static! {
-    static ref SOUND_BUFFER: RefCell<Vec<i16>> = RefCell::new(Vec::new());
+    static ref SOUND_BUFFER: Mutex<RefCell<Vec<i16>>> = Mutex::new(RefCell::new(Vec::new()));
 }
 
 pub struct EspeakTts {
@@ -49,7 +50,7 @@ enum CallbackResponse {
 
 extern "C" fn espeak_callback(wav: *mut c_short, num_samples: c_int, _: *mut espeak_EVENT) -> c_int {
     let wav_slc = unsafe {std::slice::from_raw_parts(wav, num_samples.try_into().unwrap())};
-    (*SOUND_BUFFER).borrow_mut().extend_from_slice(wav_slc);
+    (*SOUND_BUFFER).lock().unwrap().borrow_mut().extend_from_slice(wav_slc);
 
     CallbackResponse::Continue as c_int
 }
@@ -75,7 +76,7 @@ impl Tts for EspeakTts {
         unsafe {espeak_Synth(synth_cstr.as_ptr() as *const libc::c_void , input.len() as usize, 0, espeak_POSITION_TYPE::POS_CHARACTER, 0, synth_flags, std::ptr::null_mut(), std::ptr::null_mut());}
 
 
-        Ok(Audio::new_raw(SOUND_BUFFER.replace(Vec::new()), DEFAULT_SAMPLES_PER_SECOND))
+        Ok(Audio::new_raw(SOUND_BUFFER.lock().unwrap().replace(Vec::new()), DEFAULT_SAMPLES_PER_SECOND))
     }
 
     fn get_info(&self) -> TtsInfo {
