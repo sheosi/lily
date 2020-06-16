@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 // Paths
 pub const NLU_ENGINE_PATH: PathRef = PathRef::new("resources/nlu/engine");
 pub const NLU_TRAIN_SET_PATH: PathRef = PathRef::new("resources/nlu/train-set.json");
+pub const NLU_RASA_PATH: PathRef = PathRef::new("resources/nlu/rasa/");
 pub const STT_DATA_PATH: PathRef = PathRef::new("resources/stt");
 pub const DEEPSPEECH_DATA_PATH: PathRef = PathRef::new("resources/stt/deepspeech");
 pub const PICO_DATA_PATH: PathRef = PathRef::new("resources/tts");
@@ -52,3 +53,4 @@ pub const DEFAULT_HOTWORD_SENSITIVITY: f32 = 0.45;
 pub const MIN_SCORE_FOR_ACTION: f32 = 0.3;
 pub const DEFAULT_SAMPLES_PER_SECOND: u32 = 16000;
 pub const HOTWORD_CHECK_INTERVAL_MS: u16 = 100; // Larger = less CPU, more wait time
+pub const RECORD_BUFFER_SIZE: usize = 4096;

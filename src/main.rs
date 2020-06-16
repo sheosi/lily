@@ -11,6 +11,7 @@ mod actions;
 mod config;
 mod path_ext;
 mod signals;
+mod interfaces;
 
 // Standard library
 use std::path::Path;
