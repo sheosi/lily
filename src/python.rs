@@ -2,7 +2,7 @@ use std::cell::{RefCell, Ref};
 use std::rc::Rc;
 use std::path::Path;
 
-use crate::interfaces::TTS;
+use crate::interfaces::{CURR_INTERFACE, UserInterfaceOutput};
 use crate::audio::PlayDevice;
 use crate::vars::{PYDICT_SET_ERR_MSG, NO_YAML_FLOAT_MSG};
 
@@ -200,11 +200,11 @@ fn negotiate_lang(py: Python, input: &str, default: &str, available: Vec<String>
 }
 
 fn python_say(py: Python, input: &str) -> PyResult<cpython::PyObject> {
-    let audio = TTS.with(|t|t.borrow_mut().synth_text(input).map_err(|err|make_err(py, err)))?;
-    match PlayDevice::new().ok_or_else(||make_err(py, "Couldn't obtain play stream"))?.wait_audio(audio) {
+    let res = CURR_INTERFACE.with(|itf|itf.borrow().lock().map_err(|e|make_err(py, e)).and_then(|mut i|i.answer(input).map_err(|e|make_err(py, e))));
+    match res {
         Ok(()) => Ok(py.None()),
         Err(err) => Err(PyErr::new::<exc::OSError,_>(py, format!("Error while playing audio: {:?}", err)))
-    }   
+    }
 }
 
 fn log_info(python: Python, input: &str) -> PyResult<cpython::PyObject> {

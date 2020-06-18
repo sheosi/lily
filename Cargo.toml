@@ -21,9 +21,9 @@ pocketsphinx = "^0.6.0" # Offline Stt
 deepspeech = {version = "^0.7", optional = true} # More correct and better (also slower) Stt 
 sphinxad = "^0.1" # Recording library
 cpal = {version = "^0.11", optional = true} # For recording (future substitute of sphinxad)
-ringbuf = {version = "^0.2", optional = true}
+ringbuf = {version = "^0.2", optional = true} # Send what is recorded from the consumer to the producer
 ogg = "^0.7" # Send to web services audio and to save into disk
-opus = "^0.2"
+opus = "^0.2" # The format we use in ogg
 
 snips-nlu-lib = { git = "https://github.com/snipsco/snips-nlu-rs", branch = "master" } # NLU
 snips-nlu-ontology = { git = "https://github.com/snipsco/snips-nlu-ontology", tag = "0.67.1"  } # NLU-related things
@@ -34,7 +34,7 @@ lazy_static = "^1.4" # We use this for the path were the data is stored
 
 ttspico = "^0.1" # Main Tts (only for some languages)
 espeak-ng-sys = {git = "https://github.com/sheosi/espeak-ng-sys", optional = true} # Auxiliar Tts (speaks any language)
-libc = "^0.2" # Required to interface with espeak-sys
+libc = "^0.2" # Required to interface with espeak-ng-sys
 rodio = "^0.11" # Playback library
 
 syslog = "^5.0" # Linux log interface
@@ -42,7 +42,7 @@ log = "^0.4" # Common API for logging so we can change backend easily
 
 #Cloud-based
 google_translate_tts = {version = "0.1.2", optional = true} # Format TTS URLs
-reqwest = {version="^0.10", features=["default-tls", "blocking"]} # HTTP client
+reqwest = {version="^0.10", features=["default-tls", "blocking", "json"]} # HTTP client
 url = "^2.1"
 base64 = "^0.12" # For sending data to the online TTS and STT
 

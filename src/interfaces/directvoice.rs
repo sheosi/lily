@@ -1,23 +1,19 @@
-use std::cell::RefCell;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use crate::audio::{PlayDevice, RecDevice, Recording};
 use crate::config::Config;
 use crate::hotword::{HotwordDetector, Snowboy};
+use crate::interfaces::{SharedOutput, UserInterface, UserInterfaceOutput};
 use crate::signals::SignalEvent;
 use crate::stt::{SttFactory, DecodeState, SttStream};
-use crate::tts::{VoiceDescr, Gender, TtsFactory};
+use crate::tts::{VoiceDescr, Gender, Tts, TtsFactory};
 use crate::vars::*;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use cpython::PyDict;
 use log::{info, warn};
 use unic_langid::LanguageIdentifier;
-
-// To be shared on the same thread
-thread_local! {
-    pub static TTS: RefCell<Box<dyn crate::tts::Tts>> = RefCell::new(TtsFactory::dummy());
-}
 
 enum ProgState {
     WaitingForHotword,
@@ -36,23 +32,21 @@ fn save_recording_to_disk(recording: &mut crate::audio::Audio, path: &Path) {
 }
 
 pub struct DirectVoiceInterface {
-    stt: Box<dyn SttStream>
+    stt: Box<dyn SttStream>,
+    output: Arc<Mutex<DirectVoiceInterfaceOutput>>
 }
 
 impl DirectVoiceInterface {
     pub fn new(curr_lang: &LanguageIdentifier, config: &Config) -> Result<Self> {
-        let ibm_tts_gateway_key = config.extract_ibm_tts_data();
         let ibm_stt_gateway_key = config.extract_ibm_stt_data();
-
-        const VOICE_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};
-        let new_tts = TtsFactory::load_with_prefs(curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS)?;
-        TTS.with(|a|(&a).replace(new_tts));
-        info!("Using tts {}", TTS.with(|a|(*a).borrow().get_info()));
 
         let stt = SttFactory::load(curr_lang, config.prefer_online_stt, ibm_stt_gateway_key)?;
         info!("Using stt {}", stt.get_info());
         
-        Ok(DirectVoiceInterface{stt})
+        let output_obj = DirectVoiceInterfaceOutput::new(curr_lang, config)?;
+        let output = Arc::new(Mutex::new(output_obj));
+
+        Ok(DirectVoiceInterface{stt, output})
     }
 
     pub fn interface_loop<F: FnMut( Option<(String, Option<String>, i32)>, &mut SignalEvent)->Result<()>> (&mut self, config: &Config, signal_event: &mut SignalEvent, base_context: &PyDict, mut callback: F) -> Result<()> {
@@ -116,5 +110,38 @@ impl DirectVoiceInterface {
                 }
             }
         }
+    }
+}
+
+
+struct DirectVoiceInterfaceOutput {
+    tts: Box<dyn Tts>
+}
+
+impl DirectVoiceInterfaceOutput {
+    fn new(curr_lang: &LanguageIdentifier, config: &Config) -> Result<Self> {
+        const VOICE_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};
+        let ibm_tts_gateway_key = config.extract_ibm_tts_data();
+
+        let tts = TtsFactory::load_with_prefs(curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS)?;
+        info!("Using tts {}", tts.get_info());
+
+        Ok(Self{tts})
+    }
+}
+
+impl UserInterfaceOutput for DirectVoiceInterfaceOutput {
+    fn answer(&mut self, input: &str) -> Result<()> {
+        let audio = self.tts.synth_text(input)?;
+        PlayDevice::new().ok_or_else(||anyhow!("Couldn't obtain play stream"))?.wait_audio(audio)?;
+        Ok(())
+    }
+}
+
+
+
+impl UserInterface for DirectVoiceInterface {
+    fn get_output(&self) -> SharedOutput {
+        self.output.clone()
     }
 }
