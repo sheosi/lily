@@ -100,4 +100,3 @@ impl SttFactory {
         Ok(Box::new(SttVadlessInterface::new(DeepSpeechStt::new(lang)?, SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res")).unwrap())))
     }
 }
-

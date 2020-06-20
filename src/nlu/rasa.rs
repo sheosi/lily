@@ -1,15 +1,17 @@
 use std::collections::HashMap;
 use std::convert::{Into, TryInto};
-use std::io::{Read, Write, Seek, SeekFrom};
 use std::path::Path;
 use std::process::{Child, Command};
 
+use crate::nlu::{compare_sets_and_train, try_open_file_and_check, write_contents};
 use crate::nlu::{EntityDef, EntityData, Nlu, NluManager, NluResponse, NluResponseSlot, NluUtterance};
 
 use anyhow::Result;
 use reqwest::blocking;
+use maplit::hashmap;
 use serde::{Serialize, Deserialize};
 use serde_yaml::Value;
+use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 
 pub struct RasaNlu {
@@ -28,9 +30,9 @@ impl RasaNlu {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct RasaResponse {
+struct RasaResponse {
     pub intent: RasaIntent,
-    pub entities: Vec<RasaEntity>,
+    pub entities: Vec<RasaNluEntity>, // This one lacks the extractor field, but whe don't need it
     pub intent_ranking: Vec<RasaIntent>,
 }
 
@@ -40,15 +42,9 @@ pub struct RasaIntent {
     pub confidence: f32
 }
 
-#[derive(Deserialize, Debug)]
-pub struct RasaEntity {
-
-}
-
 impl Nlu for RasaNlu {
     fn parse (&self, input: &str) -> Result<NluResponse> {
-        let mut map = HashMap::new();
-        map.insert("text", input);
+        let map = hashmap!{"text" => input};
 
         let resp: RasaResponse = self.client.post("localhost:5005/model/parse")
                                        .json(&map).send()?
@@ -91,7 +87,7 @@ struct RasaNluLookupTable {
         //NYI
 }
 
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 struct RasaNluEntity {
     start: u32,
     end: u32,
@@ -127,9 +123,40 @@ impl RasaNluManager {
         Self{intents: vec![], synonyms: vec![]}
     }
 
-    fn make_train_set_json(self, lang: &LanguageIdentifier) -> Result<String> {
-        let mut common_examples: Vec<RasaNluCommmonExample> = transform_intents(self.intents);
+    fn make_pipeline() -> Vec<HashMap<String, Value>> {
 
+        vec![
+            hashmap!{"name".to_owned() => "ConveRTTokenizer".into()},
+            hashmap!{"name".to_owned() => "ConveRTFeaturizer".into()},
+            hashmap!{"name".to_owned() => "RegexFeaturizer".into()},
+            hashmap!{"name".to_owned() => "LexicalSyntacticFeaturizer".into()},
+            hashmap!{"name".to_owned() => "CountVectorsFeaturizer".into()},
+            hashmap!{"name".to_owned() => "CountVectorsFeaturizer".into(),
+                    "analyzer".to_owned() => "char_wb".into(),
+                    "min_ngram".to_owned() => 1.into(),
+                    "max_ngram".to_owned() => 1.into()},
+            hashmap!{"name".to_owned() => "DIETClassifier".into(),
+                     "epochs".to_owned() => 100.into()},
+            hashmap!{"name".to_owned() => "EntitySynonymMapper".into()},
+            hashmap!{"name".to_owned() => "ResponseSelector".into(),
+                     "epochs".to_owned() => 100.into()}
+
+        ]
+    }
+
+    fn make_train_conf(lang: &LanguageIdentifier) -> Result<String> {
+        let conf = RasaNluTrainConfig{
+            language: lang.to_string(),
+            pipeline: Self::make_pipeline(),
+            data: None,
+            policies: None
+        };
+        Ok(serde_yaml::to_string(&conf)?)
+    }
+
+    fn make_train_set_json(self) -> Result<String> {
+        let common_examples: Vec<RasaNluCommmonExample> = transform_intents(self.intents);
+        
         let data = RasaNluData{
             common_examples,
             entity_synonyms: self.synonyms,
@@ -148,57 +175,29 @@ impl NluManager for RasaNluManager {
         self.intents.push((order_name.to_string(), phrases));
     }
 
-    fn add_entity(&mut self, name: &str, def: EntityDef) {
+    fn add_entity(&mut self, _name: &str, def: EntityDef) {
         self.synonyms.extend(def.data.into_iter());
     }
 
     fn train(self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<()> {
 
-        let train_set = self.make_train_set_json(lang)?;
-
-        // Write to file
-        let mut train_file = std::fs::OpenOptions::new().read(true).write(true).create(true).open(train_set_path);
-        let should_write = {
-            if let Ok(train_file) = &mut train_file {
-                let mut old_train_file: String = String::new();
-                train_file.read_to_string(&mut old_train_file)?;
-                old_train_file != train_set
-            }
-            else {
-                if let Some(path_parent) = train_set_path.parent() {
-                    std::fs::create_dir_all(path_parent)?;
-                }
-                train_file = std::fs::OpenOptions::new().read(true).write(true).create(true).open(train_set_path);
-
-                false
-            }
-        };
+        let train_set = self.make_train_set_json()?;
+        let train_conf = Self::make_train_conf(lang)?;
 
         let engine_path = Path::new(engine_path);
+        let rasa_path = train_set_path.parent().expect("Failed to get rasa's path from data's path");
+        if let Some(mut file) = try_open_file_and_check(&rasa_path.join("conf.yml"), &train_conf)? {
+            write_contents(&mut file, &train_conf)?;
+        };
+
 
         // Make sure it's different, otherwise no need to train it
-        if should_write {
-            // Create parents
-            if let Some(path_parent) = engine_path.parent() {
-                std::fs::create_dir_all(path_parent)?;
-            }
-
-            // Clean engine folder
-            if engine_path.is_dir() {
-                std::fs::remove_dir_all(engine_path)?;
-            }
-
-            // Write train file
-            let mut train_file = train_file?;
-            train_file.set_len(0)?; // Truncate file
-            train_file.seek(SeekFrom::Start(0))?; // Start from the start
-            train_file.write_all(train_set[..].as_bytes())?;
-            train_file.sync_all()?;
-
-            // Train engine
-            std::process::Command::new("rasa").args(&["train", "nlu"]).spawn().expect("Failed to execute rasa").wait().expect("rasa failed it's training, maybe some argument it's wrong?");
-
-        }
+        compare_sets_and_train(train_set_path, &train_set, engine_path, 
+            ||{
+                std::process::Command::new("rasa").args(&["train", "nlu"])
+                .spawn().expect("Failed to execute rasa")
+                .wait().expect("rasa failed it's training, maybe some argument it's wrong?");
+            })?;
 
         Ok(())
     }
@@ -250,10 +249,15 @@ impl Into<NluResponse> for RasaResponse {
         NluResponse {
             name: Some(self.intent.name),
             confidence: self.intent.confidence,
-            //TODO: entities are not transferred in Rasa
             slots: self.entities.into_iter()
-                  .map(|_e|NluResponseSlot{value: "".to_owned(), name: "".to_owned()})
+                  .map(|e|NluResponseSlot{value: e.value, name: e.entity})
                   .collect()
         }
     }
+}
+
+#[derive(Error, Debug)]
+pub enum RasaError {
+    #[error("Failed to write training configuration")]
+    CantWriteConf(#[from]std::io::Error)
 }

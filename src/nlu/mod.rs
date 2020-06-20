@@ -1,11 +1,17 @@
-mod snips;
-pub use self::snips::*;
 
-use std::path::Path;
+
 use std::collections::HashMap;
-use unic_langid::LanguageIdentifier;
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom, Write};
+use std::path::Path;
 use anyhow::Result;
 use serde::Serialize;
+use unic_langid::LanguageIdentifier;
+
+#[cfg(not(feature="devel_rasa_nlu"))]
+mod snips;
+#[cfg(not(feature="devel_rasa_nlu"))]
+pub use self::snips::*;
 
 #[cfg(feature="devel_rasa_nlu")]
 mod rasa;
@@ -62,4 +68,61 @@ pub struct NluResponse {
 pub struct NluResponseSlot {
     pub value: String,
     pub name: String
+}
+
+
+pub fn try_open_file_and_check(path: &Path, new_contents: &str) -> Result<Option<std::fs::File>, std::io::Error> {
+    let file = std::fs::OpenOptions::new().read(true).write(true).create(true).open(path);
+
+    if let Ok(mut file) = file {
+        let mut old_file: String = String::new();
+        file.read_to_string(&mut old_file)?;
+        if old_file != new_contents {
+            Ok(Some(file))
+        }
+        else {
+            Ok(None)
+        }
+    }
+    else {
+        if let Some(path_parent) = path.parent() {
+            std::fs::create_dir_all(path_parent)?;
+        }
+        let file = std::fs::OpenOptions::new().read(true).write(true).create(true).open(path)?;
+
+        Ok(Some(file))
+    }
+
+}
+
+pub fn write_contents(file: &mut File, contents: &str) -> Result <()> {
+    file.set_len(0)?; // Truncate file
+    file.seek(SeekFrom::Start(0))?; // Start from the start
+    file.write_all(contents[..].as_bytes())?;
+    file.sync_all()?;
+
+    Ok(())
+}
+
+pub fn compare_sets_and_train<F: FnOnce()>(train_set_path: &Path, train_set:&str, engine_path: &Path, callback: F) -> Result<()> {
+    if let Some(mut train_file) = try_open_file_and_check(train_set_path, train_set)? {
+        // Create parents
+        if let Some(path_parent) = engine_path.parent() {
+            std::fs::create_dir_all(path_parent)?;
+        }
+
+        // Clean engine folder
+        if engine_path.is_dir() {
+            std::fs::remove_dir_all(engine_path)?;
+        }
+
+        // Write train file
+        write_contents(&mut train_file, train_set)?;
+
+        // Train engine
+        callback();
+
+    }
+
+    Ok(())
 }

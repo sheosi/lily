@@ -10,12 +10,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(feature = "devel_cpal_rec")]
 use ringbuf::{Consumer, RingBuffer};
 
-pub struct RecDevice {
-    device: sphinxad::AudioDevice,
-    buffer: [i16; RECORD_BUFFER_SIZE],
-    last_read: u128
-}
-
 pub trait Recording {
     fn read(&mut self) -> Result<Option<&[i16]>, std::io::Error>;
     fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, std::io::Error>;
@@ -23,6 +17,14 @@ pub trait Recording {
     fn stop_recording(&mut self) -> Result<(), std::io::Error>;
 }
 
+#[cfg(not(feature = "devel_cpal_rec"))]
+pub struct RecDevice {
+    device: sphinxad::AudioDevice,
+    buffer: [i16; RECORD_BUFFER_SIZE],
+    last_read: u128
+}
+
+#[cfg(not(feature = "devel_cpal_rec"))]
 impl RecDevice {
     pub fn new() -> Result<RecDevice, std::io::Error> {
         //let host = cpal::default_host();
@@ -43,6 +45,7 @@ impl RecDevice {
     }
 }
 
+#[cfg(not(feature = "devel_cpal_rec"))]
 impl Recording for RecDevice {
     fn read(&mut self) -> Result<Option<&[i16]>, std::io::Error> {
         self.last_read = Self::get_millis();
@@ -72,8 +75,9 @@ impl Recording for RecDevice {
     }
 }
 
+// Cpal version
 #[cfg(feature = "devel_cpal_rec")]
-pub struct RecDeviceCpal {
+pub struct RecDevice {
     external_buffer: [i16; RECORD_BUFFER_SIZE],
     internal_buffer_consumer: Consumer<i16>,
     last_read: u128,
@@ -81,8 +85,9 @@ pub struct RecDeviceCpal {
 }
 
 #[cfg(feature = "devel_cpal_rec")]
-impl RecDeviceCpal {
-    pub fn new() -> Self {
+impl RecDevice {
+    // For now just use that error to original RecDevice
+    pub fn new() -> Result<Self, std::io::Error> {
         let host = cpal::default_host();
         let device = host.default_input_device().unwrap();
         let format = device.default_input_format().unwrap();
@@ -148,12 +153,12 @@ impl RecDeviceCpal {
             })
         });
 
-        RecDeviceCpal {
+        Ok(RecDevice {
             external_buffer: [0i16; RECORD_BUFFER_SIZE],
             last_read: 0,
             internal_buffer_consumer: cons,
             recording
-        }
+        })
 
     }
 
@@ -163,7 +168,7 @@ impl RecDeviceCpal {
 }
 
 #[cfg(feature = "devel_cpal_rec")]
-impl Recording for RecDeviceCpal {
+impl Recording for RecDevice {
     fn read(&mut self) -> Result<Option<&[i16]>, std::io::Error> {
         self.last_read = Self::get_millis();
         let size = self.internal_buffer_consumer.pop_slice(&mut self.external_buffer[..]);

@@ -9,11 +9,13 @@ use std::rc::Rc;
 use crate::actions::ActionSet;
 use crate::config::Config;
 use crate::interfaces::DirectVoiceInterface;
-use crate::nlu::{Nlu, SnipsNlu, SnipsNluManager, NluManager, NluResponseSlot, NluUtterance, EntityInstance, EntityDef, EntityData};
-use crate::python::try_translate_all;
+use crate::nlu::{Nlu, NluManager, NluResponseSlot, NluUtterance, EntityInstance, EntityDef, EntityData};
+use crate::python::{try_translate, try_translate_all};
 use crate::signals::{OrderMap, SignalEvent};
 use crate::vars::*;
 
+#[cfg(not(feature="devel_rasa_nlu"))]
+use crate::nlu::{SnipsNlu, SnipsNluManager};
 #[cfg(feature="devel_rasa_nlu")]
 use crate::nlu::{RasaNlu, RasaNluManager};
 
@@ -80,7 +82,15 @@ pub fn add_order<N: NluManager>(
                     ent_name,
                     EntityInstance {
                         kind: ent_kind_name,
-                        example: ent_data.example,
+                        example: {
+                            match try_translate(&ent_data.example) {
+                                Ok(trans) =>  trans,
+                                Err(err) => {
+                                    warn!("Failed to do translation of \"{}\", error: {:?}", &ent_data.example, err);
+                                    ent_data.example.clone()
+                                }
+                            }
+                        },
                     },
                 );
             }

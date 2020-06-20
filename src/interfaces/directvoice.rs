@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use crate::audio::{PlayDevice, RecDevice, Recording};
+use crate::audio::{PlayDevice, Recording, RecDevice};
 use crate::config::Config;
 use crate::hotword::{HotwordDetector, Snowboy};
 use crate::interfaces::{SharedOutput, UserInterface, UserInterfaceOutput};
@@ -48,6 +48,9 @@ impl DirectVoiceInterface {
 
         Ok(DirectVoiceInterface{stt, output})
     }
+
+
+    
 
     pub fn interface_loop<F: FnMut( Option<(String, Option<String>, i32)>, &mut SignalEvent)->Result<()>> (&mut self, config: &Config, signal_event: &mut SignalEvent, base_context: &PyDict, mut callback: F) -> Result<()> {
         let mut record_device = RecDevice::new()?;

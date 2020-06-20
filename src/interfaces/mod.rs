@@ -42,3 +42,4 @@ impl UserInterfaceFactory {
         Arc::new(Mutex::new(DummyInterface::new()))
     }
 }
+
