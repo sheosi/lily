@@ -15,6 +15,7 @@ pub use self::pocketsphinx::*;
 pub use self::deepspeech::*;
 
 use core::fmt::Display;
+use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use unic_langid::LanguageIdentifier;
 use log::info;
 
@@ -71,6 +72,34 @@ pub trait SttVadless {
 
 
 pub struct SttFactory;
+
+pub trait SpecifiesLangs {
+    fn available_langs() -> Vec<LanguageIdentifier>;
+}
+
+pub trait IsLangCompatible {
+    fn is_lang_compatible(lang: &LanguageIdentifier) -> Result<(), SttConstructionError>;
+}
+
+impl<T> IsLangCompatible for T where T: SpecifiesLangs {
+    fn is_lang_compatible(lang: &LanguageIdentifier) -> Result<(), SttConstructionError> {
+        negotiate_langs_res(lang, &Self::available_langs()).map(|_|())
+    }
+}
+
+fn negotiate_langs_res(
+    input: &LanguageIdentifier,
+    available: &Vec<LanguageIdentifier>
+) -> Result<LanguageIdentifier, SttConstructionError> {
+    let langs = negotiate_languages(&[input], available, None, NegotiationStrategy::Filtering);
+    if !langs.is_empty() {
+        Ok(langs[0].clone())
+    }
+    else {
+        Err(SttConstructionError::LangIncompatible)
+    }
+
+}
 
 impl SttFactory {
     #[cfg(not(feature = "devel_deepspeech"))]

@@ -1,8 +1,8 @@
 use std::mem::replace;
-use crate::stt::{SttConstructionError, SttError, SttBatched, SttInfo, SttVadless};
+use crate::stt::{SpecifiesLangs, SttConstructionError, SttError, SttBatched, SttInfo, SttVadless};
 use crate::vars::{DEEPSPEECH_DATA_PATH, ALPHA_BETA_MSG, SET_BEAM_MSG};
 use deepspeech::{CandidateTranscript, Model, Stream};
-use unic_langid::LanguageIdentifier;
+use unic_langid::{langids, LanguageIdentifier};
 
 // Deepspeech
 pub struct DeepSpeechStt {
@@ -82,5 +82,11 @@ impl SttVadless for DeepSpeechStt {
             name: "DeepSpeech".to_owned(),
             is_online: false
         }
+    }
+}
+
+impl SpecifiesLangs for DeepSpeechStt {
+    fn available_langs() -> Vec<LanguageIdentifier> {
+        langids!("en")
     }
 }
