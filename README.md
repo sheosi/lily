@@ -11,6 +11,7 @@ Lily is written in Rust + Python.
 #### Dependencies needed at compile time and runtime:
 
 ```
+- libssl-dev
 - libasound2-dev
 - libpocketsphinx-dev
 - libsphinxbase-dev
