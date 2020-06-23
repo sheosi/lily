@@ -36,7 +36,7 @@ Optional dependency for feature `extra_langs_tts` (Languages not provided by Pic
 
 `sudo snips-nlu download en`
 
-#### Install spanish module for NLU:**
+#### Install spanish module for NLU:
 
 `sudo snips-nlu download es`
 
