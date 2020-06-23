@@ -23,6 +23,7 @@ Lily is written in Rust + Python.
 Optional dependency for feature `extra_langs_tts` (Languages not provided by Pico Tts for local Tts):
 ```
 - libespeak-ng-dev
+```
 
 #### Python dependencies (needed for runtime):
 
