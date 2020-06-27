@@ -27,7 +27,6 @@ pub enum SttConstructionError {
     #[error("Input is not a valid utf-8")]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
 
-    #[cfg(feature = "devel_deepspeech")]
     #[error("Language not compatible")]
     LangIncompatible,
 

@@ -1,3 +1,4 @@
+// Note: Rasa needs tensorflow_text
 use std::collections::HashMap;
 use std::convert::{Into, TryInto};
 use std::path::Path;

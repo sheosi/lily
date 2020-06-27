@@ -2,7 +2,7 @@ use std::mem::replace;
 use crate::stt::{SpecifiesLangs, SttConstructionError, SttError, SttBatched, SttInfo, SttVadless};
 use crate::vars::{DEEPSPEECH_DATA_PATH, ALPHA_BETA_MSG, SET_BEAM_MSG};
 use deepspeech::{CandidateTranscript, Model, Stream};
-use unic_langid::{langids, LanguageIdentifier};
+use unic_langid::{langid, langids, LanguageIdentifier};
 
 // Deepspeech
 pub struct DeepSpeechStt {

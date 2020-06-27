@@ -81,7 +81,7 @@ impl Into<Utterance> for NluUtterance {
                         SplitCapKind::Text => UtteranceData{text: text.to_string(), entity: None, slot_name: None},
                         SplitCapKind::Entity => {
                             let ent_data = &entities[&text.to_string()];
-                            UtteranceData{text: &ent_data.example, entity: Some(ent_data.kind.clone()), slot_name: Some(text.to_string())}
+                            UtteranceData{text: ent_data.example.clone(), entity: Some(ent_data.kind.clone()), slot_name: Some(text.to_string())}
                         }
                     }
                 };
