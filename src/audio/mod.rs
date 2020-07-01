@@ -199,6 +199,19 @@ impl AudioRaw {
         Ok(buffer)
     }
 
+    pub fn rms(&self) -> f64 {
+        let sqr_sum = self.buffer.iter().fold(0i64, |sqr_sum, s|{
+            sqr_sum + (*s as i64)  * (*s as i64)
+        });
+        (sqr_sum as f64/ self.buffer.len() as f64).sqrt()
+
+    }
+
+    // Length in seconds
+    pub fn len_s(&self) -> f32 {
+        let len = self.buffer.len();
+        (len as f32)/(self.samples_per_second as f32)
+    }
 }
 
 #[derive(Error, Debug)]

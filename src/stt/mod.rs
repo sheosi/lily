@@ -15,6 +15,7 @@ pub use self::pocketsphinx::*;
 pub use self::deepspeech::*;
 
 use core::fmt::Display;
+use crate::audio::AudioRaw;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use unic_langid::LanguageIdentifier;
 use log::info;
@@ -100,12 +101,25 @@ fn negotiate_langs_res(
     }
 
 }
+const DYNAMIC_ENERGY_ADJUSTMENT_DAMPING: f64 = 0.15;
+const DYNAMIC_ENERGY_RATIO: f64 = 0.00013;
+const MIN_ENERGY: f64 = 3.0;
+fn calc_threshold(audio: &AudioRaw) -> f64 {
+    // This is taken from python's speech_recognition package
+    let energy = audio.rms();
+    let damping = DYNAMIC_ENERGY_ADJUSTMENT_DAMPING.powf(audio.len_s() as f64);
+    let target_energy = energy * DYNAMIC_ENERGY_RATIO;
+    let res = MIN_ENERGY * damping + target_energy;
+    println!("{}, damping {}, target {}", res, damping, target_energy);
+
+    res
+}
 
 impl SttFactory {
     #[cfg(not(feature = "devel_deepspeech"))]
-	pub fn load(lang: &LanguageIdentifier, prefer_cloud: bool, gateway_key: Option<(String, String)>) -> Result<Box<dyn SttStream>, SttConstructionError> {
+	pub fn load(lang: &LanguageIdentifier, audio_sample: &AudioRaw, prefer_cloud: bool, gateway_key: Option<(String, String)>) -> Result<Box<dyn SttStream>, SttConstructionError> {
 
-		let local_stt = Pocketsphinx::new(lang)?;
+		let local_stt = Pocketsphinx::new(lang, audio_sample)?;
         if prefer_cloud {
             info!("Prefer online Stt");
             if let Some((api_gateway, api_key)) = gateway_key {

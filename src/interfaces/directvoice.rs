@@ -1,7 +1,9 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use std::thread::sleep;
 
-use crate::audio::{PlayDevice, Recording, RecDevice};
+use crate::audio::{AudioRaw, PlayDevice, Recording, RecDevice};
 use crate::config::Config;
 use crate::hotword::{HotwordDetector, Snowboy};
 use crate::interfaces::{SharedOutput, UserInterface, UserInterfaceOutput};
@@ -36,11 +38,19 @@ pub struct DirectVoiceInterface {
     output: Arc<Mutex<DirectVoiceInterfaceOutput>>
 }
 
+const ENERGY_SAMPLING_TIME_MS: u64 = 500;
 impl DirectVoiceInterface {
     pub fn new(curr_lang: &LanguageIdentifier, config: &Config) -> Result<Self> {
         let ibm_stt_gateway_key = config.extract_ibm_stt_data();
 
-        let stt = SttFactory::load(curr_lang, config.prefer_online_stt, ibm_stt_gateway_key)?;
+        // Record environment to get minimal energy threshold
+        let mut record_device = RecDevice::new()?;
+        record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
+        sleep(Duration::from_millis(ENERGY_SAMPLING_TIME_MS));
+        let audio_sample = AudioRaw::new_raw(record_device.read()?.unwrap().to_owned(), DEFAULT_SAMPLES_PER_SECOND);
+        record_device.stop_recording()?;
+
+        let stt = SttFactory::load(curr_lang, &audio_sample,  config.prefer_online_stt, ibm_stt_gateway_key)?;
         info!("Using stt {}", stt.get_info());
         
         let output_obj = DirectVoiceInterfaceOutput::new(curr_lang, config)?;
@@ -91,7 +101,6 @@ impl DirectVoiceInterface {
                 }
                 ProgState::Listening => {
                     current_speech.append_raw(microphone_data, DEFAULT_SAMPLES_PER_SECOND);
-
                     match self.stt.decode(microphone_data)? {
                         DecodeState::NotStarted => {},
                         DecodeState::StartListening => {

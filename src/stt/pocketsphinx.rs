@@ -1,6 +1,7 @@
-use crate::vars::*;
-use crate::stt::{DecodeState, SttConstructionError, SttError, SttStream, SttInfo};
+use crate::audio::AudioRaw;
+use crate::stt::{calc_threshold, DecodeState, SttConstructionError, SttError, SttStream, SttInfo};
 use crate::vad::{Vad, VadError};
+use crate::vars::*;
 use crate::path_ext::ToStrResult;
 
 use pocketsphinx::{PsDecoder, CmdLn};
@@ -12,11 +13,13 @@ pub struct Pocketsphinx {
 }
 
 
+
 impl Pocketsphinx {
-    pub fn new(lang: &LanguageIdentifier) -> Result<Self, SttConstructionError> {
+    pub fn new(lang: &LanguageIdentifier, audio_sample: &AudioRaw) -> Result<Self, SttConstructionError> {
         let lang = Self::lang_neg(lang);
         let iso_str = format!("{}-{}", lang.language, lang.region.ok_or(SttConstructionError::NoRegion)?.as_str().to_lowercase());
         let stt_path = STT_DATA_PATH.resolve();
+        let ener_threshold = calc_threshold(audio_sample);
 
         let config = CmdLn::init( 
             true,
@@ -28,7 +31,9 @@ impl Pocketsphinx {
                 stt_path.join(&iso_str).join(iso_str.to_string() + ".lm.bin").to_str_res()?,
                 "-dict",
                 stt_path.join(&iso_str).join("cmudict-".to_owned() + &iso_str + ".dict").to_str_res()?,
-                "-logfn", "nul", // This PsDecoder
+                "-logfn", "nul",
+                "-vad_threshold", &ener_threshold.to_string()
+
             ]
         )?;
         let decoder = PsDecoder::init(config);

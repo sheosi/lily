@@ -8,7 +8,7 @@ use std::rc::Rc;
 // This crate
 use crate::actions::ActionSet;
 use crate::config::Config;
-use crate::interfaces::DirectVoiceInterface;
+use crate::interfaces::{CURR_INTERFACE, DirectVoiceInterface, UserInterface};
 use crate::nlu::{Nlu, NluManager, NluResponseSlot, NluUtterance, EntityInstance, EntityDef, EntityData};
 use crate::python::{try_translate, try_translate_all};
 use crate::signals::{OrderMap, SignalEvent};
@@ -240,6 +240,7 @@ impl SignalOrder {
 
     pub fn record_loop(&mut self, signal_event: &mut SignalEvent, config: &Config, base_context: &PyDict, curr_lang: &LanguageIdentifier) -> Result<()> {
         let mut interface = DirectVoiceInterface::new(curr_lang, config)?;
+        CURR_INTERFACE.with(|itf|itf.replace(interface.get_output()));
         interface.interface_loop(config, signal_event, base_context, |d, s|{self.received_order(d, s, base_context)})
     }
 }
