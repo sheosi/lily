@@ -84,6 +84,8 @@ impl DirectVoiceInterface {
                 None => continue,
             };
 
+            println!("read data: {}", microphone_data.len());
+
             match current_state {
                 ProgState::WaitingForHotword => {
                     match hotword_detector.check_hotword(microphone_data)? {

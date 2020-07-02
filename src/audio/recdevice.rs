@@ -1,8 +1,11 @@
 use std::time::{SystemTime, Duration, UNIX_EPOCH};
 use crate::vars::{CLOCK_TOO_EARLY_MSG, DEFAULT_SAMPLES_PER_SECOND, RECORD_BUFFER_SIZE};
+use log::info;
 
 #[cfg(feature = "devel_cpal_rec")]
 use cpal::traits::{DeviceTrait, HostTrait, EventLoopTrait};
+#[cfg(feature = "devel_cpal_rec")]
+use cpal::{SampleFormat};
 #[cfg(feature = "devel_cpal_rec")]
 use std::sync::Arc;
 #[cfg(feature = "devel_cpal_rec")]
@@ -27,6 +30,7 @@ pub struct RecDevice {
 #[cfg(not(feature = "devel_cpal_rec"))]
 impl RecDevice {
     pub fn new() -> Result<RecDevice, std::io::Error> {
+        info!("Using sphinxad");
         //let host = cpal::default_host();
         //let device = host.default_input_device().expect("Something failed");
 
@@ -88,9 +92,13 @@ pub struct RecDevice {
 impl RecDevice {
     // For now just use that error to original RecDevice
     pub fn new() -> Result<Self, std::io::Error> {
+        info!("Using cpal");
         let host = cpal::default_host();
         let device = host.default_input_device().unwrap();
-        let format = device.default_input_format().unwrap();
+        let mut format = device.default_input_format().unwrap();
+        format.data_type = SampleFormat::I16;
+        format.channels = 1;
+        format.sample_rate = cpal::SampleRate(DEFAULT_SAMPLES_PER_SECOND);
         let event_loop = host.event_loop();
         let stream_id = event_loop.build_input_stream(&device, &format).unwrap();
         event_loop.play_stream(stream_id).unwrap();
@@ -109,7 +117,6 @@ impl RecDevice {
                         return;
                     }
                 };
-
                 //If we're done recording return early.
                 if !recording_2.load(std::sync::atomic::Ordering::Relaxed) {
                     return;
@@ -118,10 +125,11 @@ impl RecDevice {
                 //Otherwise send data
                 match data {
                     cpal::StreamData::Input {buffer: cpal::UnknownTypeInputBuffer::U16(buffer)} => {
+                        println!("Note: Recording using U16 translation code, has not been tested and may not work");
                         let mut count = 0;
                         prod.push_each(||{
                             let res = if count < buffer.len() {
-                                Some(buffer[count] as i16)
+                                Some(((buffer[count] as u32) - ((std::u16::MAX/2) as u32)) as i16)
                             }
                             else {
                                 None
@@ -135,10 +143,11 @@ impl RecDevice {
                         prod.push_slice(&buffer);
                     }
                     cpal::StreamData::Input {buffer: cpal::UnknownTypeInputBuffer::F32(buffer)} => {
+                        println!("Note: Recording using F32 translation code, has not been tested and may not work");
                         let mut count = 0;
                         prod.push_each(||{
                             let res = if count < buffer.len() {
-                                Some(buffer[count] as i16)
+                                Some((buffer[count]  * (std::i16::MAX as f32)) as i16)
                             }
                             else {
                                 None
@@ -147,8 +156,12 @@ impl RecDevice {
                             count += 1;
                             res
                         });
+                        println!("len: {} count: {}", buffer.len(),  count);
                     }
-                    _ => ()
+                    _ => {
+                        println!("Received something else");
+                        ()
+                    }
                 }
             })
         });
@@ -173,7 +186,7 @@ impl Recording for RecDevice {
         self.last_read = Self::get_millis();
         let size = self.internal_buffer_consumer.pop_slice(&mut self.external_buffer[..]);
         if size > 0 {
-            Ok(Some(&self.external_buffer))
+            Ok(Some(&self.external_buffer[0..size]))
         }
         else {
             Ok(None)

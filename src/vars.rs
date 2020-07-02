@@ -57,4 +57,4 @@ pub const DEFAULT_HOTWORD_SENSITIVITY: f32 = 0.45;
 pub const MIN_SCORE_FOR_ACTION: f32 = 0.3;
 pub const DEFAULT_SAMPLES_PER_SECOND: u32 = 16000;
 pub const HOTWORD_CHECK_INTERVAL_MS: u16 = 100; // Larger = less CPU, more wait time
-pub const RECORD_BUFFER_SIZE: usize = 4096;
+pub const RECORD_BUFFER_SIZE: usize = 8096;
