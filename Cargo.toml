@@ -46,6 +46,7 @@ google_translate_tts = {version = "0.1.2", optional = true} # Format TTS URLs
 reqwest = {version="^0.10", features=["default-tls", "blocking", "json"]} # HTTP client
 url = "^2.1"
 base64 = "^0.12" # For sending data to the online TTS and STT
+tungstenite = "0.11.0" # Web sockets for online STT
 
 # Localization
 unic-langid = {version="^0.9", features = ["macros"]} # For parsing Unicode Language Identifiers

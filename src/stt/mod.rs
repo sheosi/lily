@@ -117,14 +117,14 @@ fn calc_threshold(audio: &AudioRaw) -> f64 {
 
 impl SttFactory {
     #[cfg(not(feature = "devel_deepspeech"))]
-	pub fn load(lang: &LanguageIdentifier, audio_sample: &AudioRaw, prefer_cloud: bool, gateway_key: Option<(String, String)>) -> Result<Box<dyn SttStream>, SttConstructionError> {
+	pub fn load(lang: &LanguageIdentifier, audio_sample: &AudioRaw, prefer_cloud: bool, ibm_data: Option<IbmSttData>) -> Result<Box<dyn SttStream>, SttConstructionError> {
 
 		let local_stt = Pocketsphinx::new(lang, audio_sample)?;
         if prefer_cloud {
             info!("Prefer online Stt");
-            if let Some((api_gateway, api_key)) = gateway_key {
+            if let Some(ibm_data_obj) = ibm_data {
                 info!("Construct online Stt");
-                Ok(Box::new(SttOnlineInterface::new(IbmStt::new(lang, api_gateway.to_string(), api_key.to_string())?, local_stt)))
+                Ok(Box::new(SttOnlineInterface::new(IbmStt::new(lang, ibm_data_obj)?, local_stt)))
             }
             else {
                 Ok(Box::new(local_stt))

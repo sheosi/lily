@@ -5,7 +5,7 @@ pub use self::playdevice::*;
 pub use self::recdevice::*;
 
 use std::io::Write;
-use crate::vars::LILY_VER;
+use crate::vars::{DEFAULT_SAMPLES_PER_SECOND, LILY_VER};
 use thiserror::Error;
 
 enum Data {
@@ -104,19 +104,24 @@ impl Audio {
 }
 
 
-// For managing Audio only in Raw, much more simple and a little more focused on speed
+// For managing raw audio, mostly coming from the mic,
+// is fixed at 16 KHz and mono (what most STTs )
 pub struct AudioRaw {
-    pub buffer: Vec<i16>,
-    pub samples_per_second: u32
+    pub buffer: Vec<i16>
 }
 
 impl AudioRaw {
+    pub fn get_samples_per_second() -> u32 {
+        DEFAULT_SAMPLES_PER_SECOND
+    }
     pub fn new_empty(samples_per_second: u32) -> Self {
-        AudioRaw{buffer: Vec:: new(), samples_per_second}
+        assert!(samples_per_second == Self::get_samples_per_second());
+        AudioRaw{buffer: Vec:: new()}
     }
 
     pub fn new_raw(buffer: Vec<i16>, samples_per_second: u32) -> Self {
-        AudioRaw{buffer, samples_per_second}
+        assert!(samples_per_second == Self::get_samples_per_second());
+        AudioRaw{buffer}
     }
 
     pub fn clear(&mut self) {
@@ -124,9 +129,8 @@ impl AudioRaw {
     }
 
     pub fn append_audio(&mut self, other: &[i16], sps: u32) -> bool {
-        if self.samples_per_second == sps {
+        if sps == Self::get_samples_per_second() {
             self.buffer.extend(other);
-
             true
         }
         else {
@@ -135,6 +139,10 @@ impl AudioRaw {
     }
 
     pub fn to_ogg_opus(&self) -> Result<Vec<u8>, AudioError> {
+        // This should have a bitrate of 25.6 Kb/s, above the 24 Kb/s that IBM recomends
+
+        // More frame time, sligtly less overhead more problematic packet loses,
+        // a frame time of 20ms is considered good enough for most applications
         const FRAME_TIME_MS: u32 = 20;
         const FRAME_SAMPLES: u32 = 16000 * 1 * FRAME_TIME_MS / 1000;
 
@@ -146,7 +154,6 @@ impl AudioRaw {
             let max = {
                 ((self.buffer.len() as f32 / FRAME_SAMPLES as f32).ceil() as u32) - 1
             };
-            log::info!("Max {:?}", max);
 
             fn calc(counter: u32) -> usize {
                 (counter as usize) * (FRAME_SAMPLES as usize)
@@ -156,7 +163,7 @@ impl AudioRaw {
                 1, // Version number, always 1
                 1, // Channels
                 56, 1,//Pre-skip
-                0, 0, 0, 0, // Original Hz (informational)
+                0, 0, 62, 128, // Original Hz (informational), the numbers here should mean 16000
                 0, 0, // Output gain
                 0, // Channel map
                 // If Channel map != 0, here should go channel mapping table
@@ -167,8 +174,8 @@ impl AudioRaw {
             opus_tags.extend(b"OpusTags");
             opus_tags.extend(&[vendor_str.len() as u8,0,0,0]);
             opus_tags.extend(vendor_str.bytes());
-            opus_tags.extend(&[1,0,0,0]);
-            opus_tags.extend(&[0;12]);
+            opus_tags.extend(&[1,0,0,0]); // Not sure what is this
+            opus_tags.extend(&[0;12]); // Not sure what is this
 
             packet_writer.write_packet(Box::new(OPUS_HEAD), 1, ogg::PacketWriteEndInfo::EndPage, 0)?;
             packet_writer.write_packet(opus_tags.into_boxed_slice(), 1, ogg::PacketWriteEndInfo::EndPage, 0)?;
@@ -210,7 +217,7 @@ impl AudioRaw {
     // Length in seconds
     pub fn len_s(&self) -> f32 {
         let len = self.buffer.len();
-        (len as f32)/(self.samples_per_second as f32)
+        (len as f32)/(Self::get_samples_per_second() as f32)
     }
 }
 

@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use anyhow::{anyhow, Result};
 use crate::vars::{DEFAULT_HOTWORD_SENSITIVITY, MAIN_CONF_PATH, NO_KEY_MSG};
+use crate::stt::IbmSttData;
 use std::collections::HashMap;
 use std::rc::Rc;
 use serde_yaml::Value;
@@ -17,8 +18,8 @@ pub struct Config {
     pub prefer_online_stt: bool,
     #[serde(default = "none_str")]
     pub ibm_tts_key: Option<String>,
-    #[serde(default = "none_str")]
-    pub ibm_stt_key: Option<String>,
+    #[serde(default = "none_ibm_stt")]
+    pub ibm_stt: Option<IbmSttData>,
     #[serde(default = "none_str")]
     pub ibm_gateway: Option<String>,
     #[serde(default = "none_str")]
@@ -29,12 +30,17 @@ pub struct Config {
     pub debug_record_active_speech: bool,
 
 
+
     #[serde(flatten)]
     pub pkgs_conf: HashMap<String, Value>
 }
 
 fn false_val() -> bool {
     false
+}
+
+fn none_ibm_stt() -> Option<IbmSttData> {
+    None
 }
 
 fn none_str() -> Option<String> {
@@ -67,7 +73,7 @@ impl Config {
             prefer_online_tts: false,
             prefer_online_stt: false,
             ibm_tts_key: None,
-            ibm_stt_key: None,
+            ibm_stt: None,
             ibm_gateway: None,
             language: None,
             hotword_sensitivity: DEFAULT_HOTWORD_SENSITIVITY,
@@ -100,10 +106,9 @@ impl Config {
         }
     }
 
-    pub fn extract_ibm_stt_data(&self) -> Option<(String, String)> {
-        if self.ibm_gateway.is_some() && self.ibm_stt_key.is_some() {
-            // Those unwrap cannot fail
-            Some((self.ibm_gateway.clone().expect(NO_KEY_MSG), self.ibm_stt_key.clone().expect(NO_KEY_MSG)))
+    pub fn extract_ibm_stt_data(&self) -> Option<IbmSttData> {
+        if self.ibm_stt.is_some() {
+            self.ibm_stt.clone()
         }
         else {
             None

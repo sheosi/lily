@@ -114,6 +114,7 @@ impl DirectVoiceInterface {
                             current_state = ProgState::WaitingForHotword;
                             record_device.stop_recording().expect(AUDIO_REC_STOP_ERR_MSG);
                             //self.received_order(decode_res, signal_event, &base_context)?;
+                            info!("{:?}", decode_res);
                             callback(decode_res, signal_event)?;
                             record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
                             save_recording_to_disk(&mut current_speech, LAST_SPEECH_PATH.resolve().as_path());
