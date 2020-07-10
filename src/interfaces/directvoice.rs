@@ -35,7 +35,8 @@ fn save_recording_to_disk(recording: &mut crate::audio::Audio, path: &Path) {
 
 pub struct DirectVoiceInterface {
     stt: Box<dyn SttStream>,
-    output: Arc<Mutex<DirectVoiceInterfaceOutput>>
+    output: Arc<Mutex<DirectVoiceInterfaceOutput>>,
+
 }
 
 const ENERGY_SAMPLING_TIME_MS: u64 = 500;
@@ -66,7 +67,13 @@ impl DirectVoiceInterface {
         let mut record_device = RecDevice::new()?;
         let mut _play_device = PlayDevice::new();
 
-        let mut current_speech = crate::audio::Audio::new_empty(DEFAULT_SAMPLES_PER_SECOND);
+        let mut current_speech = if config.debug_record_active_speech{
+            Some(crate::audio::Audio::new_empty(DEFAULT_SAMPLES_PER_SECOND))
+        }
+        else {
+            None
+        };
+
         let mut current_state = ProgState::WaitingForHotword;
         let mut hotword_detector = {
             let snowboy_path = SNOWBOY_DATA_PATH.resolve();
@@ -102,7 +109,9 @@ impl DirectVoiceInterface {
                     }
                 }
                 ProgState::Listening => {
-                    current_speech.append_raw(microphone_data, DEFAULT_SAMPLES_PER_SECOND);
+                    if let Some(ref mut curr) = current_speech {
+                        curr.append_raw(microphone_data, DEFAULT_SAMPLES_PER_SECOND);
+                    }
                     match self.stt.decode(microphone_data)? {
                         DecodeState::NotStarted => {},
                         DecodeState::StartListening => {
@@ -113,13 +122,18 @@ impl DirectVoiceInterface {
                             info!("End of speech");
                             current_state = ProgState::WaitingForHotword;
                             record_device.stop_recording().expect(AUDIO_REC_STOP_ERR_MSG);
-                            //self.received_order(decode_res, signal_event, &base_context)?;
+
                             info!("{:?}", decode_res);
                             callback(decode_res, signal_event)?;
                             record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
-                            save_recording_to_disk(&mut current_speech, LAST_SPEECH_PATH.resolve().as_path());
-                            current_speech.clear();
+
+                            if let Some(ref mut curr) = current_speech {
+                                save_recording_to_disk(curr, LAST_SPEECH_PATH.resolve().as_path());
+                                curr.clear();
+                            }
+
                             hotword_detector.start_hotword_check()?;
+
                         }
                     }
                 }
