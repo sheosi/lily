@@ -79,7 +79,7 @@ impl<S: SttStream, F: SttStream> SttFallback<S, F> {
 impl<S: SttStream, F: SttStream> SttStream for SttFallback<S, F> {
     fn begin_decoding(&mut self) -> Result<(),SttError> {
         self.copy_audio.clear();
-        self.fallback.begin_decoding()?;
+        self.main_stt.begin_decoding()?;
         Ok(())
 
     }
@@ -96,6 +96,7 @@ impl<S: SttStream, F: SttStream> SttStream for SttFallback<S, F> {
                 },
                 Err(err) => {
                     warn!("Problem with online STT: {}", err);
+                    self.fallback.begin_decoding()?;
                     self.copy_audio.append_audio(audio, DEFAULT_SAMPLES_PER_SECOND);
                     let inter_res = self.fallback.decode(&self.copy_audio.buffer);
                     self.copy_audio.clear(); // We don't need the copy audio anymore

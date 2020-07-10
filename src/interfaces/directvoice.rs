@@ -92,10 +92,11 @@ impl DirectVoiceInterface {
                             // Don't record for a moment
                             record_device.stop_recording().expect(AUDIO_REC_STOP_ERR_MSG);
                             current_state = ProgState::Listening;
-                            self.stt.begin_decoding()?;
-                            info!("Hotword detected");
                             signal_event.call("init_reco", &base_context)?;
+                            info!("Hotword detected");
                             record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
+                            // This could take a while 
+                            self.stt.begin_decoding()?;
                         }
                         _ => {}
                     }
