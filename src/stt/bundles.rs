@@ -3,6 +3,7 @@ use crate::stt::{DecodeState, SttBatched, SttError, SttStream, SttVadless, SttIn
 use crate::vad::Vad;
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
+use log::warn;
 
 pub struct SttBatcher<S: SttBatched, V: Vad> {
     batch_stt: S,
@@ -59,19 +60,23 @@ impl<S: SttBatched, V: Vad> SttStream for SttBatcher<S, V> {
 }
 
 
-pub struct SttOnlineInterface<S: SttBatched, F: SttStream> {
-    online_stt: S,
+pub struct SttFallback<S: SttStream, F: SttStream> {
+    main_stt: S,
     fallback: F,
     copy_audio: AudioRaw,
+    using_fallback: bool
 }
 
-impl<S: SttBatched, F: SttStream> SttOnlineInterface<S, F> {
-    pub fn new(online_stt: S,fallback: F) -> Self {
-        Self{online_stt, fallback, copy_audio: AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND)}
+impl<S: SttStream, F: SttStream> SttFallback<S, F> {
+    pub fn new(main_stt: S,fallback: F) -> Self {
+        Self{main_stt, fallback,
+            copy_audio: AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND), 
+            using_fallback: false
+        }
     }
 }
 
-impl<S: SttBatched, F: SttStream> SttStream for SttOnlineInterface<S, F> {
+impl<S: SttStream, F: SttStream> SttStream for SttFallback<S, F> {
     fn begin_decoding(&mut self) -> Result<(),SttError> {
         self.copy_audio.clear();
         self.fallback.begin_decoding()?;
@@ -80,24 +85,34 @@ impl<S: SttBatched, F: SttStream> SttStream for SttOnlineInterface<S, F> {
     }
 
     fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
-        let res = self.fallback.decode(audio)?;
-        if res != DecodeState::NotStarted {
-            self.copy_audio.append_audio(audio, DEFAULT_SAMPLES_PER_SECOND);
-        }
-        match res {
-            DecodeState::Finished(local_res) => {
-                match self.online_stt.decode(&self.copy_audio.buffer) {
-                    Ok(ok_res) => Ok(DecodeState::Finished(ok_res)),
-                    Err(_) => Ok(DecodeState::Finished(local_res))
-                }
+        if !self.using_fallback {
+            match self.main_stt.decode(audio) {
+                Ok(inter_res) => {
+                    if inter_res != DecodeState::NotStarted {
+                        self.copy_audio.append_audio(audio, DEFAULT_SAMPLES_PER_SECOND);
+                    }
 
-            },
-            _ => Ok(res)
+                    Ok(inter_res)
+                },
+                Err(err) => {
+                    warn!("Problem with online STT: {}", err);
+                    self.copy_audio.append_audio(audio, DEFAULT_SAMPLES_PER_SECOND);
+                    let inter_res = self.fallback.decode(&self.copy_audio.buffer);
+                    self.copy_audio.clear(); // We don't need the copy audio anymore
+                    self.using_fallback = true;
+
+                    inter_res
+                }
+                
+            }
+        }
+        else {
+            self.fallback.decode(audio)
         }
     }
 
     fn get_info(&self) -> SttInfo {
-        self.online_stt.get_info()
+        self.main_stt.get_info()
     }
 
 }
@@ -118,6 +133,7 @@ impl<S: SttVadless, V: Vad> SttVadlessInterface<S, V> {
 impl<S: SttVadless, V: Vad> SttStream for SttVadlessInterface<S,V> {
     fn begin_decoding(&mut self) -> Result<(),SttError> {
         self.vad.reset()?;
+        self.vadless.begin_decoding()?;
         Ok(())
 
     }

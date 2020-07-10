@@ -49,14 +49,14 @@ impl HotwordDetector for Snowboy {
 
     fn check_hotword(&mut self, audio: &[i16]) -> Result<bool> {
         if !self.someone_talking {
-            let vad_res = self.vad.is_someone_talking(audio)?;
-            /*match vad_val {
-                -2 => {println!("Silence");}
-                -1 => {println!("Wait something happened");}
-                0 => {println!("Something is there");}
-                _ => {}
+            /*Snowboy return values:
+                -2 => Silence
+                -1 => Error
+                 0 => Speech detected
+            */
 
-            }*/
+            let vad_res = self.vad.is_someone_talking(audio)?;
+
 
 
             if vad_res == true {

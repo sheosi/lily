@@ -5,7 +5,7 @@ use log::info;
 #[cfg(feature = "devel_cpal_rec")]
 use cpal::traits::{DeviceTrait, HostTrait, EventLoopTrait};
 #[cfg(feature = "devel_cpal_rec")]
-use cpal::{SampleFormat};
+use cpal::{SampleFormat, StreamId};
 #[cfg(feature = "devel_cpal_rec")]
 use std::sync::Arc;
 #[cfg(feature = "devel_cpal_rec")]
@@ -85,7 +85,7 @@ pub struct RecDevice {
     external_buffer: [i16; RECORD_BUFFER_SIZE],
     internal_buffer_consumer: Consumer<i16>,
     last_read: u128,
-    recording: Arc<AtomicBool>
+    stream_id: StreamId
 }
 
 #[cfg(feature = "devel_cpal_rec")]
@@ -101,10 +101,8 @@ impl RecDevice {
         format.sample_rate = cpal::SampleRate(DEFAULT_SAMPLES_PER_SECOND);
         let event_loop = host.event_loop();
         let stream_id = event_loop.build_input_stream(&device, &format).unwrap();
-        event_loop.play_stream(stream_id).unwrap();
+        event_loop.play_stream(stream_id.clone()).unwrap();
 
-        let recording = Arc::new(AtomicBool::new(false));
-        let recording_2 = recording.clone();
         let internal_buffer = RingBuffer::new(RECORD_BUFFER_SIZE);
         let (mut prod, cons) = internal_buffer.split();
 
@@ -117,10 +115,6 @@ impl RecDevice {
                         return;
                     }
                 };
-                //If we're done recording return early.
-                if !recording_2.load(std::sync::atomic::Ordering::Relaxed) {
-                    return;
-                }
 
                 //Otherwise send data
                 match data {
@@ -156,11 +150,9 @@ impl RecDevice {
                             count += 1;
                             res
                         });
-                        println!("len: {} count: {}", buffer.len(),  count);
                     }
                     _ => {
-                        println!("Received something else");
-                        ()
+                        panic!("Received non-input data");
                     }
                 }
             })
@@ -170,7 +162,7 @@ impl RecDevice {
             external_buffer: [0i16; RECORD_BUFFER_SIZE],
             last_read: 0,
             internal_buffer_consumer: cons,
-            recording
+            stream_id
         })
 
     }
@@ -205,11 +197,15 @@ impl Recording for RecDevice {
     }
 
     fn start_recording(&mut self) -> Result<(), std::io::Error> {
-        self.recording.store(true, Ordering::Relaxed);
+        let host = cpal::default_host();
+        let el = host.event_loop();
+        el.play_stream(self.stream_id.clone()).unwrap();
         Ok(())
     }
     fn stop_recording(&mut self) -> Result<(), std::io::Error> {
-        self.recording.store(false, Ordering::Relaxed);
+        let host = cpal::default_host();
+        let el = host.event_loop();
+        el.pause_stream(self.stream_id.clone()).unwrap();
         Ok(())
     }
 }

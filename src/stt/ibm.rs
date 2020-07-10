@@ -37,7 +37,10 @@ impl IbmStt {
     }
 
     fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
-        let available_langs = langids!("es-ES", "en-US");
+        let available_langs = langids!(
+			"es-ES", "en-US"
+		);
+
         let default = langid!("en-US");
         negotiate_languages(&[lang],&available_langs, Some(&default), NegotiationStrategy::Filtering)[0].clone()
     }
@@ -55,13 +58,16 @@ impl SttBatched for IbmStt {
 }
 
 impl SttVadless for IbmStt {
+	fn begin_decoding(&mut self) -> Result<(), SttError> {
+		self.engine.live_process_begin(&self.model)?;
+		Ok(())
+	}
     fn process(&mut self, audio: &[i16]) -> Result<(), SttError> {
-        self.engine.live_process(&AudioRaw::new_raw(audio.to_vec(), 16000), &self.model)?;
+        self.engine.live_process(&AudioRaw::new_raw(audio.to_vec(), 16000))?;
         Ok(())
     }
     fn end_decoding(&mut self) -> Result<Option<(String, Option<String>, i32)>, SttError> {
-        println!("End decode ");
-        let res = self.engine.live_process_end(&self.model)?;
+        let res = self.engine.live_process_end()?;
         Ok(res)
     }
     fn get_info(&self) -> SttInfo {
@@ -89,7 +95,7 @@ struct WatsonAlternative {
 
 
 pub struct IbmSttEngine {
-	client: blocking::Client,
+	curr_socket: Option <WatsonSocket>,
 	data: IbmSttData,
 	token_cache: TokenCache
 }
@@ -106,13 +112,12 @@ enum WatsonOrder {
 impl WatsonSocket {
 
 	fn new(model: &str, data: IbmSttData, token: &str) -> Self {
-		let url_str = format!("wss://api.{}.speech-to-text.watson.cloud.ibm.com/instances/{}/v1/recognize", data.gateway, data.gateway);
-		let (mut socket, response) =
+		let url_str = format!("wss://api.{}.speech-to-text.watson.cloud.ibm.com/instances/{}/v1/recognize", data.gateway, data.instance);
+		let (socket, _response) =
 			connect(Url::parse_with_params(&url_str,&[
 				("access_token", token),
 				("model", model)
 			]).unwrap()).expect("Can't connect");
-
 		Self{socket}
 	}
 
@@ -146,32 +151,32 @@ impl WatsonSocket {
 	}
 
 	fn get_answer(&mut self) -> Result<Option<(String, Option<String>, i32)>, OnlineSttError> {
-		if let Message::Text(response_str) = self.socket.read_message().expect("Error reading message") {
-			let response: WatsonResponse = serde_json::from_str(&response_str)?;
-			let res = {
-				if !response.results.is_empty() {
-					let alternatives = &response.results[response.result_index as usize].alternatives;
-	
-					if !alternatives.is_empty() {
-						let res_str = &alternatives[0].transcript;
-						Some((res_str.to_string() , None, 0))
-					}
-					else {
-						None
-					}
+		// Ignore {"state": "listening"}
+		loop {
+			if let Message::Text(response_str) = self.socket.read_message().expect("Error reading message") {
+				let response_res: Result<WatsonResponse,_> = serde_json::from_str(&response_str);
+				if let Ok(response) = response_res {
+					let res = {
+						if !response.results.is_empty() {
+							let alternatives = &response.results[response.result_index as usize].alternatives;
+
+							if !alternatives.is_empty() {
+								let res_str = &alternatives[0].transcript;
+								Some((res_str.to_string() , None, 0))
+							}
+							else {
+								None
+							}
+						}
+						else {
+							None
+						}
+					};
+					return Ok(res)
 				}
-				else {
-					None
-				}
-			};
-	
-				Ok(res)
 			}
+		}
 	
-			else {
-				panic!(""); // TODO: Fix me
-			}
-		
 	}
 
 	fn close(mut self) {
@@ -196,15 +201,16 @@ impl TokenCache {
 			expires_in: u16
 		}
 
+		let start = std::time::Instant::now();
 		let clnt = blocking::Client::new();
 		let url = Url::parse_with_params("https://iam.cloud.ibm.com/identity/token", &[
 			("grant_type", "urn:ibm:params:oauth:grant-type:apikey"),
 			("apikey", api_key)
 			]).unwrap();
-		let resp: IamResponse = clnt.post(url)
+		let resp = clnt.post(url)
 		.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-		.header(header::ACCEPT, "application/json").send().unwrap().json().unwrap();
-		println!("{:?}", resp);
+		.header(header::ACCEPT, "application/json").send().unwrap();
+		let resp: IamResponse =  resp.json().unwrap();
 		(resp.access_token, resp.expires_in)
 	}
 
@@ -217,8 +223,8 @@ impl TokenCache {
 		};
 
 		if must_redo {
-			// A token is valid for 3600 seconds (60 minutes), but to be on the safe side let's give
-			// 3480 seconds (58 minutes)
+			// A token is valid for 3600 seconds (60 minutes), but to be on the 
+			// safe side let's give it 3480 seconds (58 minutes).
 			let (token, valid_time) = Self::gen_iam_token(api_key);
 			self.data = Some((token, Instant::now() + Duration::new((valid_time - (2 * 60)).into(),0)));
 		}
@@ -245,7 +251,7 @@ impl IbmSttEngine {
 			"London".to_owned() => "eu-gb",
 			"Seoul".to_owned() => "kr-seo"
 		};
-		IbmSttEngine{client: blocking::Client::new(), token_cache: TokenCache::new(), data: IbmSttData {
+		IbmSttEngine{curr_socket: None, token_cache: TokenCache::new(), data: IbmSttData {
 			api_key: data.api_key,
 			instance: data.instance,
 			gateway: location[&data.gateway].to_owned()
@@ -264,13 +270,43 @@ impl IbmSttEngine {
 		res
 	}
 
-	pub fn live_process(&mut self, audio: &crate::audio::AudioRaw, model: &str) -> Result<(), OnlineSttError> {
+	pub fn live_process_begin(&mut self, model: &str) -> Result<(), OnlineSttError> {
 		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key));
+		socket.send_order(WatsonOrder::Start);
+		self.curr_socket = Some(socket);
+		
+		Ok(())
+	}
+
+	pub fn live_process(&mut self, audio: &crate::audio::AudioRaw) -> Result<(), OnlineSttError> {
+		let socket = {
+			if let Some(ref mut sck) = self.curr_socket {
+				sck
+			}
+			else {
+				panic!("IbmSttEngine.live_process can't be called before live_proces_begin");
+			}
+		};
+
+		socket.send_audio(audio)?;
 
 	    Ok(())
 	}
-	pub fn live_process_end(&mut self, model: &str) -> Result<Option<(String, Option<String>, i32)>, OnlineSttError> {
-		Ok(None)
+	pub fn live_process_end(&mut self) -> Result<Option<(String, Option<String>, i32)>, OnlineSttError> {
+		let socket = {
+			if let Some(ref mut sck) = self.curr_socket {
+				sck
+			}
+			else {
+				panic!("live_process_end can't be called twice")
+			}
+		};
+
+		socket.send_order(WatsonOrder::Stop);
+		let res = socket.get_answer();
+		std::mem::replace(&mut self.curr_socket, None).unwrap().close();
+
+		res
 	}
 
 }

@@ -56,14 +56,13 @@ impl SttBatched for DeepSpeechStt {
 }
 
 impl SttVadless for DeepSpeechStt {
+    fn begin_decoding(&mut self) -> Result<(), SttError> {
+        self.current_stream = Some(self.model.create_stream().unwrap());
+    }
     fn process(&mut self, audio: &[i16]) -> Result<(), SttError> {
-        if self.current_stream.is_none() {
-            self.current_stream = Some(self.model.create_stream().unwrap())
-        }
-
         match self.current_stream {
             Some(ref mut s) => s.feed_audio(audio),
-            None => panic!()
+            None => panic!("'process' can't be called before 'begin_decoding'")
         }
 
         Ok(())

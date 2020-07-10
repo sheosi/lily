@@ -123,7 +123,6 @@ fn split_captures<'a>(re: &'a Regex, input: &'a str) ->  Vec<(&'a str, SplitCapK
         result.push((&input[last_pos..input.len()], SplitCapKind::Text));
     }
 
-    println!("{:?}", result);
     result
 }
 
