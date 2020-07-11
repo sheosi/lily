@@ -201,7 +201,6 @@ impl TokenCache {
 			expires_in: u16
 		}
 
-		let start = std::time::Instant::now();
 		let clnt = blocking::Client::new();
 		let url = Url::parse_with_params("https://iam.cloud.ibm.com/identity/token", &[
 			("grant_type", "urn:ibm:params:oauth:grant-type:apikey"),

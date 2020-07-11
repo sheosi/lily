@@ -103,40 +103,6 @@ fn negotiate_langs_res(
 
 }
 
-// Dummy ///////////////////////////////////////////////////////////////////////
-pub struct DummyTts{}
-
-impl DummyTts {
-    pub fn new() -> Self{
-        Self{}
-    }
-}
-
-impl Tts for DummyTts {
-    fn synth_text(&mut self, _input: &str) -> Result<Audio, TtsError> {
-        Ok(Audio::new_empty(16000))
-    }
-
-    fn get_info(&self) -> TtsInfo {
-        TtsInfo{
-            name: "Dummy Synthesizer".to_string(),
-            is_online: false
-        }
-    }
-}
-
-impl TtsStatic for DummyTts {
-    fn is_descr_compatible(_descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
-        // Just a dummy, won't output anything anyway
-        Ok(())
-    }
-
-    fn is_lang_comptaible(_lang: &LanguageIdentifier) -> Result<(), TtsConstructionError> {
-        // Just a dummy, won't output anything anyway
-        Ok(())
-    }
-}
-
 // Factory /////////////////////////////////////////////////////////////////////
 pub struct TtsFactory;
 
@@ -187,9 +153,5 @@ impl TtsFactory {
                 Ok(local_tts)
             }
         }
-    }
-
-    pub fn dummy() -> Box<dyn Tts> {
-        Box::new(DummyTts::new())
     }
 }

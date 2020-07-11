@@ -2,12 +2,10 @@ use std::collections::HashMap;
 use std::convert::Into;
 use std::path::Path;
 
-use crate::python::try_translate;
 use crate::nlu::compare_sets_and_train;
 use crate::nlu::{EntityDef, Nlu, NluManager, NluResponse, NluResponseSlot, NluUtterance};
 
 use anyhow::{anyhow, Result};
-use log::warn;
 use regex::Regex;
 use serde::Serialize;
 use snips_nlu_lib::SnipsNluEngine;
@@ -193,10 +191,6 @@ impl Nlu for SnipsNlu {
         .map(|r|r.into())
         .map_err(|_|anyhow!("Failed snips NLU"))
     }
-
-    /*fn to_json(res: &snips_nlu_ontology::IntentParserResult ) -> Result<String> {
-        Ok(serde_json::to_string_pretty(&res)?)
-    }*/
 }
 
 impl Into<NluResponse> for snips_nlu_ontology::IntentParserResult {

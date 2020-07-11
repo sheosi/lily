@@ -40,3 +40,12 @@ not work with "--user"), and is going to be mantained (after the buy out of
 Snips, this is not so clear for Snips NLU). Note: DeepPavlov could also be
 pretty interesting.
 
+
+### Unused code
+
+Code that used to be useful and can be useful in the future but not right now
+and it's put behind a feature so that is not compiled (and so the compiler
+doesn't annoy us).
+
+- `unused_stt_batcher`: A STT bundle transforming a batched STT into a 
+streaming one.

@@ -1,10 +1,14 @@
 use crate::audio::AudioRaw;
-use crate::stt::{DecodeState, SttBatched, SttError, SttStream, SttVadless, SttInfo};
+use crate::stt::{DecodeState, SttError, SttStream, SttVadless, SttInfo};
 use crate::vad::Vad;
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
+P#[cfg(feature = "unused_stt_batcher")]
+use crate::stt::SttBatched;
+
 use log::warn;
 
+#[cfg(feature = "unused_stt_batcher")]
 pub struct SttBatcher<S: SttBatched, V: Vad> {
     batch_stt: S,
     vad: V,
@@ -12,13 +16,14 @@ pub struct SttBatcher<S: SttBatched, V: Vad> {
     someone_was_talking: bool
 }
 
+#[cfg(feature = "unused_stt_batcher")]
 impl<S: SttBatched, V: Vad> SttBatcher<S, V> {
     pub fn new(batch_stt: S, vad: V) -> Self {
         Self {vad, copy_audio: AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND), batch_stt, someone_was_talking: false}
     }
 }
 
-
+#[cfg(feature = "unused_stt_batcher")]
 impl<S: SttBatched, V: Vad> SttStream for SttBatcher<S, V> {
     fn begin_decoding(&mut self) -> Result<(),SttError> {
         self.copy_audio.clear();
