@@ -3,7 +3,7 @@ use crate::stt::{DecodeState, SttError, SttStream, SttVadless, SttInfo};
 use crate::vad::Vad;
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
-P#[cfg(feature = "unused_stt_batcher")]
+#[cfg(feature = "unused_stt_batcher")]
 use crate::stt::SttBatched;
 
 use log::warn;
