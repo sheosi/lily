@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use crate::audio::AudioRaw;
-use crate::stt::{SttInfo, SttConstructionError, SttBatched, OnlineSttError,SttError, SttVadless};
+use crate::stt::{DecodeRes, OnlineSttError, SttInfo, SttConstructionError, SttBatched,SttError, SttVadless};
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
@@ -48,7 +48,7 @@ impl IbmStt {
 
 impl SttBatched for IbmStt {
     
-    fn decode(&mut self, audio: &[i16]) -> Result<Option<(String, Option<String>, i32)>, SttError> {
+    fn decode(&mut self, audio: &[i16]) -> Result<Option<DecodeRes>, SttError> {
         Ok(self.engine.decode(&AudioRaw::new_raw(audio.to_vec(), DEFAULT_SAMPLES_PER_SECOND), &self.model)?)
     }
 
@@ -66,7 +66,7 @@ impl SttVadless for IbmStt {
         self.engine.live_process(&AudioRaw::new_raw(audio.to_vec(), 16000))?;
         Ok(())
     }
-    fn end_decoding(&mut self) -> Result<Option<(String, Option<String>, i32)>, SttError> {
+    fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError> {
         let res = self.engine.live_process_end()?;
         Ok(res)
     }
@@ -150,7 +150,7 @@ impl WatsonSocket {
 		Ok(())
 	}
 
-	fn get_answer(&mut self) -> Result<Option<(String, Option<String>, i32)>, OnlineSttError> {
+	fn get_answer(&mut self) -> Result<Option<DecodeRes>, OnlineSttError> {
 		// Ignore {"state": "listening"}
 		loop {
 			if let Message::Text(response_str) = self.socket.read_message().expect("Error reading message") {
@@ -162,7 +162,7 @@ impl WatsonSocket {
 
 							if !alternatives.is_empty() {
 								let res_str = &alternatives[0].transcript;
-								Some((res_str.to_string() , None, 0))
+								Some(DecodeRes{hypothesis: res_str.to_string()})
 							}
 							else {
 								None
@@ -258,7 +258,7 @@ impl IbmSttEngine {
 	}
 
 	// Send all audio in one big chunk
-	pub fn decode(&mut self, audio: &AudioRaw, model: &str) -> Result<Option<(String, Option<String>, i32)>, OnlineSttError> {
+	pub fn decode(&mut self, audio: &AudioRaw, model: &str) -> Result<Option<DecodeRes>, OnlineSttError> {
 		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key));
 		socket.send_order(WatsonOrder::Start);
 		socket.send_audio(audio)?;
@@ -291,7 +291,7 @@ impl IbmSttEngine {
 
 	    Ok(())
 	}
-	pub fn live_process_end(&mut self) -> Result<Option<(String, Option<String>, i32)>, OnlineSttError> {
+	pub fn live_process_end(&mut self) -> Result<Option<DecodeRes>, OnlineSttError> {
 		let socket = {
 			if let Some(ref mut sck) = self.curr_socket {
 				sck

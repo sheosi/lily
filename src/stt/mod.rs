@@ -47,7 +47,12 @@ pub enum DecodeState {
     NotStarted, 
     StartListening,
     NotFinished,
-    Finished(Option<(String, Option<String>, i32)>),
+    Finished(Option<DecodeRes>),
+}
+
+#[derive(PartialEq, Debug)]
+pub struct DecodeRes {
+    pub hypothesis: String
 }
 
 // An Stt which accepts an Stream
@@ -59,14 +64,14 @@ pub trait SttStream {
 
 // An Stt which accepts only audio batches
 pub trait SttBatched {
-    fn decode(&mut self, audio: &[i16]) -> Result<Option<(String, Option<String>, i32)>, SttError>;
+    fn decode(&mut self, audio: &[i16]) -> Result<Option<DecodeRes>, SttError>;
     fn get_info(&self) -> SttInfo;
 }
 
 pub trait SttVadless {
     fn begin_decoding(&mut self) -> Result<(), SttError>;
     fn process(&mut self, audio: &[i16]) -> Result<(), SttError>;
-    fn end_decoding(&mut self) -> Result<Option<(String, Option<String>, i32)>, SttError>;
+    fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError>;
     fn get_info(&self) -> SttInfo;
 }
 

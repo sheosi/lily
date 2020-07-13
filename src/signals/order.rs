@@ -11,6 +11,7 @@ use crate::config::Config;
 use crate::interfaces::{CURR_INTERFACE, DirectVoiceInterface, UserInterface};
 use crate::nlu::{Nlu, NluManager, NluResponseSlot, NluUtterance, EntityInstance, EntityDef, EntityData};
 use crate::python::{try_translate, try_translate_all};
+use crate::stt::DecodeRes;
 use crate::signals::{OrderMap, SignalEvent};
 use crate::vars::*;
 
@@ -193,16 +194,15 @@ impl SignalOrder {
     }
 
 
-    fn received_order(&mut self, decode_res: Option<(String, Option<String>, i32)>, event_signal: &mut SignalEvent, base_context: &PyDict) -> Result<()> {
+    fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: &mut SignalEvent, base_context: &PyDict) -> Result<()> {
         match decode_res {
-            None => warn!("Not recognized"),
-            Some((hypothesis, _utt_id, _score)) => {
+            None => event_signal.call("empty_reco", &base_context)?,
+            Some(decode_res) => {
                 
-
-                if !hypothesis.is_empty() {
+                if !decode_res.hypothesis.is_empty() {
                     match self.nlu {
                         Some(ref mut nlu) => {
-                            let result = nlu.parse(&hypothesis).map_err(|err|anyhow!("Failed to parse: {:?}", err))?;
+                            let result = nlu.parse(&decode_res.hypothesis).map_err(|err|anyhow!("Failed to parse: {:?}", err))?;
                             info!("{:?}", result);
                             let score = result.confidence;
                             info!("Score: {}",score);

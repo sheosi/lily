@@ -7,10 +7,6 @@ use cpal::traits::{DeviceTrait, HostTrait, EventLoopTrait};
 #[cfg(feature = "devel_cpal_rec")]
 use cpal::{SampleFormat, StreamId};
 #[cfg(feature = "devel_cpal_rec")]
-use std::sync::Arc;
-#[cfg(feature = "devel_cpal_rec")]
-use std::sync::atomic::{AtomicBool, Ordering};
-#[cfg(feature = "devel_cpal_rec")]
 use ringbuf::{Consumer, RingBuffer};
 
 pub trait Recording {

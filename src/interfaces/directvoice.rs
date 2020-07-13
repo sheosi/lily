@@ -8,7 +8,7 @@ use crate::config::Config;
 use crate::hotword::{HotwordDetector, Snowboy};
 use crate::interfaces::{SharedOutput, UserInterface, UserInterfaceOutput};
 use crate::signals::SignalEvent;
-use crate::stt::{SttFactory, DecodeState, SttStream};
+use crate::stt::{DecodeRes, DecodeState, SttFactory, SttStream};
 use crate::tts::{VoiceDescr, Gender, Tts, TtsFactory};
 use crate::vars::*;
 
@@ -60,10 +60,7 @@ impl DirectVoiceInterface {
         Ok(DirectVoiceInterface{stt, output})
     }
 
-
-    
-
-    pub fn interface_loop<F: FnMut( Option<(String, Option<String>, i32)>, &mut SignalEvent)->Result<()>> (&mut self, config: &Config, signal_event: &mut SignalEvent, base_context: &PyDict, mut callback: F) -> Result<()> {
+    pub fn interface_loop<F: FnMut( Option<DecodeRes>, &mut SignalEvent)->Result<()>> (&mut self, config: &Config, signal_event: &mut SignalEvent, base_context: &PyDict, mut callback: F) -> Result<()> {
         let mut record_device = RecDevice::new()?;
         let mut _play_device = PlayDevice::new();
 

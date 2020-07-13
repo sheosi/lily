@@ -1,5 +1,5 @@
 use crate::audio::AudioRaw;
-use crate::stt::{calc_threshold, DecodeState, SttConstructionError, SttError, SttStream, SttInfo};
+use crate::stt::{calc_threshold, DecodeRes, DecodeState, SttConstructionError, SttError, SttStream, SttInfo};
 use crate::vad::{Vad, VadError};
 use crate::vars::*;
 use crate::path_ext::ToStrResult;
@@ -70,7 +70,8 @@ impl SttStream for Pocketsphinx {
             if self.is_speech_started {
                 self.is_speech_started = false;
                 self.decoder.end_utt()?;
-                Ok(DecodeState::Finished(self.decoder.get_hyp()))
+                let res = self.decoder.get_hyp().map(|(hypothesis, _, _)| DecodeRes{hypothesis});
+                Ok(DecodeState::Finished(res))
             } else {
                 // TODO: Check this
                 Ok(DecodeState::NotStarted)

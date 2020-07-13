@@ -121,10 +121,11 @@ def answer(output):
 
 @action(name = "say")
 class Say():
-    def trigger_action(args, context):
+    def trigger_action(self, args, context):
         answer(translate(args, context))
 
 @action(name = "play_file")
 class PlayFile():
-    def trigger_action(args, _context):
+    def trigger_action(self, args, _context):
         _lily_impl.__play_file(args)
+str_input = "tusa"
