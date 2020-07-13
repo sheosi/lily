@@ -31,3 +31,14 @@ data1 = garaje
 data2 = cuarto
 
 say_repeat = Repito {$what_to_repeat}
+
+lily_unknown = Vale, eso no lo he entendido
+    .a_1 = Seguro que puedo hacer eso?
+    .a_2 = Creo que me hará falta un pluguin para hacer eso
+    .a_3 = No puedo hacerlo, por que no pruebas con Google?
+    .a_4 = Lo siento, no he entendido lo que me has dicho
+    .a_5 = Creo que eso está más allás de mis límites
+    .a_6 = No es del tipo de cosas que sepa hacer
+    .a_7 = Ojalá pudiese ayudarte con eso
+    .a_8 = Algún día podré hacerlo, aunque hoy no
+    .a_9 = Nop, no sé hacer eso

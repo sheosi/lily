@@ -1,10 +1,4 @@
-say_hello:
-  signals:
-    order: $order_say_hello
-
-  actions:
-    say: $say_hello_i18n
-
+# Events #########################################################################
 lily_start: # Called by lily executable when it's ready to serve petitions
   signals:
     event: lily_start
@@ -12,6 +6,34 @@ lily_start: # Called by lily executable when it's ready to serve petitions
   actions:
     say: $lily_start
 
+init_reco: # Called by executable when starts listening, the sound is causing problems now so it's disabled
+  signals:
+      event: init_reco
+
+  actions: # We'll play a file for the time being
+    play_file: sounds/beep.ogg
+
+unknown:
+  signals:
+    event: unknown
+  
+  actions:
+    say: $lily_unknown
+
+empty_reco: # Called by Lily when active voice ends and nothing is recorded
+  signals:
+    event: empty_reco
+
+  actions:
+    play_file: sound/end_recognition.ogg
+
+# Actions ########################################################################
+say_hello:
+  signals:
+    order: $order_say_hello
+
+  actions:
+    say: $say_hello_i18n
 
 say_name:
   signals:
@@ -19,14 +41,6 @@ say_name:
 
   actions:
     say: $say_name
-
-empty_reco: # Called by Lily when active voice ends and nothing is recorded
-  signals:
-    event: empty_reco
-
-  actions:
-    say: $say_hello_i18n
-
 
 repeat:
   signals:
@@ -44,13 +58,6 @@ repeat:
     
   actions:
     say: $say_repeat
-
-init_reco: # Called by executable when starts listening, the sound is causing problems now so it's disabled
-  signals:
-      event: init_reco
-
-  actions: # We'll play a file for the time being
-    play_file: sounds/beep.ogg
 
 say_time:
   signals:
