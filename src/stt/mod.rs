@@ -132,7 +132,7 @@ impl SttFactory {
 
     #[cfg(not(feature = "deepspeech_stt"))]
     fn make_local(lang: &LanguageIdentifier, audio_sample: &AudioRaw) -> Result<Box<dyn SttStream>, SttConstructionError> {
-        Ok(Pocketsphinx::new(lang, audio_sample)?)
+        Ok(Box::new(Pocketsphinx::new(lang, audio_sample)?))
     }
 
 
