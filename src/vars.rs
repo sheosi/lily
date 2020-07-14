@@ -50,11 +50,13 @@ pub const NO_COMPATIBLE_LANG_MSG: &str = "Lang negotiation failed, even though a
 pub const ALPHA_BETA_MSG: &str = "Setting alpha and beta failed, though this shouldn't happen";
 #[cfg(feature = "deepspeech_stt")]
 pub const SET_BEAM_MSG: &str = "Setting beam's width this wasn't expected to happen";
+#[cfg(feature = "deepspeech_stt")]
 pub const DEEPSPEECH_READ_FAIL_MSG: &str = "Failed to read deepspeech's folder";
 // Other
 pub const LILY_VER: &str = "0.1";
-pub const DEFAULT_HOTWORD_SENSITIVITY: f32 = 0.45;
+pub const DEFAULT_HOTWORD_SENSITIVITY: f32 = 0.43;
 pub const MIN_SCORE_FOR_ACTION: f32 = 0.3;
 pub const DEFAULT_SAMPLES_PER_SECOND: u32 = 16000;
-pub const HOTWORD_CHECK_INTERVAL_MS: u16 = 100; // Larger = less CPU, more wait time
-pub const RECORD_BUFFER_SIZE: usize = 8096;
+pub const HOTWORD_CHECK_INTERVAL_MS: u16 = 25; // Larger = less CPU, more wait time
+pub const ACTIVE_LISTENING_INTERVAL_MS: u16 = 50; // Larger = less CPU, more wait time
+pub const RECORD_BUFFER_SIZE: usize = 16_192; // This is large for the times Lily is busy doing other things

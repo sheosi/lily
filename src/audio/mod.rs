@@ -144,12 +144,13 @@ impl AudioRaw {
         // More frame time, sligtly less overhead more problematic packet loses,
         // a frame time of 20ms is considered good enough for most applications
         const FRAME_TIME_MS: u32 = 20;
-        const FRAME_SAMPLES: u32 = 16000 * 1 * FRAME_TIME_MS / 1000;
+        const FRAME_SAMPLES: u32 = (16000 * 1 * FRAME_TIME_MS) / 1000;
 
         let mut buffer: Vec<u8> = Vec::new();
         {
             let mut packet_writer = ogg::PacketWriter::new(&mut buffer);
             let mut opus_encoder = opus::Encoder::new(16000, opus::Channels::Mono, opus::Application::Audio)?;
+
 
             let max = {
                 ((self.buffer.len() as f32 / FRAME_SAMPLES as f32).ceil() as u32) - 1
@@ -180,7 +181,7 @@ impl AudioRaw {
             packet_writer.write_packet(Box::new(OPUS_HEAD), 1, ogg::PacketWriteEndInfo::EndPage, 0)?;
             packet_writer.write_packet(opus_tags.into_boxed_slice(), 1, ogg::PacketWriteEndInfo::EndPage, 0)?;
 
-            for counter in 0..max - 1{
+            for counter in 0..max{
                 let pos_a: usize = calc(counter);
                 let pos_b: usize = calc(counter + 1);
 
@@ -191,7 +192,7 @@ impl AudioRaw {
                 
 
                 let end_info = {
-                    if counter != max - 2 {
+                    if max == 0 || (counter != max - 1) {
                         ogg::PacketWriteEndInfo::NormalPacket
                     }
                     else {

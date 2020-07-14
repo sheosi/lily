@@ -17,6 +17,7 @@ use cpython::PyDict;
 use log::{info, warn};
 use unic_langid::LanguageIdentifier;
 
+#[derive(PartialEq)]
 enum ProgState {
     WaitingForHotword,
     Listening,
@@ -82,23 +83,24 @@ impl DirectVoiceInterface {
         record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
         hotword_detector.start_hotword_check()?; 
 
-           loop {
-            let microphone_data = match record_device.read_for_ms(HOTWORD_CHECK_INTERVAL_MS)? {
-                Some(d) => d,
-                None => continue,
-            };
+            loop {
+                let interval =
+                    if current_state == ProgState::WaitingForHotword {HOTWORD_CHECK_INTERVAL_MS}
+                    else {ACTIVE_LISTENING_INTERVAL_MS};
+
+                let microphone_data = match record_device.read_for_ms(interval)? {
+                    Some(d) => d,
+                    None => continue,
+                };
 
 
             match current_state {
                 ProgState::WaitingForHotword => {
                     match hotword_detector.check_hotword(microphone_data)? {
                         true => {
-                            // Don't record for a moment
-                            record_device.stop_recording().expect(AUDIO_REC_STOP_ERR_MSG);
                             current_state = ProgState::Listening;
                             signal_event.call("init_reco", &base_context)?;
                             info!("Hotword detected");
-                            record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
                             // This could take a while 
                             self.stt.begin_decoding()?;
                         }
