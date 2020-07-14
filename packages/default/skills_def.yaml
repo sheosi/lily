@@ -16,7 +16,7 @@ init_reco: # Called by executable when starts listening, the sound is causing pr
 unknown:
   signals:
     event: unknown
-  
+
   actions:
     say: $lily_unknown
 
@@ -25,7 +25,7 @@ empty_reco: # Called by Lily when active voice ends and nothing is recorded
     event: empty_reco
 
   actions:
-    play_file: sound/end_recognition.ogg
+    play_file: sounds/end_recognition.ogg
 
 # Actions ########################################################################
 say_hello:
@@ -48,14 +48,14 @@ repeat:
       text: $order_repeat
       entities:
         what_to_repeat:
-          kind: 
+          kind:
             data:
               - $data1
               - $data2
-                  
+
           example: $data1
 
-    
+
   actions:
     say: $say_repeat
 

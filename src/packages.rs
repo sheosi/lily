@@ -30,17 +30,7 @@ impl IntoMapping for serde_yaml::Value {
 fn load_trans(python: Python, pkg_path: &Path, curr_lang: &LanguageIdentifier) -> Result<()>{
     let lily_py_mod = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
 
-    let canon_path = pkg_path.canonicalize()?;
-
-    let pkg_name = {
-        let os_str = canon_path.file_name().ok_or_else(||anyhow!("Can't get package path's name"))?;
-        let pkg_name_str = os_str.to_str().ok_or_else(||anyhow!("Can't transform package path name to str"))?;
-        Rc::new(pkg_name_str.to_string())
-    };
-
-    std::env::set_current_dir(canon_path)?;
-
-    call_for_pkg(pkg_name, || lily_py_mod.call(python, "__set_translations", (curr_lang.to_string(),), None).map_err(|py_err|anyhow!("Python error while calling __set_translations: {:?}", py_err)))?;
+    call_for_pkg(pkg_path, |_| lily_py_mod.call(python, "__set_translations", (curr_lang.to_string(),), None).map_err(|py_err|anyhow!("Python error while calling __set_translations: {:?}", py_err)))??;
 
     Ok(())
 }
@@ -48,15 +38,8 @@ fn load_trans(python: Python, pkg_path: &Path, curr_lang: &LanguageIdentifier) -
 pub fn load_package(signal_order: &mut SignalOrder, signal_event: &mut SignalEvent, action_registry: &ActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) -> Result<()> {
     info!("Loading package: {}", path.to_str().ok_or_else(|| anyhow!("Failed to get the str from path {:?}", path))?);
 
-    // Set current Python module
-    let pkg_name =  {
-        let os_str = path.file_name().ok_or_else(||anyhow!("Can't get package path's name"))?;
-        let pkg_name_str = os_str.to_str().ok_or_else(||anyhow!("Can't transform package path name to str"))?;
-        Rc::new(pkg_name_str.to_string())
-    };
-
     let pkg_path = Rc::new(path.to_path_buf());
-    call_for_pkg::<_, Result<()>>(pkg_name.clone(), ||{
+    call_for_pkg::<_, Result<()>>(path, |pkg_name|{
 
         let yaml_path = path.join("skills_def.yaml");
         if yaml_path.is_file() {
@@ -121,7 +104,7 @@ pub fn load_package(signal_order: &mut SignalOrder, signal_event: &mut SignalEve
             }
         }
         Ok(())
-    })?;
+    })??;
 
     Ok(())
 }

@@ -40,12 +40,21 @@ impl RefString {
     }
 }
 
-pub fn call_for_pkg<F, R>(name: Rc<String>, f: F) -> R where F: FnOnce() -> R {
-    PYTHON_LILY_PKG.with(|c| c.set(name));
-    let r = f();
+fn extract_name(path: &Path) -> Result<Rc<String>> {
+    let os_str = path.file_name().ok_or_else(||anyhow!("Can't get package path's name"))?;
+    let pkg_name_str = os_str.to_str().ok_or_else(||anyhow!("Can't transform package path name to str"))?;
+    Ok(Rc::new(pkg_name_str.to_string()))
+}
+
+pub fn call_for_pkg<F, R>(path: &Path, f: F) -> Result<R> where F: FnOnce(Rc<String>) -> R {
+    let canon_path = path.canonicalize()?;
+    let pkg_name = extract_name(&canon_path)?;
+    std::env::set_current_dir(&canon_path)?;
+    PYTHON_LILY_PKG.with(|c| c.set(pkg_name.clone()));
+    let r = f(pkg_name);
     PYTHON_LILY_PKG.with(|c| c.clear());
 
-    r
+    Ok(r)
 }
 
 
