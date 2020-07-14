@@ -1,13 +1,14 @@
-use serde::Deserialize;
-use anyhow::{anyhow, Result};
-use crate::vars::{DEFAULT_HOTWORD_SENSITIVITY, MAIN_CONF_PATH, NO_KEY_MSG};
-use crate::stt::IbmSttData;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use crate::stt::IbmSttData;
+use crate::vars::{DEFAULT_HOTWORD_SENSITIVITY, MAIN_CONF_PATH, NO_KEY_MSG};
+use anyhow::{anyhow, Result};
+use serde::Deserialize;
 use serde_yaml::Value;
 
 thread_local! {
-     pub static GLOBAL_CONF: Rc<Config> = Rc::new(Config::default());
+     pub static GLOBAL_CONF: RefCell<Rc<Config>> = RefCell::new(Rc::new(Config::default()));
 }
 
 #[derive(Clone, Deserialize, Debug)]
@@ -83,7 +84,6 @@ impl Config {
     }
 
     pub fn get_package_path(&self, pkg_name: &str, pkg_path: &str) -> Option<&str> {
-
         self.pkgs_conf.get(pkg_name).and_then(|m| {
             let mut curr_map = m;
             for path_part in pkg_path.split("/") {

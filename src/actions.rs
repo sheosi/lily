@@ -118,7 +118,7 @@ impl ActionSet {
             // TODO: if an object doesn't implement trigger_action, don't panic, but decide what to do
             let trig_act = action.obj.getattr(py, "trigger_action").map_err(|py_err|anyhow!("Python error while accessing trigger_action: {:?}", py_err))?; 
             std::env::set_current_dir(action.lily_pkg_path.as_ref())?;
-            call_for_pkg(action.lily_pkg_path.as_ref(), |_|trig_act.call(py, (action.obj.clone_ref(py),action.args.clone_ref(py), context.clone_ref(py)), None).map_err(|py_err|{py_err.clone_ref(py).print(py);anyhow!("Python error while calling action: {:?}", py_err)}))??;
+            call_for_pkg(action.lily_pkg_path.as_ref(), |_|trig_act.call(py, (action.args.clone_ref(py), context.clone_ref(py)), None).map_err(|py_err|{py_err.clone_ref(py).print(py);anyhow!("Python error while calling action: {:?}", py_err)}))??;
         }
 
         Ok(())
