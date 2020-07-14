@@ -13,9 +13,9 @@ init_reco: # Called by executable when starts listening, the sound is causing pr
   actions: # We'll play a file for the time being
     play_file: sounds/beep.ogg
 
-unknown:
+unrecognized:
   signals:
-    event: unknown
+    event: unrecognized
 
   actions:
     say: $lily_unknown
