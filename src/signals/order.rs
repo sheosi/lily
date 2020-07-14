@@ -204,14 +204,12 @@ impl SignalOrder {
                         Some(ref mut nlu) => {
                             let result = nlu.parse(&decode_res.hypothesis).map_err(|err|anyhow!("Failed to parse: {:?}", err))?;
                             info!("{:?}", result);
-                            let score = result.confidence;
-                            info!("Score: {}",score);
 
                             // Do action if at least we are 80% confident on
                             // what we got
-                            if score >= MIN_SCORE_FOR_ACTION {
-                                info!("Let's call an action");
+                            if result.confidence >= MIN_SCORE_FOR_ACTION {
                                 if let Some(intent_name) = result.name {
+                                    info!("Let's call an action");
                                     let slots_context = add_slots(base_context,result.slots)?;
                                     self.order_map.call_order(&intent_name, &slots_context)?;
                                     info!("Action called");

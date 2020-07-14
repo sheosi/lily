@@ -15,6 +15,7 @@ mod interfaces;
 
 // Standard library
 use std::path::Path;
+use std::rc::Rc;
 
 // This crate
 use crate::vars::PACKAGES_PATH;
@@ -71,6 +72,8 @@ fn main() -> Result<()> {
 
     // Set language
     let config = get_conf();
+    crate::config::GLOBAL_CONF.with(|c|c.replace(Rc::new(config.clone())));
+
     println!("{:?}", config);
 
     let curr_lang : LanguageIdentifier = {

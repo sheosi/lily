@@ -85,7 +85,7 @@ pub fn load_package(signal_order: &mut SignalOrder, signal_event: &mut SignalEve
                     for (act_name, act_arg) in actions.into_iter() {
                         let gil = Python::acquire_gil();
                         let py = gil.python();
-                        act_set.borrow_mut().add_action(py, &act_name, &act_arg, &action_registry, pkg_name.clone(), pkg_path.clone())?;
+                        act_set.borrow_mut().add_action(py, &act_name, &act_arg, &action_registry, pkg_path.clone())?;
                     }
                     for (sig_name, sig_arg) in signals.into_iter() {
                         if sig_name == "order" {

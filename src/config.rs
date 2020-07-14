@@ -10,7 +10,7 @@ thread_local! {
      pub static GLOBAL_CONF: Rc<Config> = Rc::new(Config::default());
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct Config {
     #[serde(default = "false_val")]
     pub prefer_online_tts: bool,

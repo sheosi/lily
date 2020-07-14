@@ -249,9 +249,9 @@ fn play_file(py: Python, input: &str) -> PyResult<cpython::PyObject> {
 }
 
 fn get_conf_string(py: Python, input: &str) -> PyResult<cpython::PyObject> {
-    let curr_conf = crate::config::GLOBAL_CONF.with(|c|c.clone());
+    let curr_conf = crate::config::GLOBAL_CONF.with(|c|c.borrow().clone());
     let conf_data = PYTHON_LILY_PKG.with(|n| {
-        curr_conf.get_package_path(&n.borrow(), input)
+        curr_conf.get_package_path(&(&n).borrow(), input)
     });
     Ok(match conf_data {
         Some(string) => string.to_py_object(py).into_object(),
