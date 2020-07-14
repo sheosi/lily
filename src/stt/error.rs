@@ -30,7 +30,7 @@ pub enum SttConstructionError {
     #[error("Language not compatible")]
     LangIncompatible,
 
-    #[cfg(feature = "devel_deepspeech")]
+    #[cfg(feature = "deepspeech_stt")]
     #[error("Can't load files")]
     CantLoadFiles,
 }

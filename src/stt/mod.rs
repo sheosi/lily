@@ -3,7 +3,7 @@ mod error;
 mod ibm;
 mod pocketsphinx;
 
-#[cfg(feature = "devel_deepspeech")]
+#[cfg(feature = "deepspeech_stt")]
 mod deepspeech;
 
 pub use self::bundles::*;
@@ -11,7 +11,7 @@ pub use self::error::*;
 pub use self::ibm::*;
 pub use self::pocketsphinx::*;
 
-#[cfg(feature = "devel_deepspeech")]
+#[cfg(feature = "deepspeech_stt")]
 pub use self::deepspeech::*;
 
 use core::fmt::Display;
@@ -120,10 +120,25 @@ fn calc_threshold(audio: &AudioRaw) -> f64 {
 }
 
 impl SttFactory {
-    #[cfg(not(feature = "devel_deepspeech"))]
+    #[cfg(feature = "deepspeech_stt")]
+    fn make_local(lang: &LanguageIdentifier, audio_sample: &AudioRaw) -> Result<Box<dyn SttStream>, SttConstructionError> {
+        if DeepSpeechStt::is_lang_compatible(lang).is_ok() {
+            Ok(Box::new(SttVadlessInterface::new(DeepSpeechStt::new(lang)?, SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res")).unwrap())))    
+        }
+        else {
+            Ok(Box::new(Pocketsphinx::new(lang, audio_sample)?))
+        }
+    }
+
+    #[cfg(not(feature = "deepspeech_stt"))]
+    fn make_local(lang: &LanguageIdentifier, audio_sample: &AudioRaw) -> Result<Box<dyn SttStream>, SttConstructionError> {
+        Ok(Pocketsphinx::new(lang, audio_sample)?)
+    }
+
+
 	pub fn load(lang: &LanguageIdentifier, audio_sample: &AudioRaw, prefer_cloud: bool, ibm_data: Option<IbmSttData>) -> Result<Box<dyn SttStream>, SttConstructionError> {
 
-		let local_stt = Pocketsphinx::new(lang, audio_sample)?;
+		let local_stt = Self::make_local(lang, audio_sample)?;
         if prefer_cloud {
             info!("Prefer online Stt");
             if let Some(ibm_data_obj) = ibm_data {
@@ -133,16 +148,11 @@ impl SttFactory {
                 Ok(Box::new(SttFallback::new(online, local_stt)))
             }
             else {
-                Ok(Box::new(local_stt))
+                Ok(local_stt)
             }
         }
         else {
-            Ok(Box::new(local_stt))
+            Ok(local_stt)
         }
-    }
-    
-    #[cfg(feature = "devel_deepspeech")]
-    pub fn load(lang: &LanguageIdentifier, _prefer_cloud: bool, _gateway_key: Option<(String, String)>) -> Result<Box<dyn SttStream>, SttConstructionError> {
-        Ok(Box::new(SttVadlessInterface::new(DeepSpeechStt::new(lang)?, SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res")).unwrap())))
     }
 }

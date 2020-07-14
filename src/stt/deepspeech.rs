@@ -1,8 +1,12 @@
 use std::mem::replace;
-use crate::stt::{SpecifiesLangs, SttConstructionError, SttError, SttBatched, SttInfo, SttVadless};
-use crate::vars::{DEEPSPEECH_DATA_PATH, ALPHA_BETA_MSG, SET_BEAM_MSG};
+
+use crate::stt::{DecodeRes, SpecifiesLangs, SttConstructionError, SttError, SttBatched, SttInfo, SttVadless};
+use crate::vars::{ALPHA_BETA_MSG, DEEPSPEECH_DATA_PATH, DEEPSPEECH_READ_FAIL_MSG, SET_BEAM_MSG};
+
+use anyhow::anyhow;
 use deepspeech::{CandidateTranscript, Model, Stream};
-use unic_langid::{langid, langids, LanguageIdentifier};
+use log::warn;
+use unic_langid::{LanguageIdentifier};
 
 // Deepspeech
 pub struct DeepSpeechStt {
@@ -22,13 +26,15 @@ fn transcript_to_string(tr: &CandidateTranscript) -> String {
 impl DeepSpeechStt {
     pub fn new(curr_lang: &LanguageIdentifier) -> Result<Self, SttConstructionError> {
         const BEAM_WIDTH:u16 = 500;
+        const ALPHA: f32 = 0.931289039105002f32;
+        const BETA: f32 = 1.1834137581510284f32;
 
         let lang_str = curr_lang.to_string();
         let dir_path = DEEPSPEECH_DATA_PATH.resolve().join(&lang_str);
         if dir_path.is_dir() {
             let mut model = Model::load_from_files(&dir_path.join(&format!("{}.pbmm", &lang_str))).map_err(|_| SttConstructionError::CantLoadFiles)?;
             model.enable_external_scorer(&dir_path.join(&format!("{}.scorer", &lang_str)));
-            model.set_scorer_alpha_beta(0.931289039105002f32, 1.1834137581510284f32).expect(ALPHA_BETA_MSG);
+            model.set_scorer_alpha_beta(ALPHA, BETA).expect(ALPHA_BETA_MSG);
             model.set_model_beam_width(BEAM_WIDTH).expect(SET_BEAM_MSG);
 
             Ok(Self {model, current_stream: None})
@@ -40,11 +46,11 @@ impl DeepSpeechStt {
 }
 
 impl SttBatched for DeepSpeechStt {
-    fn decode(&mut self, audio: &[i16]) -> Result<Option<(String, Option<String>, i32)>, SttError> {
+    fn decode(&mut self, audio: &[i16]) -> Result<Option<DecodeRes>, SttError> {
         let metadata = self.model.speech_to_text_with_metadata(audio, 1).unwrap();
         let transcript = &metadata.transcripts()[0];
 
-        Ok(Some((transcript_to_string(transcript), None, transcript.confidence() as i32)))
+        Ok(Some(DecodeRes{hypothesis: transcript_to_string(transcript)}))
     }
 
     fn get_info(&self) -> SttInfo {
@@ -58,6 +64,7 @@ impl SttBatched for DeepSpeechStt {
 impl SttVadless for DeepSpeechStt {
     fn begin_decoding(&mut self) -> Result<(), SttError> {
         self.current_stream = Some(self.model.create_stream().unwrap());
+        Ok(())
     }
     fn process(&mut self, audio: &[i16]) -> Result<(), SttError> {
         match self.current_stream {
@@ -68,12 +75,12 @@ impl SttVadless for DeepSpeechStt {
         Ok(())
     }
 
-    fn end_decoding(&mut self) -> Result<Option<(String, Option<String>, i32)>, SttError> {
+    fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError> {
         let stream = replace(&mut self.current_stream, None).unwrap();
         let metadata = stream.finish_with_metadata(1).unwrap();
         let transcript = &metadata.transcripts()[0];
 
-        Ok(Some((transcript_to_string(transcript), None, transcript.confidence() as i32)))
+        Ok(Some(DecodeRes{hypothesis: transcript_to_string(transcript)}))
     }
 
     fn get_info(&self) -> SttInfo {
@@ -86,6 +93,41 @@ impl SttVadless for DeepSpeechStt {
 
 impl SpecifiesLangs for DeepSpeechStt {
     fn available_langs() -> Vec<LanguageIdentifier> {
-        langids!("en")
+
+        fn extract_data(entry: Result<std::fs::DirEntry, std::io::Error>) -> Result<Option<LanguageIdentifier>, anyhow::Error> {
+            let entry = entry.map_err(|_|anyhow!("Coudln't read an element of deepspeech path due to an intermittent IO error"))?;
+            let file_type = entry.file_type().map_err(|_|anyhow!("Couldn't get file type for {:?}", entry.path()))?;
+            if file_type.is_dir() {
+                let fname = entry.file_name().into_string().map_err(|e|anyhow!("Can't transform to string: {:?}", e))?;
+                let lang_id = fname.parse().map_err(|_| anyhow!("Can't parse {} as language identifier", fname))?;
+                Ok(Some(lang_id))
+            }
+            else {
+                Ok(None)
+            }
+        }
+
+        fn extract(entry: Result<std::fs::DirEntry, std::io::Error>) -> Option<LanguageIdentifier> {
+            match extract_data(entry) {
+                Ok(data) => {
+                    data
+                },
+                Err(e) => {
+                    warn!("{}", e);
+                    None
+                }
+            }
+        }
+
+        match DEEPSPEECH_DATA_PATH.resolve().read_dir() {
+            Ok(dir_it) => {
+                dir_it.filter_map(extract).collect()
+            },
+            Err(e) => {
+                warn!("{}:{}", DEEPSPEECH_READ_FAIL_MSG, e);
+                vec![]
+            }
+
+        }
     }
 }

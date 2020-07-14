@@ -15,6 +15,12 @@ some situations.
 - `google_tts`: Enable Google's TTS as online TTS which is used if IBM's data
 is not provided.
 
+- `deepspeech_stt`: Enabbled by default, use _deeepspeech_ as part of the
+voice recognition system.Still needs some testing, for the time it's enabled
+by default as it should be good enough in systems like the latest
+Raspberry pi. Note: In the future I would also like to try wav2letter, which
+is said to be the fastest AI-based Voice Recognition software.
+
 ### For developers
 
 Features that are in development, in the future they are expected to be the
@@ -25,12 +31,6 @@ of Sphinxad, though Sphinxad might be faster (at least it's pulseaudio
 implementation is very simple), not depending on it, makes building Lily easier,
 and makes us less dependent on pocketsphinx (which might be removed from being
 by default in the future).
-
-- `devel_deepspeech`: Use _deeepspeech_ as part of the voice recognition system.
-Still in testing, and it's actual future will depend on how it performs on
-systems like the latest Raspberry pi. Note: In the future I would also like to
-try wav2letter, which is said to be the fastest AI-based Voice Recognition
-software.
 
 
 - `devel_rasa_nlu`: Use _rasa_ as the NLU, instead of Snips, Rasa is much less

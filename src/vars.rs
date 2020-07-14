@@ -7,7 +7,7 @@ pub const NLU_TRAIN_SET_PATH: PathRef = PathRef::new("resources/nlu/train-set.js
 #[cfg(feature = "devel_rasa_nlu")]
 pub const NLU_RASA_PATH: PathRef = PathRef::new("resources/nlu/rasa/");
 pub const STT_DATA_PATH: PathRef = PathRef::new("resources/stt");
-#[cfg(feature = "devel_deepspeech")]
+#[cfg(feature = "deepspeech_stt")]
 pub const DEEPSPEECH_DATA_PATH: PathRef = PathRef::new("resources/stt/deepspeech");
 pub const PICO_DATA_PATH: PathRef = PathRef::new("resources/tts");
 pub const SNOWBOY_DATA_PATH: PathRef = PathRef::new("resources/hotword");
@@ -46,11 +46,11 @@ pub const PYDICT_SET_ERR_MSG :&str = "Failed while assigning an entry in PyDict"
 pub const NO_KEY_MSG: &str = "This shouldn't happen, a key checked beforehand is None";
 pub const NO_YAML_FLOAT_MSG: &str = "This shouldn't happen, a Yaml was checked as a number which is not an u64 was not an f64 either";
 pub const NO_COMPATIBLE_LANG_MSG: &str = "Lang negotiation failed, even though a default lang was provided";
-#[cfg(feature = "devel_deepspeech")]
+#[cfg(feature = "deepspeech_stt")]
 pub const ALPHA_BETA_MSG: &str = "Setting alpha and beta failed, though this shouldn't happen";
-#[cfg(feature = "devel_deepspeech")]
+#[cfg(feature = "deepspeech_stt")]
 pub const SET_BEAM_MSG: &str = "Setting beam's width this wasn't expected to happen";
-
+pub const DEEPSPEECH_READ_FAIL_MSG: &str = "Failed to read deepspeech's folder";
 // Other
 pub const LILY_VER: &str = "0.1";
 pub const DEFAULT_HOTWORD_SENSITIVITY: f32 = 0.45;

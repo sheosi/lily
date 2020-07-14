@@ -65,15 +65,15 @@ impl<S: SttBatched, V: Vad> SttStream for SttBatcher<S, V> {
 }
 
 
-pub struct SttFallback<S: SttStream, F: SttStream> {
+pub struct SttFallback<S: SttStream> {
     main_stt: S,
-    fallback: F,
+    fallback: Box<dyn SttStream>,
     copy_audio: AudioRaw,
     using_fallback: bool
 }
 
-impl<S: SttStream, F: SttStream> SttFallback<S, F> {
-    pub fn new(main_stt: S,fallback: F) -> Self {
+impl<S: SttStream> SttFallback<S> {
+    pub fn new(main_stt: S,fallback: Box<dyn SttStream>) -> Self {
         Self{main_stt, fallback,
             copy_audio: AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND), 
             using_fallback: false
@@ -81,7 +81,7 @@ impl<S: SttStream, F: SttStream> SttFallback<S, F> {
     }
 }
 
-impl<S: SttStream, F: SttStream> SttStream for SttFallback<S, F> {
+impl<S: SttStream> SttStream for SttFallback<S> {
     fn begin_decoding(&mut self) -> Result<(),SttError> {
         self.copy_audio.clear();
         self.main_stt.begin_decoding()?;

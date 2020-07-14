@@ -54,10 +54,10 @@ locale_config = "*" # Interact with the system locale, the * is suggestednby it'
 fluent-langneg = "^0.13" # Language negotiation
 
 [features]
-default = []
+default = ["devel_cpal_rec"]
 extra_langs_tts = ["espeak-ng-sys"]
 google_tts = ["google_translate_tts"]
+deepspeech_stt = ["deepspeech"]
 devel_cpal_rec = ["cpal", "ringbuf"]
-devel_deepspeech = ["deepspeech"]
 devel_rasa_nlu= []
 unused_stt_batcher= []
