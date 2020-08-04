@@ -1,11 +1,12 @@
 use std::time::Duration;
 use std::thread::sleep;
 use crate::audio::{Audio, Data};
-use rodio::{source::Source, decoder::DecoderError};
+use rodio::{source::Source, decoder::DecoderError, OutputStream, OutputStreamHandle};
 use thiserror::Error;
 
 pub struct PlayDevice {
-    device: rodio::Device
+    _stream: OutputStream, // We need to preserve this
+    stream_handle: OutputStreamHandle
 }
 
 #[derive(Error, Debug)]
@@ -18,15 +19,15 @@ pub enum PlayFileError {
 
 impl PlayDevice  {
     pub fn new() -> Option<PlayDevice> {
-        let device = rodio::default_output_device()?;
+        let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
         
-        Some(PlayDevice {device})
+        Some(PlayDevice {_stream, stream_handle})
     }
     
     pub fn play_file(&mut self, path: &str) -> Result<(), PlayFileError> {
         let file = std::fs::File::open(path)?;
         let source = rodio::Decoder::new(std::io::BufReader::new(file))?;
-        rodio::play_raw(&self.device, source.convert_samples());
+        self.stream_handle.play_raw(source.convert_samples()).unwrap();
 
         Ok(())
     }
@@ -35,12 +36,14 @@ impl PlayDevice  {
         match audio.buffer {
             Data::Raw(raw_data) => {
                 let source = rodio::buffer::SamplesBuffer::new(1, audio.samples_per_second, raw_data);
-                rodio::play_raw(&self.device, source.convert_samples());
+                self.stream_handle.play_raw(source.convert_samples()).unwrap();
+
                 Ok(())
             },
             Data::Encoded(enc_data) => {
                 let source = rodio::Decoder::new(std::io::Cursor::new(enc_data))?;
-                rodio::play_raw(&self.device, source.convert_samples());
+                self.stream_handle.play_raw(source.convert_samples()).unwrap();
+
                 Ok(())
             }
         }   

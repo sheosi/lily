@@ -3,11 +3,13 @@ use crate::vars::{CLOCK_TOO_EARLY_MSG, DEFAULT_SAMPLES_PER_SECOND, RECORD_BUFFER
 use log::info;
 
 #[cfg(feature = "devel_cpal_rec")]
-use cpal::traits::{DeviceTrait, HostTrait, EventLoopTrait};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 #[cfg(feature = "devel_cpal_rec")]
-use cpal::{SampleFormat, StreamId};
+use cpal::{BufferSize, SampleRate, Stream, StreamConfig};
 #[cfg(feature = "devel_cpal_rec")]
 use ringbuf::{Consumer, RingBuffer};
+#[cfg(feature = "devel_cpal_rec")]
+use log::error;
 
 pub trait Recording {
     fn read(&mut self) -> Result<Option<&[i16]>, std::io::Error>;
@@ -79,88 +81,60 @@ impl Recording for RecDevice {
 #[cfg(feature = "devel_cpal_rec")]
 pub struct RecDevice {
     external_buffer: [i16; RECORD_BUFFER_SIZE],
+    stream_data: Option<StreamData>
+}
+
+#[cfg(feature = "devel_cpal_rec")]
+struct StreamData {
     internal_buffer_consumer: Consumer<i16>,
     last_read: u128,
-    stream_id: StreamId
+    _stream: Stream
 }
 
 #[cfg(feature = "devel_cpal_rec")]
 impl RecDevice {
     // For now just use that error to original RecDevice
     pub fn new() -> Result<Self, std::io::Error> {
+
+        Ok(RecDevice {
+            external_buffer: [0i16; RECORD_BUFFER_SIZE],
+            stream_data: None
+        })
+
+    }
+
+    fn make_stream() -> (Stream, Consumer<i16>) {
         info!("Using cpal");
         let host = cpal::default_host();
         let device = host.default_input_device().unwrap();
-        let mut format = device.default_input_format().unwrap();
-        format.data_type = SampleFormat::I16;
-        format.channels = 1;
-        format.sample_rate = cpal::SampleRate(DEFAULT_SAMPLES_PER_SECOND);
-        let event_loop = host.event_loop();
-        let stream_id = event_loop.build_input_stream(&device, &format).unwrap();
-        event_loop.play_stream(stream_id.clone()).unwrap();
+        // TODO: Make sure audio is compatible with our application and/or negotiate
+        // device.default_input_config().unwrap();
+        let config = StreamConfig {
+            channels: 1,
+            sample_rate: SampleRate(DEFAULT_SAMPLES_PER_SECOND),
+            buffer_size: BufferSize::Default
+        };
 
         let internal_buffer = RingBuffer::new(RECORD_BUFFER_SIZE);
         let (mut prod, cons) = internal_buffer.split();
 
-        std::thread::spawn(move || {
-            event_loop.run(move |id, event|{
-                let data = match event {
-                    Ok(data) => data,
-                    Err(err) => {
-                        eprintln!("An error ocurred on stream {:?}: {}", id, err);
-                        return;
-                    }
-                };
+        let err_fn = move |err| {
+            error!("An error ocurred on stream: {}", err);
+        };
 
-                //Otherwise send data
-                match data {
-                    cpal::StreamData::Input {buffer: cpal::UnknownTypeInputBuffer::U16(buffer)} => {
-                        println!("Note: Recording using U16 translation code, has not been tested and may not work");
-                        let mut count = 0;
-                        prod.push_each(||{
-                            let res = if count < buffer.len() {
-                                Some(((buffer[count] as u32) - ((std::u16::MAX/2) as u32)) as i16)
-                            }
-                            else {
-                                None
-                            };
+        let stream = device.build_input_stream(
+            &config,
+            move |data: &[i16], _: &_| {
+                assert!(!prod.is_full());
+                prod.push_slice(&data);
+            },
+            err_fn
+        ).unwrap();
 
-                            count += 1;
-                            res
-                        });
-                    }
-                    cpal::StreamData::Input {buffer: cpal::UnknownTypeInputBuffer::I16(buffer)} => {
-                        prod.push_slice(&buffer);
-                    }
-                    cpal::StreamData::Input {buffer: cpal::UnknownTypeInputBuffer::F32(buffer)} => {
-                        println!("Note: Recording using F32 translation code, has not been tested and may not work");
-                        let mut count = 0;
-                        prod.push_each(||{
-                            let res = if count < buffer.len() {
-                                Some((buffer[count]  * (std::i16::MAX as f32)) as i16)
-                            }
-                            else {
-                                None
-                            };
+        // Do make sure stream is working
+        stream.play().unwrap();
 
-                            count += 1;
-                            res
-                        });
-                    }
-                    _ => {
-                        panic!("Received non-input data");
-                    }
-                }
-            })
-        });
-
-        Ok(RecDevice {
-            external_buffer: [0i16; RECORD_BUFFER_SIZE],
-            last_read: 0,
-            internal_buffer_consumer: cons,
-            stream_id
-        })
-
+        (stream, cons)
     }
 
     fn get_millis() -> u128 {
@@ -171,37 +145,54 @@ impl RecDevice {
 #[cfg(feature = "devel_cpal_rec")]
 impl Recording for RecDevice {
     fn read(&mut self) -> Result<Option<&[i16]>, std::io::Error> {
-        self.last_read = Self::get_millis();
-        let size = self.internal_buffer_consumer.pop_slice(&mut self.external_buffer[..]);
-        if size > 0 {
-            Ok(Some(&self.external_buffer[0..size]))
+        match self.stream_data {
+            Some(ref mut str_data) => {
+                str_data.last_read = Self::get_millis();
+                let size = str_data.internal_buffer_consumer.pop_slice(&mut self.external_buffer[..]);
+                if size > 0 {
+                    Ok(Some(&self.external_buffer[0..size]))
+                }
+                else {
+                    Ok(None)
+                }
+            },
+            None => {
+                panic!("Read called when a recdevice was stopped");
+            }
         }
-        else {
-            Ok(None)
-        }
+        
         
     }
     fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, std::io::Error> {
-        let curr_time = Self::get_millis();
-        let diff_time = (curr_time - self.last_read) as u16;
-        if milis > diff_time{
-            let sleep_time = (milis  - diff_time) as u64 ;
-            std::thread::sleep(Duration::from_millis(sleep_time));
+        match self.stream_data {
+            Some(ref mut str_data) => {
+                let curr_time = Self::get_millis();
+                let diff_time = (curr_time - str_data.last_read) as u16;
+                if milis > diff_time{
+                    let sleep_time = (milis  - diff_time) as u64 ;
+                    std::thread::sleep(Duration::from_millis(sleep_time));
+                }
+            },
+            None => {
+                panic!("read_for_ms called when a recdevice was stopped");
+            }
         }
 
         self.read()
     }
 
     fn start_recording(&mut self) -> Result<(), std::io::Error> {
-        let host = cpal::default_host();
-        let el = host.event_loop();
-        el.play_stream(self.stream_id.clone()).unwrap();
+        let (_stream, consumer) = Self::make_stream();
+        self.stream_data = Some(StreamData {
+            internal_buffer_consumer: consumer,
+            last_read: 0u128,
+            _stream
+        });
+
         Ok(())
     }
     fn stop_recording(&mut self) -> Result<(), std::io::Error> {
-        let host = cpal::default_host();
-        let el = host.event_loop();
-        el.pause_stream(self.stream_id.clone()).unwrap();
+        self.stream_data = None;
         Ok(())
     }
 }
