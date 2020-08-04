@@ -115,7 +115,7 @@ impl RecDevice {
             buffer_size: BufferSize::Default
         };
 
-        let internal_buffer = RingBuffer::new(RECORD_BUFFER_SIZE);
+        let internal_buffer = RingBuffer::new(RECORD_BUFFER_SIZE * 2);
         let (mut prod, cons) = internal_buffer.split();
 
         let err_fn = move |err| {
@@ -125,7 +125,6 @@ impl RecDevice {
         let stream = device.build_input_stream(
             &config,
             move |data: &[i16], _: &_| {
-                assert!(!prod.is_full());
                 prod.push_slice(&data);
             },
             err_fn

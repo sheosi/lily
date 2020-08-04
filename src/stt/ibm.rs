@@ -190,8 +190,10 @@ struct TokenCache {
 }
 
 impl TokenCache {
-	fn new() -> Self {
-		TokenCache{data: None}
+	fn new(api_key: &str) -> Self {
+		let mut res = TokenCache{data: None};
+		res.get(api_key);
+		res
 	}
 
 	fn gen_iam_token(api_key: &str) -> (String, u16) {
@@ -250,7 +252,7 @@ impl IbmSttEngine {
 			"London".to_owned() => "eu-gb",
 			"Seoul".to_owned() => "kr-seo"
 		};
-		IbmSttEngine{curr_socket: None, token_cache: TokenCache::new(), data: IbmSttData {
+		IbmSttEngine{curr_socket: None, token_cache: TokenCache::new(&data.api_key), data: IbmSttData {
 			api_key: data.api_key,
 			instance: data.instance,
 			gateway: location[&data.gateway].to_owned()

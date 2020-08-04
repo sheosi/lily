@@ -60,4 +60,4 @@ pub const MIN_SCORE_FOR_ACTION: f32 = 0.3;
 pub const DEFAULT_SAMPLES_PER_SECOND: u32 = 16000;
 pub const HOTWORD_CHECK_INTERVAL_MS: u16 = 20; // Larger = less CPU, more wait time
 pub const ACTIVE_LISTENING_INTERVAL_MS: u16 = 50; // Larger = less CPU, more wait time
-pub const RECORD_BUFFER_SIZE: usize = 8_000; // This ammounts for half a second
+pub const RECORD_BUFFER_SIZE: usize = 32_000; // This ammounts for 2s of audio

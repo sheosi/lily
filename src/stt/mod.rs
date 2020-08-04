@@ -145,6 +145,7 @@ impl SttFactory {
                 info!("Construct online Stt");
                 let vad = SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res")).unwrap();
                 let online = SttVadlessInterface::new(IbmStt::new(lang,ibm_data_obj)?,vad);
+                //let online = SttBatcher::new(IbmStt::new(lang,ibm_data_obj)?,vad);
                 Ok(Box::new(SttFallback::new(online, local_stt)))
             }
             else {
