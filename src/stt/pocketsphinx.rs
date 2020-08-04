@@ -1,18 +1,19 @@
+use std::ffi::CString;
+
 use crate::audio::AudioRaw;
 use crate::stt::{calc_threshold, DecodeRes, DecodeState, SttConstructionError, SttError, SttStream, SttInfo};
 use crate::vad::{Vad, VadError};
 use crate::vars::*;
 use crate::path_ext::ToStrResult;
 
-use pocketsphinx::{PsDecoder, CmdLn};
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
+use libc::mkfifo;
+use pocketsphinx::{PsDecoder, CmdLn};
 use unic_langid::{LanguageIdentifier, langid, langids};
 pub struct Pocketsphinx {
     decoder: PsDecoder,
     is_speech_started: bool,
 }
-
-
 
 impl Pocketsphinx {
     pub fn new(lang: &LanguageIdentifier, audio_sample: &AudioRaw) -> Result<Self, SttConstructionError> {
@@ -21,6 +22,8 @@ impl Pocketsphinx {
         let stt_path = STT_DATA_PATH.resolve();
         let ener_threshold = calc_threshold(audio_sample);
 
+        let ps_log = PS_LOG_PATH.resolve();
+        let ps_log_str = ps_log.to_str().unwrap();
         let config = CmdLn::init( 
             true,
             &[  
@@ -31,7 +34,7 @@ impl Pocketsphinx {
                 stt_path.join(&iso_str).join(iso_str.to_string() + ".lm.bin").to_str_res()?,
                 "-dict",
                 stt_path.join(&iso_str).join("cmudict-".to_owned() + &iso_str + ".dict").to_str_res()?,
-                "-logfn", "nul",
+                "-logfn", ps_log_str,
                 "-vad_threshold", &ener_threshold.to_string()
 
             ]

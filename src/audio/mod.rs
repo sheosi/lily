@@ -192,11 +192,11 @@ impl AudioRaw {
                 
 
                 let end_info = {
-                    if max == 0 || (counter != max - 1) {
-                        ogg::PacketWriteEndInfo::NormalPacket
+                    if counter == max - 1 {
+                        ogg::PacketWriteEndInfo::EndStream
                     }
                     else {
-                        ogg::PacketWriteEndInfo::EndStream
+                        ogg::PacketWriteEndInfo::NormalPacket
                     }
                 };
 

@@ -20,6 +20,7 @@ Lily is written in Rust + Python.
 - libopus-dev
 - clang
 - libgsl-dev
+- vorbis-utils (needs ogg123 while git rodio isn't working properly)
 ```
 
 Optional dependency for feature `extra_langs_tts` (Languages not provided by Pico Tts for local Tts):

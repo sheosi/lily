@@ -25,9 +25,10 @@ impl PlayDevice  {
     }
     
     pub fn play_file(&mut self, path: &str) -> Result<(), PlayFileError> {
-        let file = std::fs::File::open(path)?;
+        /*let file = std::fs::File::open(path)?;
         let source = rodio::Decoder::new(std::io::BufReader::new(file))?;
-        self.stream_handle.play_raw(source.convert_samples()).unwrap();
+        self.stream_handle.play_raw(source.convert_samples()).unwrap();*/
+        std::process::Command::new("/usr/bin/ogg123").args(&["-q",path]).status().unwrap();
 
         Ok(())
     }

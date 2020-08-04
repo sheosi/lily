@@ -15,6 +15,7 @@ pub const PYTHON_SDK_PATH: PathRef = PathRef::new("resources/python");
 pub const PACKAGES_PATH: PathRef = PathRef::new("packages");
 pub const LAST_SPEECH_PATH: PathRef = PathRef::new("last_speech.ogg");
 pub const MAIN_CONF_PATH: PathRef = PathRef::new("conf.yaml");
+pub const PS_LOG_PATH: PathRef = PathRef::new("resources/stt/pocketsphinx.log");
 
 lazy_static! {
     static ref ORG_PATH: PathBuf = std::env::current_dir().expect("Couldn't get current_dir").canonicalize().expect("Failed to canonicalize current_dir");
@@ -57,6 +58,6 @@ pub const LILY_VER: &str = "0.1";
 pub const DEFAULT_HOTWORD_SENSITIVITY: f32 = 0.43;
 pub const MIN_SCORE_FOR_ACTION: f32 = 0.3;
 pub const DEFAULT_SAMPLES_PER_SECOND: u32 = 16000;
-pub const HOTWORD_CHECK_INTERVAL_MS: u16 = 25; // Larger = less CPU, more wait time
+pub const HOTWORD_CHECK_INTERVAL_MS: u16 = 20; // Larger = less CPU, more wait time
 pub const ACTIVE_LISTENING_INTERVAL_MS: u16 = 50; // Larger = less CPU, more wait time
-pub const RECORD_BUFFER_SIZE: usize = 16_192; // This is large for the times Lily is busy doing other things
+pub const RECORD_BUFFER_SIZE: usize = 8_000; // This ammounts for half a second

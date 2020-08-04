@@ -24,3 +24,4 @@ last_speech.ogg
 *.sublime-workspace
 *.sublime-project
 .vscode/settings.json
+resources/stt/pocketsphinx.log

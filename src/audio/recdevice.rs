@@ -93,8 +93,9 @@ struct StreamData {
 
 #[cfg(feature = "devel_cpal_rec")]
 impl RecDevice {
-    // For now just use that error to original RecDevice
+    // For now, just use that error to original RecDevice
     pub fn new() -> Result<Self, std::io::Error> {
+        info!("Using cpal");
 
         Ok(RecDevice {
             external_buffer: [0i16; RECORD_BUFFER_SIZE],
@@ -104,7 +105,6 @@ impl RecDevice {
     }
 
     fn make_stream() -> (Stream, Consumer<i16>) {
-        info!("Using cpal");
         let host = cpal::default_host();
         let device = host.default_input_device().unwrap();
         // TODO: Make sure audio is compatible with our application and/or negotiate
