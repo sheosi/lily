@@ -1,5 +1,3 @@
-use std::ffi::CString;
-
 use crate::audio::AudioRaw;
 use crate::stt::{calc_threshold, DecodeRes, DecodeState, SttConstructionError, SttError, SttStream, SttInfo};
 use crate::vad::{Vad, VadError};
@@ -7,7 +5,6 @@ use crate::vars::*;
 use crate::path_ext::ToStrResult;
 
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
-use libc::mkfifo;
 use pocketsphinx::{PsDecoder, CmdLn};
 use unic_langid::{LanguageIdentifier, langid, langids};
 pub struct Pocketsphinx {
@@ -23,7 +20,7 @@ impl Pocketsphinx {
         let ener_threshold = calc_threshold(audio_sample);
 
         let ps_log = PS_LOG_PATH.resolve();
-        let ps_log_str = ps_log.to_str().unwrap();
+        let ps_log_str = ps_log.to_str().expect("Pocketsphinx path is not UTF-8 compatible, this is not supported");
         let config = CmdLn::init( 
             true,
             &[  

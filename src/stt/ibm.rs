@@ -11,7 +11,7 @@ use tungstenite::{client::AutoStream, connect, Message, WebSocket};
 use serde::{Deserialize, Serialize};
 use url::Url;
 use unic_langid::{LanguageIdentifier, langid, langids};
-
+use log::warn;
 
 pub struct IbmStt {
     engine: IbmSttEngine,
@@ -111,17 +111,17 @@ enum WatsonOrder {
 
 impl WatsonSocket {
 
-	fn new(model: &str, data: IbmSttData, token: &str) -> Self {
+	fn new(model: &str, data: IbmSttData, token: &str) -> Result<Self, OnlineSttError> {
 		let url_str = format!("wss://api.{}.speech-to-text.watson.cloud.ibm.com/instances/{}/v1/recognize", data.gateway, data.instance);
 		let (socket, _response) =
 			connect(Url::parse_with_params(&url_str,&[
 				("access_token", token),
 				("model", model)
-			]).unwrap()).expect("Can't connect");
-		Self{socket}
+			])?)?;
+		Ok(Self{socket})
 	}
 
-	fn send_order(&mut self, order: WatsonOrder) {
+	fn send_order(&mut self, order: WatsonOrder) -> Result<(), OnlineSttError> {
 		#[derive(Serialize)]
 		struct WatsonOrderInternal<'a> {
 			action: &'a str,
@@ -135,17 +135,17 @@ impl WatsonSocket {
 			WatsonOrder::Start => WatsonOrderInternal{action: "start", content_type: Some("audio/ogg")},
 			WatsonOrder::Stop => WatsonOrderInternal{action: "stop", content_type: None}
 		};
-		let order_str = serde_json::to_string(&order).unwrap();
+		let order_str = serde_json::to_string(&order)?;
 		self.socket
-		.write_message(Message::Text(order_str))
-		.unwrap();
+		.write_message(Message::Text(order_str))?;
+
+		Ok(())
 	}
 
 	fn send_audio(&mut self, audio: &AudioRaw) -> Result<(), OnlineSttError> {
 		let as_ogg = audio.to_ogg_opus()?;
 		self.socket
-		.write_message(Message::Binary(as_ogg))
-		.unwrap();
+		.write_message(Message::Binary(as_ogg))?;
 
 		Ok(())
 	}
@@ -179,9 +179,11 @@ impl WatsonSocket {
 	
 	}
 
-	fn close(mut self) {
-		self.socket.close(None).unwrap();
+	fn close(mut self) -> Result<(), OnlineSttError> {
+		self.socket.close(None)?;
 		// TODO: Make sure we get Error::ConnectionClosed
+
+		Ok(())
 	}
 }
 
@@ -192,11 +194,14 @@ struct TokenCache {
 impl TokenCache {
 	fn new(api_key: &str) -> Self {
 		let mut res = TokenCache{data: None};
-		res.get(api_key);
+		if let Err(err) = res.get(api_key) {
+			warn!("Initial IBM API key couldn't be obtained, continuing regardless: {:?}", err);
+		}
+
 		res
 	}
 
-	fn gen_iam_token(api_key: &str) -> (String, u16) {
+	fn gen_iam_token(api_key: &str) -> Result<(String, u16), OnlineSttError> {
 		#[derive(Debug, Deserialize)]
 		struct IamResponse {
 			access_token: String,
@@ -207,15 +212,15 @@ impl TokenCache {
 		let url = Url::parse_with_params("https://iam.cloud.ibm.com/identity/token", &[
 			("grant_type", "urn:ibm:params:oauth:grant-type:apikey"),
 			("apikey", api_key)
-			]).unwrap();
+			])?;
 		let resp = clnt.post(url)
 		.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-		.header(header::ACCEPT, "application/json").send().unwrap();
-		let resp: IamResponse =  resp.json().unwrap();
-		(resp.access_token, resp.expires_in)
+		.header(header::ACCEPT, "application/json").send()?;
+		let resp: IamResponse =  resp.json()?;
+		Ok((resp.access_token, resp.expires_in))
 	}
 
-	fn get(&mut self, api_key: &str) -> &str {
+	fn get(&mut self, api_key: &str) -> Result<&str, OnlineSttError> {
 		let must_redo = if let Some(ref data) = self.data {
 			Instant::now() > data.1
 		}
@@ -226,12 +231,12 @@ impl TokenCache {
 		if must_redo {
 			// A token is valid for 3600 seconds (60 minutes), but to be on the 
 			// safe side let's give it 3480 seconds (58 minutes).
-			let (token, valid_time) = Self::gen_iam_token(api_key);
+			let (token, valid_time) = Self::gen_iam_token(api_key)?;
 			self.data = Some((token, Instant::now() + Duration::new((valid_time - (2 * 60)).into(),0)));
 		}
 
 		if let Some(ref data) = self.data  {
-			&data.0
+			Ok(&data.0)
 		}
 		else {
 			panic!("TokenCache.data has no value, but we just set it");
@@ -261,19 +266,21 @@ impl IbmSttEngine {
 
 	// Send all audio in one big chunk
 	pub fn decode(&mut self, audio: &AudioRaw, model: &str) -> Result<Option<DecodeRes>, OnlineSttError> {
-		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key));
-		socket.send_order(WatsonOrder::Start);
+		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key)?)?;
+		socket.send_order(WatsonOrder::Start)?;
 		socket.send_audio(audio)?;
-		socket.send_order(WatsonOrder::Stop);
+		socket.send_order(WatsonOrder::Stop)?;
 		let res = socket.get_answer();
-		socket.close();
+		if let Err(err) =  socket.close() {
+			warn!("Error while closing websocket: {:?}", err);
+		}
 
 		res
 	}
 
 	pub fn live_process_begin(&mut self, model: &str) -> Result<(), OnlineSttError> {
-		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key));
-		socket.send_order(WatsonOrder::Start);
+		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key)?)?;
+		socket.send_order(WatsonOrder::Start)?;
 		self.curr_socket = Some(socket);
 		
 		Ok(())
@@ -303,9 +310,13 @@ impl IbmSttEngine {
 			}
 		};
 
-		socket.send_order(WatsonOrder::Stop);
+		socket.send_order(WatsonOrder::Stop)?;
 		let res = socket.get_answer();
-		std::mem::replace(&mut self.curr_socket, None).unwrap().close();
+		if let Some(sock) = std::mem::replace(&mut self.curr_socket, None) {
+			if let Err(err) =  sock.close() {
+				warn!("Error while closing websocket: {:?}", err);
+			}
+		}
 
 		res
 	}

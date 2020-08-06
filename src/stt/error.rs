@@ -10,7 +10,11 @@ pub enum SttError {
     OnlineError(#[from] OnlineSttError),
 
     #[error("Error from the vad")]
-    Vad(#[from] crate::vad::VadError)
+    Vad(#[from] crate::vad::VadError),
+
+    #[cfg(feature = "deepspeech_stt")]
+    #[error("Deepspeech error")]
+    Deepspeech(#[from] deepspeech::errors::DeepspeechError)
 }
 
 #[derive(Error, Debug)]
@@ -53,5 +57,8 @@ pub enum OnlineSttError {
 	JsonParse(#[from] serde_json::Error),
 
 	#[error("opus encoding")]
-	OpusEncode(#[from] opus::Error)
+    OpusEncode(#[from] opus::Error),
+
+    #[error("Websocket failure")]
+	WebSocket(#[from] tungstenite::Error)
 }

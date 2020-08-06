@@ -24,7 +24,7 @@ pub struct EspeakTts {
 }
 
 unsafe fn  from_lang_and_prefs(lang: &LanguageIdentifier, prefs: &VoiceDescr) -> *mut espeak_VOICE {
-    let lang = CString::new(lang.language.as_str()).unwrap();
+    let lang = CString::new(lang.language.as_str()).expect("Language name had some internal nul character");
     let gender = match prefs.gender {
         Gender::Male => 1,
         Gender::Female => 2
@@ -49,8 +49,20 @@ enum CallbackResponse {
 }
 
 extern "C" fn espeak_callback(wav: *mut c_short, num_samples: c_int, _: *mut espeak_EVENT) -> c_int {
-    let wav_slc = unsafe {std::slice::from_raw_parts(wav, num_samples.try_into().unwrap())};
-    (*SOUND_BUFFER).lock().unwrap().borrow_mut().extend_from_slice(wav_slc);
+    let wav_slc = unsafe {std::slice::from_raw_parts(wav, num_samples.try_into().expect("The received number of parts can't fit in a usize, is it negative?"))};
+    match (*SOUND_BUFFER).lock() {
+        Ok(buffer) => {
+            buffer.borrow_mut().extend_from_slice(wav_slc);
+        },
+        Err(poisoned) => {
+            warn!("Espeak TTS buffer was corrupted");
+            let mut new_buffer = Vec::new();
+            new_buffer.extend_from_slice(wav_slc);
+            poisoned.into_inner().borrow_mut().replace(new_buffer);
+        }
+
+    }
+
 
     CallbackResponse::Continue as c_int
 }
@@ -75,18 +87,28 @@ impl Tts for EspeakTts {
         unsafe {espeak_Synth(synth_cstr.as_ptr() as *const libc::c_void , input.len() as usize, 0, espeak_POSITION_TYPE::POS_CHARACTER, 0, synth_flags, std::ptr::null_mut(), std::ptr::null_mut());}
 
 
-        Ok(Audio::new_raw(SOUND_BUFFER.lock().unwrap().replace(Vec::new()), DEFAULT_SAMPLES_PER_SECOND))
+        match SOUND_BUFFER.lock() {
+            Ok(buffer) => Ok(Audio::new_raw(buffer.replace(Vec::new()), DEFAULT_SAMPLES_PER_SECOND)),
+            Err(poisoned) => Ok(){
+                warn!("Espeak TTS buffer was corrupted");
+                poisoned.into_inner().replace(Vec::new());
+                Audio::new_empty(DEFAULT_SAMPLES_PER_SECOND)
+            }
+        }
+
     }
 
     fn get_info(&self) -> TtsInfo {
-        let (info, _data_path) = unsafe {
+        //let (info, _data_path) = unsafe {
+        let info = unsafe {
             let mut c_buf = std::ptr::null();
-            let info = CStr::from_ptr(espeak_Info(&mut c_buf)).to_str().unwrap();
-            let c_str = CStr::from_ptr(c_buf);
-            let str_slice: &str = c_str.to_str().unwrap();
-            let data_path: String = str_slice.to_owned(); // if necessary*
+            let info = CStr::from_ptr(espeak_Info(&mut c_buf)).to_str().unwrap_or("(Info can't be read)");
+            //let c_str = CStr::from_ptr(c_buf);
+            //let str_slice: &str = c_str.to_str().expect("Can't read espeak data path");
+            //let data_path: String = str_slice.to_owned(); // if necessary*
 
-            (info, data_path)
+            //(info, data_path)
+            info
         };
 
 

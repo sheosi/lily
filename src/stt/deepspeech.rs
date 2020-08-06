@@ -50,7 +50,7 @@ impl DeepSpeechStt {
 
 impl SttBatched for DeepSpeechStt {
     fn decode(&mut self, audio: &[i16]) -> Result<Option<DecodeRes>, SttError> {
-        let metadata = self.model.speech_to_text_with_metadata(audio, 1).unwrap();
+        let metadata = self.model.speech_to_text_with_metadata(audio, 1)?;
         let transcript = &metadata.transcripts()[0];
 
         Ok(Some(DecodeRes{hypothesis: transcript_to_string(transcript)}))
@@ -66,7 +66,7 @@ impl SttBatched for DeepSpeechStt {
 
 impl SttVadless for DeepSpeechStt {
     fn begin_decoding(&mut self) -> Result<(), SttError> {
-        self.current_stream = Some(self.model.create_stream().unwrap());
+        self.current_stream = Some(self.model.create_stream()?);
         Ok(())
     }
     fn process(&mut self, audio: &[i16]) -> Result<(), SttError> {
@@ -79,8 +79,8 @@ impl SttVadless for DeepSpeechStt {
     }
 
     fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError> {
-        let stream = replace(&mut self.current_stream, None).unwrap();
-        let metadata = stream.finish_with_metadata(1).unwrap();
+        let stream = replace(&mut self.current_stream, None).ok_or_else(||panic!("end_decoding can't be called before begin decoding"));
+        let metadata = stream.finish_with_metadata(1)?;
         let transcript = &metadata.transcripts()[0];
 
         Ok(Some(DecodeRes{hypothesis: transcript_to_string(transcript)}))

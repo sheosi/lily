@@ -123,7 +123,7 @@ impl SttFactory {
     #[cfg(feature = "deepspeech_stt")]
     fn make_local(lang: &LanguageIdentifier, audio_sample: &AudioRaw) -> Result<Box<dyn SttStream>, SttConstructionError> {
         if DeepSpeechStt::is_lang_compatible(lang).is_ok() {
-            Ok(Box::new(SttVadlessInterface::new(DeepSpeechStt::new(lang)?, SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res"))?))
+            Ok(Box::new(SttVadlessInterface::new(DeepSpeechStt::new(lang)?, SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res"))?)))
         }
         else {
             Ok(Box::new(Pocketsphinx::new(lang, audio_sample)?))
