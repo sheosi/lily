@@ -33,6 +33,9 @@ pub enum SttConstructionError {
     #[cfg(feature = "deepspeech_stt")]
     #[error("Can't load files")]
     CantLoadFiles,
+
+    #[error("Vad couldn't be constructed")]
+    CantConstrucVad(#[from] crate::vad::VadError)
 }
 
 #[derive(Error,Debug)]

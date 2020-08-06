@@ -10,12 +10,32 @@ use cpal::{BufferSize, SampleRate, Stream, StreamConfig};
 use ringbuf::{Consumer, RingBuffer};
 #[cfg(feature = "devel_cpal_rec")]
 use log::error;
+#[cfg(feature = "devel_cpal_rec")]
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum RecordingError {
+    #[error("Failed to do I/O operations")]
+    IoError(#[from]std::io::Error),
+
+    #[cfg(feature = "devel_cpal_rec")]
+    #[error("No input device")]
+    NoInputDevice,
+
+    #[cfg(feature = "devel_cpal_rec")]
+    #[error("Couldn't build stream")]
+    BuildStream(#[from] cpal::BuildStreamError),
+
+    #[cfg(feature = "devel_cpal_rec")]
+    #[error("Failed to play the stream")]
+    PlayStreamError(#[from] cpal::PlayStreamError)
+}
 
 pub trait Recording {
-    fn read(&mut self) -> Result<Option<&[i16]>, std::io::Error>;
-    fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, std::io::Error>;
-    fn start_recording(&mut self) -> Result<(), std::io::Error>;
-    fn stop_recording(&mut self) -> Result<(), std::io::Error>;
+    fn read(&mut self) -> Result<Option<&[i16]>, RecordingError>;
+    fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, RecordingError>;
+    fn start_recording(&mut self) -> Result<(), RecordingError>;
+    fn stop_recording(&mut self) -> Result<(), RecordingError>;
 }
 
 #[cfg(not(feature = "devel_cpal_rec"))]
@@ -27,7 +47,7 @@ pub struct RecDevice {
 
 #[cfg(not(feature = "devel_cpal_rec"))]
 impl RecDevice {
-    pub fn new() -> Result<RecDevice, std::io::Error> {
+    pub fn new() -> Result<RecDevice, RecordingError> {
         info!("Using sphinxad");
         //let host = cpal::default_host();
         //let device = host.default_input_device().expect("Something failed");
@@ -49,12 +69,12 @@ impl RecDevice {
 
 #[cfg(not(feature = "devel_cpal_rec"))]
 impl Recording for RecDevice {
-    fn read(&mut self) -> Result<Option<&[i16]>, std::io::Error> {
+    fn read(&mut self) -> Result<Option<&[i16]>, RecordingError> {
         self.last_read = Self::get_millis();
         self.device.read(&mut self.buffer[..])
     }
 
-    fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, std::io::Error> {
+    fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, RecordingError> {
         let curr_time = Self::get_millis();
         let diff_time = (curr_time - self.last_read) as u16;
         if milis > diff_time{
@@ -68,11 +88,11 @@ impl Recording for RecDevice {
         self.read()
     }
 
-    fn start_recording(&mut self) -> Result<(), std::io::Error> {
+    fn start_recording(&mut self) -> Result<(), RecordingError> {
         self.last_read = SystemTime::now().duration_since(UNIX_EPOCH).expect(CLOCK_TOO_EARLY_MSG).as_millis();
         self.device.start_recording()
     }
-    fn stop_recording(&mut self) -> Result<(), std::io::Error> {
+    fn stop_recording(&mut self) -> Result<(), RecordingError> {
         self.device.stop_recording()
     }
 }
@@ -93,9 +113,8 @@ struct StreamData {
 
 #[cfg(feature = "devel_cpal_rec")]
 impl RecDevice {
-    // For now, just use that error to original RecDevice
-    pub fn new() -> Result<Self, std::io::Error> {
-        info!("Using cpal");
+    // For now just use that error to original RecDevice
+    pub fn new() -> Result<Self, RecordingError> {
 
         Ok(RecDevice {
             external_buffer: [0i16; RECORD_BUFFER_SIZE],
@@ -104,11 +123,12 @@ impl RecDevice {
 
     }
 
-    fn make_stream() -> (Stream, Consumer<i16>) {
+    fn make_stream() -> Result<(Stream, Consumer<i16>), RecordingError> {
+        info!("Using cpal");
         let host = cpal::default_host();
-        let device = host.default_input_device().unwrap();
+        let device = host.default_input_device().ok_or(RecordingError::NoInputDevice)?;
         // TODO: Make sure audio is compatible with our application and/or negotiate
-        // device.default_input_config().unwrap();
+        // device.default_input_config()?;
         let config = StreamConfig {
             channels: 1,
             sample_rate: SampleRate(DEFAULT_SAMPLES_PER_SECOND),
@@ -128,12 +148,12 @@ impl RecDevice {
                 prod.push_slice(&data);
             },
             err_fn
-        ).unwrap();
+        )?;
 
         // Do make sure stream is working
-        stream.play().unwrap();
+        stream.play()?;
 
-        (stream, cons)
+        Ok((stream, cons))
     }
 
     fn get_millis() -> u128 {
@@ -143,7 +163,7 @@ impl RecDevice {
 
 #[cfg(feature = "devel_cpal_rec")]
 impl Recording for RecDevice {
-    fn read(&mut self) -> Result<Option<&[i16]>, std::io::Error> {
+    fn read(&mut self) -> Result<Option<&[i16]>, RecordingError> {
         match self.stream_data {
             Some(ref mut str_data) => {
                 str_data.last_read = Self::get_millis();
@@ -162,7 +182,7 @@ impl Recording for RecDevice {
         
         
     }
-    fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, std::io::Error> {
+    fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, RecordingError> {
         match self.stream_data {
             Some(ref mut str_data) => {
                 let curr_time = Self::get_millis();
@@ -180,8 +200,8 @@ impl Recording for RecDevice {
         self.read()
     }
 
-    fn start_recording(&mut self) -> Result<(), std::io::Error> {
-        let (_stream, consumer) = Self::make_stream();
+    fn start_recording(&mut self) -> Result<(), RecordingError> {
+        let (_stream, consumer) = Self::make_stream()?;
         self.stream_data = Some(StreamData {
             internal_buffer_consumer: consumer,
             last_read: 0u128,
@@ -190,7 +210,7 @@ impl Recording for RecDevice {
 
         Ok(())
     }
-    fn stop_recording(&mut self) -> Result<(), std::io::Error> {
+    fn stop_recording(&mut self) -> Result<(), RecordingError> {
         self.stream_data = None;
         Ok(())
     }

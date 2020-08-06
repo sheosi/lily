@@ -43,7 +43,7 @@ impl ActionRegistry {
     }
 
     pub fn add_folder(&mut self, python: Python, actions_path: &Path) -> Result<()> {
-        call_for_pkg::<_, Result<()>>(actions_path.parent().unwrap(), |_|{
+        call_for_pkg::<_, Result<()>>(actions_path.parent().ok_or_else(||anyhow!("Can't get parent of path, this is an invalid path for python data"))?, |_|{
             // Add folder to sys.path
             add_to_sys_path(python, actions_path).map_err(|py_err|anyhow!("Python error while adding to sys.path: {:?}", py_err))?;
             info!("Add folder: {}", actions_path.to_str().ok_or_else(||anyhow!("Coudln't transform actions_path into string"))?);
@@ -66,7 +66,7 @@ impl ActionRegistry {
             };
 
             for (key, val) in  action_classes {
-                self.map.insert(key.to_string(), val.call(python, PyTuple::empty(python), None).unwrap());
+                self.map.insert(key.to_string(), val.call(python, PyTuple::empty(python), None).map_err(|py_err|anyhow!("Python error while creating an instance of an action class: {:?}", py_err))?);
             }
 
             Ok(())

@@ -72,7 +72,6 @@ impl Tts for EspeakTts {
         let synth_cstr = CString::new(input.to_string())?;
         let synth_flags = espeakCHARS_AUTO | espeakPHONEMES | espeakENDPAUSE;
 
-        // input.len().try_into().unwrap() -> size_t is the same as usize
         unsafe {espeak_Synth(synth_cstr.as_ptr() as *const libc::c_void , input.len() as usize, 0, espeak_POSITION_TYPE::POS_CHARACTER, 0, synth_flags, std::ptr::null_mut(), std::ptr::null_mut());}
 
 

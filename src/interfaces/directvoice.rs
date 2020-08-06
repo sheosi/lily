@@ -12,7 +12,7 @@ use crate::stt::{DecodeRes, DecodeState, SttFactory, SttStream};
 use crate::tts::{VoiceDescr, Gender, Tts, TtsFactory};
 use crate::vars::*;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use cpython::PyDict;
 use log::{info, warn};
 use unic_langid::LanguageIdentifier;
@@ -49,7 +49,19 @@ impl DirectVoiceInterface {
         let mut record_device = RecDevice::new()?;
         record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
         sleep(Duration::from_millis(ENERGY_SAMPLING_TIME_MS));
-        let audio_sample = AudioRaw::new_raw(record_device.read()?.unwrap().to_owned(), DEFAULT_SAMPLES_PER_SECOND);
+        let audio_sample = {
+            match record_device.read()? {
+                Some(buffer) => {
+                    AudioRaw::new_raw(buffer.to_owned(), DEFAULT_SAMPLES_PER_SECOND)
+                }
+                None => {
+                    warn!("Couldn't obtain mic input data for energy sampling while loading");
+                    AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND)
+                }
+            }
+
+        };
+
         record_device.stop_recording()?;
 
         let stt = SttFactory::load(curr_lang, &audio_sample,  config.prefer_online_stt, ibm_stt_gateway_key)?;
@@ -161,7 +173,7 @@ impl DirectVoiceInterfaceOutput {
 impl UserInterfaceOutput for DirectVoiceInterfaceOutput {
     fn answer(&mut self, input: &str) -> Result<()> {
         let audio = self.tts.synth_text(input)?;
-        PlayDevice::new().ok_or_else(||anyhow!("Couldn't obtain play stream"))?.wait_audio(audio)?;
+        PlayDevice::new()?.wait_audio(audio)?;
         Ok(())
     }
 }

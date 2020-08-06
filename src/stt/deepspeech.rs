@@ -17,7 +17,10 @@ pub struct DeepSpeechStt {
 fn transcript_to_string(tr: &CandidateTranscript) -> String {
     let mut res = String::new();
     for token in tr.tokens() {
-        res += token.text().unwrap();
+        match token.text() {
+            Ok(text) =>  {res += text}
+            Err(err) => {warn!("Part of transcript ({:?}) couldn't be transformed: {:?}", tr, err)}
+        }
     }
 
     res

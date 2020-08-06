@@ -123,7 +123,7 @@ impl SttFactory {
     #[cfg(feature = "deepspeech_stt")]
     fn make_local(lang: &LanguageIdentifier, audio_sample: &AudioRaw) -> Result<Box<dyn SttStream>, SttConstructionError> {
         if DeepSpeechStt::is_lang_compatible(lang).is_ok() {
-            Ok(Box::new(SttVadlessInterface::new(DeepSpeechStt::new(lang)?, SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res")).unwrap())))    
+            Ok(Box::new(SttVadlessInterface::new(DeepSpeechStt::new(lang)?, SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res"))?))
         }
         else {
             Ok(Box::new(Pocketsphinx::new(lang, audio_sample)?))
@@ -143,7 +143,7 @@ impl SttFactory {
             info!("Prefer online Stt");
             if let Some(ibm_data_obj) = ibm_data {
                 info!("Construct online Stt");
-                let vad = SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res")).unwrap();
+                let vad = SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res"))?;
                 let online = SttVadlessInterface::new(IbmStt::new(lang,ibm_data_obj)?,vad);
                 //let online = SttBatcher::new(IbmStt::new(lang,ibm_data_obj)?,vad);
                 Ok(Box::new(SttFallback::new(online, local_stt)))

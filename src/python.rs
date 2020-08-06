@@ -235,16 +235,12 @@ fn log_error(python: Python, input: &str) -> PyResult<cpython::PyObject>  {
 }
 
 fn play_file(py: Python, input: &str) -> PyResult<cpython::PyObject> {
-    if let Some(mut play_dev) = PlayDevice::new() {
-        if let Err(err) = play_dev.play_file(input) {
-            Err(PyErr::new::<exc::OSError, _>(py, format!("Couldn't play file \"{}\": {}",input, err)))
-        }
-        else {
-            Ok(py.None())
-        }
+    let mut play_dev = PlayDevice::new().map_err(|err|PyErr::new::<exc::OSError, _>(py, format!("Couldn't obtain play stream, reason: {:?}", err)))?;
+    if let Err(err) = play_dev.play_file(input) {
+        Err(PyErr::new::<exc::OSError, _>(py, format!("Couldn't play file \"{}\": {}",input, err)))
     }
     else {
-        Err(PyErr::new::<exc::OSError, _>(py, "Couldn't obtain play stream"))
+        Ok(py.None())
     }
 }
 
