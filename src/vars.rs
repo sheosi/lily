@@ -2,7 +2,9 @@ use std::path::PathBuf;
 use lazy_static::lazy_static;
 
 // Paths
+#[cfg(not(feature = "devel_rasa_nlu"))]
 pub const NLU_ENGINE_PATH: PathRef = PathRef::new("resources/nlu/engine");
+#[cfg(not(feature = "devel_rasa_nlu"))]
 pub const NLU_TRAIN_SET_PATH: PathRef = PathRef::new("resources/nlu/train-set.json");
 #[cfg(feature = "devel_rasa_nlu")]
 pub const NLU_RASA_PATH: PathRef = PathRef::new("resources/nlu/rasa/");

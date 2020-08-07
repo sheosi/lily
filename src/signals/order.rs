@@ -188,7 +188,7 @@ impl SignalOrder {
         };
 
         info!("Init Nlu");
-        self.nlu = Some(RasaNlu::new(&train_path));
+        self.nlu = Some(RasaNlu::new(&train_path)?);
         
         res
     }

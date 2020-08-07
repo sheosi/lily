@@ -7,25 +7,29 @@ use std::process::{Child, Command};
 use crate::nlu::{compare_sets_and_train, try_open_file_and_check, write_contents};
 use crate::nlu::{EntityDef, EntityData, Nlu, NluManager, NluResponse, NluResponseSlot, NluUtterance};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use reqwest::blocking;
+use log::error;
 use maplit::hashmap;
 use serde::{Serialize, Deserialize};
 use serde_yaml::Value;
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 
+
 pub struct RasaNlu {
     client: blocking::Client,
-    process: Child
+    _process: Child
 }
 
 impl RasaNlu {
-    pub fn new(model_path: &Path) -> Self {
-        let process = Command::new("rasa").args(&["run", "--enable-api", "-m", model_path.as_os_str().to_str().unwrap()]).spawn().unwrap();
+    pub fn new(model_path: &Path) -> Result<Self> {
+        let mod_path_str =model_path.to_str().ok_or_else(||anyhow!("Can't use provided path to rasa NLU data contains non-UTF8 characters"))?;
+        let process_res = Command::new("rasa").args(&["run", "--enable-api", "-m", mod_path_str]).spawn();
+        let _process = process_res.map_err(|err|anyhow!("Rasa can't be executed: {:?}", err))?;
         let client = blocking::Client::new();
 
-        Self{client, process}
+        Ok(Self{client, _process})
 
     }
 }
@@ -218,15 +222,42 @@ fn transform_intents(org: Vec<(String, Vec<NluUtterance>)>) -> Vec<RasaNluCommmo
                     NluUtterance::WithEntities{text, entities: conf_entities} => {
                         let mut entities = Vec::with_capacity(conf_entities.len());
                         for (name_ent, entity) in conf_entities.into_iter() {
-                            let start = text.find(&entity.example).unwrap();
-                            let en = RasaNluEntity {
-                                start: start.try_into().unwrap(),
-                                end: (start + entity.example.len()).try_into().unwrap(),
-                                value: entity.example,
-                                entity: name_ent
-                            };
+                            match text.find(&entity.example) {
+                                Some(start_usize) => {
 
-                            entities.push(en);
+                                    match start_usize.try_into() {
+                                        Ok(start) => {
+                                            let res: Result<u32,_> = entity.example.len().try_into();
+                                            match  res {
+                                                Ok(len_u32)=> {
+                                                    let end = start + len_u32;
+                                                    let en = RasaNluEntity {
+                                                        start,
+                                                        end,
+                                                        value: entity.example,
+                                                        entity: name_ent
+                                                    };
+
+                                                    entities.push(en);
+                                                }
+
+                                                Err(_) => {
+                                                    error!("The length of \"{}\" is far too big (more than a u32), this is not supported", entity.example);
+                                                }
+                                            }
+
+                                        },
+                                        Err(_) => {
+                                            error!("The index at which the example \"{}\" starts is greater than a u32, and this is not supported today, report this.", entity.example);
+                                        }
+                                    }
+
+                                }
+                                None => {
+                                    error!("Entity text \"{}\" doesn't have example \"{}\" as detailed in the YAML data, won't be taken into account", text, entity.example);
+                                }
+                            }
+                            
                         }
 
                         RasaNluCommmonExample {
