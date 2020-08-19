@@ -1,11 +1,12 @@
 // Standard library
+use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
 
 // This crate
 use crate::vars::{PYTHON_SDK_PATH, PACKAGES_PATH_ERR_MSG, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
 use crate::python::call_for_pkg;
-use crate::actions::{ActionSet, ActionRegistry};
+use crate::actions::{ActionSet, ActionRegistry, LocalActionRegistry};
 use crate::signals::{SignalOrder, SignalEvent};
 
 // Other crates
@@ -35,7 +36,7 @@ fn load_trans(python: Python, pkg_path: &Path, curr_lang: &LanguageIdentifier) -
     Ok(())
 }
 
-pub fn load_package(signal_order: &mut SignalOrder, signal_event: &mut SignalEvent, action_registry: &ActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) -> Result<()> {
+pub fn load_package(signal_order: &mut SignalOrder, signal_event: &mut SignalEvent, action_registry: &LocalActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) -> Result<()> {
     info!("Loading package: {}", path.to_str().ok_or_else(|| anyhow!("Failed to get the str from path {:?}", path))?);
 
     let pkg_path = Rc::new(path.to_path_buf());
@@ -116,18 +117,16 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<(Sig
     let gil = Python::acquire_gil();
     let py = gil.python();
 
-    let action_registry = ActionRegistry::new_with_no_trans(py, &PYTHON_SDK_PATH.resolve())?;
-
+    let mut global_registry = Rc::new(RefCell::new(ActionRegistry::new()));
+    let mut base_registry = LocalActionRegistry::new(global_registry.clone(), py, &PYTHON_SDK_PATH.resolve())?;
 
     info!("PACKAGES_PATH:{}", path.to_str().ok_or_else(|| anyhow!("Can't transform the package path {:?}", path))?);
     for entry in std::fs::read_dir(path).expect(PACKAGES_PATH_ERR_MSG) {
         let entry = entry?.path();
         if entry.is_dir() {
             load_trans(py, &entry, curr_lang)?;
-            load_package(&mut signal_order, &mut signal_event, &action_registry.clone_try_adding(py, &entry.join("python"))?, &entry, curr_lang)?;
+            load_package(&mut signal_order, &mut signal_event, &base_registry.try_add_and_clone(py, &entry.join("python"))?, &entry, curr_lang)?;
         }
-
-        info!("{:?}", action_registry);
     }
 
     signal_order.end_loading(curr_lang)?;
