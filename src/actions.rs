@@ -59,7 +59,6 @@ impl ActionRegistry {
             let name = key.to_string();
             // We'll get old items, let's ignore them
             if !self.map.contains_key(&name) {
-                println!("Initting: {}", &name);
                 let pyobj = val.call(python, PyTuple::empty(python), None).map_err(|py_err|anyhow!("Python error while instancing action \"{}\": {:?}", name, py_err))?;
                 res.insert(name.clone(), pyobj.clone_ref(python));
                 self.map.insert(name, pyobj);
