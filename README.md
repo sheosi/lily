@@ -1,5 +1,10 @@
 # lily
 
+***Note: This could be called the 'dev' branch so things might be rough***
+
+This branch contains the new lily code for multiple client, with an architecture
+of client/server using MQTT + MsgPack.
+
 A local open-source voice assistant with an NLU
 
 Lily is written in Rust + Python.
