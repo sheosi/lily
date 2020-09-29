@@ -37,7 +37,11 @@ impl PlayDevice  {
         let source = rodio::Decoder::new(std::io::BufReader::new(file))?;
 
         self.stream_handle.play_raw(source.convert_samples())?;*/
-		std::process::Command::new("/usr/bin/ogg123").args(&["-q",path]).status().unwrap();
+        std::process::Command::new("/usr/bin/ogg123").args(&["-q",path])
+            .status()
+            .map_err(
+                |err|PlayAudioError::PlayError(format!("ogg123 failed: {:?}", err))
+            )?;
 
         Ok(())
     }

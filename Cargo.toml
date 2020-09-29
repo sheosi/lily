@@ -15,11 +15,15 @@ anyhow = "^1.0" # For error handling overall in the app
 thiserror = "^1.0" # For error handling in parts that can be made their own crate
 regex = "^1.3" # To parse configuration
 ctrlc = "^3.1" # To catch ctrl-c in all platforms and exit the program
+# Some async deps
+#tokio = {version = "^0.2", features = ["full"]}
+#futures = "^0.3"
+#async-trait = "^0.1"
 
 rsnowboy = {git = "https://github.com/sheosi/rsnowboy"} # Hotword detector
 #vad = "0.1.5" # Note: Had to be disabled because syntex_syntax was causing problems
 pocketsphinx = "^0.6.0" # Offline Stt
-deepspeech = {version = "^0.7", optional = true} # More correct and better (also slower) Stt 
+deepspeech = {version = "^0.8", optional = true} # More correct and better (also slower) Stt 
 sphinxad = "^0.1" # Recording library
 cpal = {version = "^0.12", optional = true} # For recording (future substitute of sphinxad)
 ringbuf = {version = "^0.2", optional = true} # Send what is recorded from the consumer to the producer
@@ -43,10 +47,10 @@ log = "^0.4" # Common API for logging so we can change backend easily
 
 #Cloud-based
 google_translate_tts = {version = "0.1.2", optional = true} # Format TTS URLs
-reqwest = {version="^0.10", features=["default-tls", "blocking", "json"]} # HTTP client
+reqwest = {version = "^0.10", features = ["default-tls", "blocking", "json"]} # HTTP client
 url = "^2.1"
 base64 = "^0.12" # For sending data to the online TTS and STT
-tungstenite = "0.11.0" # Web sockets for online STT
+tungstenite = "^0.11" # Web sockets for online STT
 
 # Localization
 unic-langid = {version="^0.9", features = ["macros"]} # For parsing Unicode Language Identifiers

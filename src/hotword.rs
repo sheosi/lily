@@ -1,6 +1,6 @@
 use std::path::Path;
 use crate::vad::{Vad, VadError};
-use log::{debug, info};
+use log::info;
 use anyhow::{anyhow, Result};
 use thiserror::Error;
 
@@ -10,16 +10,11 @@ pub trait HotwordDetector {
 }
 
 pub struct Snowboy {
-    vad: crate::vad::SnowboyVad,
     detector: rsnowboy::SnowboyDetect,
-    someone_talking: bool
 }
-
 
 impl Snowboy {
     pub fn new(model_path: &Path, res_path: &Path, sensitivity: f32) -> Result<Snowboy> {
-
-        let vad = crate::vad::SnowboyVad::new(res_path)?;
 
         let res_path_str = res_path.to_str().ok_or_else(||anyhow!("Failed to transform resource path to unicode {:?}", res_path))?;
         let model_path_str = model_path.to_str().ok_or_else(||anyhow!("Failed to transform model path to unicode {:?}", model_path))?;
@@ -29,7 +24,7 @@ impl Snowboy {
         detector.set_audio_gain(1.0);
         detector.apply_frontend(false);
 
-        Ok(Snowboy {vad, detector, someone_talking: true})
+        Ok(Snowboy {detector})
     }
 
     pub fn detector_check(&mut self, audio: &[i16]) -> i32 {
@@ -40,50 +35,16 @@ impl Snowboy {
 impl HotwordDetector for Snowboy {
     fn start_hotword_check(&mut self) -> Result<(), VadError> {
         self.detector.reset();
-        self.vad.reset()?;
-        //self.someone_talking = false;
         info!("WaitingForHotword");
 
         Ok(())
     }
 
     fn check_hotword(&mut self, audio: &[i16]) -> Result<bool> {
-        if !self.someone_talking {
-            /*Snowboy return values:
-                -2 => Silence
-                -1 => Error
-                 0 => Speech detected
-            */
-
-            let vad_res = self.vad.is_someone_talking(audio)?;
-
-
-
-            if vad_res == true {
-                debug!("I can hear someone");
-                self.someone_talking = true;
-                let detector_res = self.detector_check(audio);
-                if detector_res == -2 {
-                    debug!("You stopped talking");
-                    self.someone_talking = false;
-                } 
-                Ok(detector_res == 1)
-            }
-            else {
-                Ok(false)
-            }
-        }
-        else {
-            let detector_res = self.detector_check(audio);
-            if detector_res != -1 {
-                if detector_res == -2 {
-                    //self.someone_talking = false;
-                } 
-                Ok(detector_res == 1)
-            }
-            else {
-                Err(HotwordError::Unknown.into())
-            }
+        match self.detector_check(audio) {
+            1      => Ok(true),
+            0 | -2 => Ok(false),
+            -1     => Err(HotwordError::Unknown.into()),
         }
     }
 }
@@ -100,5 +61,47 @@ pub enum HotwordError{
 impl std::convert::From<crate::vad::VadError> for HotwordError {
     fn from(_err: crate::vad::VadError) -> Self {
         HotwordError::VadError
+    }
+}
+
+// Wrap a hotword engine with a vad to minimize resource consumption
+struct VadHotword<V: Vad + Send ,H: HotwordDetector + Send> {
+    vad: V,
+    someone_talking: bool,
+    hotword_eng: H
+
+}
+
+impl<V: Vad + Send, H: HotwordDetector + Send> VadHotword<V, H> {
+    fn new(res_path: &Path, vad: V, hotword_eng: H) -> Self {
+        Self {vad, someone_talking: false, hotword_eng}
+    }
+}
+
+impl<V: Vad + Send, H: HotwordDetector + Send> HotwordDetector for VadHotword<V, H> {
+    fn start_hotword_check(&mut self) -> Result<(), VadError> {
+        self.hotword_eng.start_hotword_check();
+        self.vad.reset()?;
+        self.someone_talking = false;
+        info!("WaitingForHotword");
+
+        Ok(())
+    }
+
+    fn check_hotword(&mut self, audio: &[i16]) -> Result<bool> {
+        let are_they_talking = self.vad.is_someone_talking(audio)?;
+
+        if are_they_talking {
+            self.someone_talking = true;
+            let detector_res = self.hotword_eng.check_hotword(audio)?;
+            Ok(detector_res)
+        }
+        else {
+            if self.someone_talking {
+                self.hotword_eng.start_hotword_check(); // Restart if no one is talking anymore
+            }
+            self.someone_talking = false;
+            Ok(false)
+        }
     }
 }

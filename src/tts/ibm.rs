@@ -18,16 +18,67 @@ impl IbmTts {
     fn make_tts_voice(lang: &LanguageIdentifier, prefs: &VoiceDescr) -> Result<&'static str, TtsConstructionError> {
         let lang_str = format!("{}-{}", lang.language, lang.region.ok_or(TtsConstructionError::NoRegion)?.as_str());
         match lang_str.as_str() {
+            "ar-AR" => {
+                Ok("ar-AR_OmarVoice") // Only male
+            }
+            "de-DE" => {
+                Ok(match prefs.gender{ // There's also "de-DE_ErikaV3Voice"
+                    Gender::Male => "de-DE_DieterV3Voice",
+                    Gender::Female => "de-DE_BirgitV3Voice"
+                })
+            }
+            "en-GB" => {
+                Ok(match prefs.gender { // There's also "en-GB_KateV3Voice"
+                    Gender::Male => "en-GB_JamesV3Voice",
+                    Gender::Female => "en-GB_CharlotteV3Voice"
+                })
+            }
+            "en-US" => {
+                Ok(match prefs.gender { // There's also "en-US_EmilyV3Voice", "en-US_HenryV3Voice", "en-US_KevinV3Voice", "en-US_LisaV3Voice" and  "en-US_OliviaV3Voice"
+                    Gender::Male => "en-US_MichaelV3Voice",
+                    Gender::Female =>  "en-US_AllisonV3Voice"
+                })
+            }
             "es-ES" => {
                 Ok(match prefs.gender {
                     Gender::Male => "es-ES_EnriqueV3Voice",
                     Gender::Female => "es-ES_LauraV3Voice"
                 })
             }
-            "en-US" => {
+            "es-LA" => {
+                Ok("es-LA_SofiaV3Voice") // Only female
+            }
+            "es-US" => {
+                Ok("es-US_SofiaV3Voice") // Only female
+            }
+            "fr-FR" => {
                 Ok(match prefs.gender {
-                    Gender::Male => "en-US_MichaelV3Voice",
-                    Gender::Female =>  "en-US_AllisonV3Voice"
+                    Gender::Male => "fr-FR_NicolasV3Voice",
+                    Gender::Female => "fr-FR_ReneeV3Voice"
+                })
+            }
+            "it-IT" => {
+                Ok("it-IT_FrancescaV3Voice") // Only female
+            }
+            "ja-JP" => {
+                Ok("ja-JP_EmiVoice") // Only female
+            }
+            "ko-KR" => {
+                Ok("ko-KR_YoungmiVoice") // There's also "ko-KR_YunaVoice"
+            }
+            "nl-NL" => {
+                Ok(match prefs.gender {
+                    Gender::Male => "nl-NL_LiamVoice",
+                    Gender::Female => "nl-NL_EmmaVoice"
+                })
+            }
+            "pt-BR" => {
+                Ok("pt-BR_IsabelaV3Voice") // Only female
+            }
+            "zh-CN" => {
+                Ok(match prefs.gender { // There's also "zh-CN_ZhangJingVoice"
+                    Gender::Male => "zh-CN_WangWeiVoice",
+                    Gender::Female => "zh-CN_LiNaVoice"
                 })
             }
             _ => Err(TtsConstructionError::IncompatibleLanguage)
@@ -41,7 +92,8 @@ impl IbmTts {
     }
 
     fn available_langs() -> Vec<LanguageIdentifier> {
-        langids!("es-ES", "en-US")
+        langids!("ar-AR", "de-DE", "en-GB", "en-US", "es-ES", "es-LA", "es-US",
+                 "fr-FR", "it-IT", "ja-JP", "ko-KR", "nl-NL", "pt-BR", "zh-CN")
     }
 }
 
