@@ -12,7 +12,7 @@ use crate::interfaces::{CURR_INTERFACE, DirectVoiceInterface, UserInterface};
 use crate::nlu::{Nlu, NluManager, NluResponseSlot, NluUtterance, EntityInstance, EntityDef, EntityData};
 use crate::python::{try_translate, try_translate_all};
 use crate::stt::DecodeRes;
-use crate::signals::{OrderMap, SignalEvent};
+use crate::signals::{OrderMap, Signal, SignalEventShared};
 use crate::vars::*;
 
 #[cfg(not(feature="devel_rasa_nlu"))]
@@ -141,20 +141,6 @@ impl SignalOrder {
             nlu: None
         }
     }
-    
-    pub fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Rc<RefCell<ActionSet>>) -> Result<()> {
-        match self.nlu_man {
-            Some(ref mut nlu_man) => {
-                add_order(sig_arg, nlu_man, skill_name, pkg_name)?;
-                self.order_map.add_order(skill_name, act_set);
-
-                Ok(())
-            }
-            None => {
-                panic!("Called add_order after end_loading");
-            }
-        }
-    }
 
     #[cfg(not(feature = "devel_rasa_nlu"))]
     pub fn end_loading(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
@@ -194,9 +180,9 @@ impl SignalOrder {
     }
 
 
-    fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: &mut SignalEvent, base_context: &PyDict) -> Result<()> {
+    fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &PyDict) -> Result<()> {
         match decode_res {
-            None => event_signal.call("empty_reco", &base_context)?,
+            None => event_signal.borrow_mut().call("empty_reco", &base_context)?,
             Some(decode_res) => {
                 
                 if !decode_res.hypothesis.is_empty() {
@@ -215,11 +201,11 @@ impl SignalOrder {
                                     info!("Action called");
                                 }
                                 else {
-                                    event_signal.call("unrecognized", &base_context)?;
+                                    event_signal.borrow_mut().call("unrecognized", &base_context)?;
                                 }
                             }
                             else {
-                                event_signal.call("unrecognized", &base_context)?;
+                                event_signal.borrow_mut().call("unrecognized", &base_context)?;
                             }
                             
                         },
@@ -229,14 +215,14 @@ impl SignalOrder {
                     }
                 }
                 else {
-                    event_signal.call("empty_reco", &base_context)?;
+                    event_signal.borrow_mut().call("empty_reco", &base_context)?;
                 }
             }
         }
     Ok(())
     }
 
-    pub fn record_loop(&mut self, signal_event: &mut SignalEvent, config: &Config, base_context: &PyDict, curr_lang: &LanguageIdentifier) -> Result<()> {
+    pub fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &PyDict, curr_lang: &LanguageIdentifier) -> Result<()> {
         let mut interface = DirectVoiceInterface::new(curr_lang, config)?;
         CURR_INTERFACE.with(|itf|itf.replace(interface.get_output()));
         interface.interface_loop(config, signal_event, base_context, |d, s|{self.received_order(d, s, base_context)})
@@ -259,6 +245,28 @@ fn add_slots(base_context: &PyDict, slots: Vec<NluResponseSlot>) -> Result<PyDic
 
     Ok(result)
 
+}
+
+impl Signal for SignalOrder {
+    fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Rc<RefCell<ActionSet>>) -> Result<()> {
+        match self.nlu_man {
+            Some(ref mut nlu_man) => {
+                add_order(sig_arg, nlu_man, skill_name, pkg_name)?;
+                self.order_map.add_order(skill_name, act_set);
+
+                Ok(())
+            }
+            None => {
+                panic!("Called add_order after end_loading");
+            }
+        }
+    }
+    fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
+        self.end_loading(curr_lang)
+    }
+    fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &PyDict, curr_lang: &LanguageIdentifier) -> Result<()> {
+        self.record_loop(signal_event, config, base_context, curr_lang)
+    }
 }
 
 impl TryInto<EntityDef> for YamlEntityDef {

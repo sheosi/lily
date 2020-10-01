@@ -13,9 +13,10 @@ from fluent.runtime import FluentBundle, FluentResource
 
 
 action_classes = {}
+signal_classes = {}
 packages_translations = {}
 
-def action(name: str) :
+def action(name: str):
     def inner_deco(cls):
         action_classes[name] = cls
         return cls

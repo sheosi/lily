@@ -5,15 +5,15 @@ use std::rc::Rc;
 
 // This crate
 use crate::vars::{PYTHON_SDK_PATH, PACKAGES_PATH_ERR_MSG, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
-use crate::python::call_for_pkg;
+use crate::python::{add_py_folder, call_for_pkg};
 use crate::actions::{ActionSet, ActionRegistry, LocalActionRegistry};
-use crate::signals::{SignalOrder, SignalEvent};
+use crate::signals::{LocalSignalRegistry, SignalRegistry};
 
 // Other crates
-use unic_langid::LanguageIdentifier;
-use log::{info, warn};
-use cpython::Python;
 use anyhow::{anyhow, Result};
+use cpython::Python;
+use log::{info, warn};
+use unic_langid::LanguageIdentifier;
 
 trait IntoMapping {
     fn into_mapping(self) -> Option<serde_yaml::Mapping>;
@@ -36,7 +36,8 @@ fn load_trans(python: Python, pkg_path: &Path, curr_lang: &LanguageIdentifier) -
     Ok(())
 }
 
-pub fn load_package(signal_order: &mut SignalOrder, signal_event: &mut SignalEvent, action_registry: &LocalActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) -> Result<()> {
+pub fn load_package(sigreg: &mut LocalSignalRegistry, action_registry: &LocalActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) -> Result<()> {
+    // TODO: Don't load package if skills go wrong
     info!("Loading package: {}", path.to_str().ok_or_else(|| anyhow!("Failed to get the str from path {:?}", path))?);
 
     let pkg_path = Rc::new(path.to_path_buf());
@@ -88,13 +89,11 @@ pub fn load_package(signal_order: &mut SignalOrder, signal_event: &mut SignalEve
                         let py = gil.python();
                         act_set.borrow_mut().add_action(py, &act_name, &act_arg, &action_registry, pkg_path.clone())?;
                     }
-                    for (sig_name, sig_arg) in signals.into_iter() {
-                        if sig_name == "order" {
-                            signal_order.add(sig_arg, skill_name, &pkg_name, act_set.clone())?;
-                        }
 
-                        if sig_name == "event" {
-                            signal_event.add(skill_name, act_set.clone());
+
+                    for (sig_name, sig_arg) in signals.into_iter() {
+                        if let Err(e) = sigreg.add_sigact_rel(&sig_name, sig_arg, skill_name, &pkg_name, act_set.clone()) {
+                            log::warn!("Package \"{}\" with skill \"{}\" refers to a signal \"{}\" which is inexistent or not available to the package, skill won't be loaded", &pkg_name, skill_name, sig_name);
                         }
                     }
 
@@ -110,26 +109,50 @@ pub fn load_package(signal_order: &mut SignalOrder, signal_event: &mut SignalEve
     Ok(())
 }
 
-pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<(SignalOrder, SignalEvent)> {
-    let mut signal_order = SignalOrder::new();
-    let mut signal_event = SignalEvent::new();
+pub fn load_package_python(py: Python, path: &Path,
+        pkg_path: &Path,
+        base_sigreg: &LocalSignalRegistry,
+        base_actreg: &LocalActionRegistry
+    ) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+    let (signal_classes, action_classes) = add_py_folder(py, path)?;
+    let mut sigreg = base_sigreg.clone();
+    sigreg.extend_and_init_classes_py(py, pkg_path, signal_classes)?;
+
+    let mut actreg = base_actreg.clone();
+    actreg.extend_and_init_classes(py, action_classes)?;
+
+    Ok((sigreg, actreg))
+}
+
+pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<SignalRegistry> {
     // Get GIL
     let gil = Python::acquire_gil();
     let py = gil.python();
 
-    let global_registry = Rc::new(RefCell::new(ActionRegistry::new()));
-    let mut base_registry = LocalActionRegistry::new(global_registry.clone(), py, &PYTHON_SDK_PATH.resolve())?;
+    let (initial_signals, initial_actions) = add_py_folder(py, &PYTHON_SDK_PATH.resolve())?;
+
+    let mut global_sigreg = Rc::new(RefCell::new(SignalRegistry::new()));
+    let mut base_sigreg = LocalSignalRegistry::init_from(global_sigreg.clone());
+    base_sigreg.extend_and_init_classes_py(py, path, initial_signals)?;
+
+    let global_actreg = Rc::new(RefCell::new(ActionRegistry::new()));
+    let mut base_actreg = LocalActionRegistry::new(global_actreg);
+    base_actreg.extend_and_init_classes(py, initial_actions)?;
 
     info!("PACKAGES_PATH:{}", path.to_str().ok_or_else(|| anyhow!("Can't transform the package path {:?}", path))?);
     for entry in std::fs::read_dir(path).expect(PACKAGES_PATH_ERR_MSG) {
         let entry = entry?.path();
         if entry.is_dir() {
+            let (mut local_sigreg, local_actreg) = load_package_python(py, &entry.join("python"), &entry, &base_sigreg, &base_actreg).unwrap();
             load_trans(py, &entry, curr_lang)?;
-            load_package(&mut signal_order, &mut signal_event, &base_registry.try_add_and_clone(py, &entry.join("python"))?, &entry, curr_lang)?;
+            load_package(&mut local_sigreg, &local_actreg, &entry, curr_lang)?;
         }
     }
 
-    signal_order.end_loading(curr_lang)?;
+    global_sigreg.borrow_mut().end_load(curr_lang)?;
 
-    Ok((signal_order, signal_event))
+    // This is overall stupid but haven't found any other (interesting way to do it)
+    // We need the variable to help lifetime analisys
+    let res = global_sigreg.borrow_mut().clone();
+    Ok(res)
 }

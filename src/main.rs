@@ -97,7 +97,7 @@ fn main() -> Result<()> {
         crate::python::set_python_locale(py, &curr_lang)?;
     }
 
-    let (mut signal_order, mut signal_event) = load_packages(&Path::new(&PACKAGES_PATH.resolve()), &curr_lang)?;
+    let mut sigreg = load_packages(&Path::new(&PACKAGES_PATH.resolve()), &curr_lang)?;
 
     let base_context = {
         let gil = cpython::Python::acquire_gil();
@@ -106,7 +106,7 @@ fn main() -> Result<()> {
         PyDict::new(py)
     };
 
-    signal_order.record_loop(&mut signal_event, &config, &base_context, &curr_lang)?;
+    sigreg.call_loop("order", &config, &base_context, &curr_lang)?;
 
     Ok(())
 }

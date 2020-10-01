@@ -6,11 +6,12 @@ use crate::interfaces::CURR_INTERFACE;
 use crate::audio::PlayDevice;
 use crate::vars::{PYDICT_SET_ERR_MSG, NO_YAML_FLOAT_MSG};
 
-use unic_langid::LanguageIdentifier;
-use fluent_langneg::negotiate::{negotiate_languages, NegotiationStrategy};
-use cpython::{PyErr, PyClone, Python, PyList, PyDict, PyString, PythonObject, PyResult, ToPyObject, py_module_initializer, py_fn, FromPyObject, exc};
-use serde_yaml::Value;
 use anyhow::{anyhow, Result};
+use cpython::{PyErr, PyClone, Python, PyList, PyDict, PyString, PyObject, PythonObject, PyResult, ToPyObject, py_module_initializer, py_fn, FromPyObject, exc};
+use fluent_langneg::negotiate::{negotiate_languages, NegotiationStrategy};
+use log::info;
+use serde_yaml::Value;
+use unic_langid::LanguageIdentifier;
 
 thread_local! {
     pub static PYTHON_LILY_PKG: RefString = RefString::new("<None>");
@@ -169,6 +170,45 @@ pub fn try_translate_all(input: &str) -> Result<Vec<String>> {
     }
 }
 
+/// Imports every module in the passed path then it returns 
+/// the unfiltered lists (with both old and new) of signals
+/// (the first one) and actions (the second one)
+pub fn add_py_folder(python: Python, actions_path: &Path) -> Result<(Vec<(PyObject, PyObject)>, Vec<(PyObject, PyObject)>)> {
+    call_for_pkg::<_, Result<()>>(actions_path.parent().ok_or_else(||anyhow!("Can't get parent of path, this is an invalid path for python data"))?, |_|{
+        // Add folder to sys.path
+        add_to_sys_path(python, actions_path).map_err(|py_err|anyhow!("Python error while adding to sys.path: {:?}", py_err))?;
+        info!("Add folder: {}", actions_path.to_str().ok_or_else(||anyhow!("Coudln't transform actions_path into string"))?);
+
+
+        // Make order_map from python's modules
+        for entry in std::fs::read_dir(actions_path)? {
+            let entry = entry?;
+            if entry.path().is_dir() {
+                let mod_name = entry.file_name().into_string().map_err(|os_str|anyhow!("Failed to transform module name into Unicode: {:?}", os_str))?.to_string();
+                python.import(&mod_name).map_err(|py_err|anyhow!("Failed to import a package's python module: {:?}, {:?}", actions_path, py_err))?;
+            }
+        }
+
+        Ok(())
+    })?;
+
+    let signal_classes = {
+        let lily_py_mod = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
+        let sgn_cls_obj = lily_py_mod.get(python, "action_classes").map_err(|py_err|anyhow!("Python error while obtaining signal_classes: {:?}", py_err))?;
+        let sgn_cls_dict = sgn_cls_obj.cast_into::<PyDict>(python).map_err(|py_err|anyhow!("Python error while casting signal_classes into PyDict: {:?}", py_err))?;
+        sgn_cls_dict.items(python)
+    };
+
+    let action_classes = {
+        let lily_py_mod = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
+        let act_cls_obj = lily_py_mod.get(python, "action_classes").map_err(|py_err|anyhow!("Python error while obtaining action_classes: {:?}", py_err))?;
+        let act_cls_dict = act_cls_obj.cast_into::<PyDict>(python).map_err(|py_err|anyhow!("Python error while casting action_classes into PyDict: {:?}", py_err))?;
+        act_cls_dict.items(python)
+    };
+
+    Ok((signal_classes, action_classes))
+}
+
 // Define executable module
 py_module_initializer!(_lily_impl, init__lily_impl, PyInit__lily_impl, |py, m| {
     m.add(py, "__doc__", "Internal implementations of Lily's Python functions")?;
@@ -278,6 +318,5 @@ pub fn set_python_locale(py: Python, lang_id: &LanguageIdentifier) -> Result<()>
     let local_str = format!("{}.UTF-8", lang_id.to_string().replacen("-", "_", 1));
     log::info!("Curr locale: {:?}", local_str);
     locale.call(py, "setlocale", (lc_all, local_str), None).map_err(|py_err|anyhow!("Failed the call to setlocale: {:?}", py_err))?;
-
     Ok(())
 }

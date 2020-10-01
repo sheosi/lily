@@ -7,7 +7,7 @@ use crate::audio::{AudioRaw, PlayDevice, Recording, RecDevice};
 use crate::config::Config;
 use crate::hotword::{HotwordDetector, Snowboy};
 use crate::interfaces::{SharedOutput, UserInterface, UserInterfaceOutput};
-use crate::signals::SignalEvent;
+use crate::signals::SignalEventShared;
 use crate::stt::{DecodeRes, DecodeState, SttFactory, SttStream};
 use crate::tts::{VoiceDescr, Gender, Tts, TtsFactory};
 use crate::vars::*;
@@ -73,7 +73,7 @@ impl DirectVoiceInterface {
         Ok(DirectVoiceInterface{stt, output})
     }
 
-    pub fn interface_loop<F: FnMut( Option<DecodeRes>, &mut SignalEvent)->Result<()>> (&mut self, config: &Config, signal_event: &mut SignalEvent, base_context: &PyDict, mut callback: F) -> Result<()> {
+    pub fn interface_loop<F: FnMut( Option<DecodeRes>, SignalEventShared)->Result<()>> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &PyDict, mut callback: F) -> Result<()> {
         let mut record_device = RecDevice::new()?;
         let mut _play_device = PlayDevice::new();
 
@@ -90,7 +90,7 @@ impl DirectVoiceInterface {
             Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res"), config.hotword_sensitivity)?
         };
         info!("Start Recording");
-        signal_event.call("lily_start", &base_context)?;
+        signal_event.borrow_mut().call("lily_start", &base_context)?;
         // Start recording
         record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
         hotword_detector.start_hotword_check()?; 
@@ -111,7 +111,7 @@ impl DirectVoiceInterface {
                     match hotword_detector.check_hotword(microphone_data)? {
                         true => {
                             current_state = ProgState::Listening;
-                            signal_event.call("init_reco", &base_context)?;
+                            signal_event.borrow_mut().call("init_reco", &base_context)?;
                             info!("Hotword detected");
                             // This could take a while 
                             self.stt.begin_decoding()?;
@@ -135,7 +135,7 @@ impl DirectVoiceInterface {
                             record_device.stop_recording().expect(AUDIO_REC_STOP_ERR_MSG);
 
                             info!("{:?}", decode_res);
-                            callback(decode_res, signal_event)?;
+                            callback(decode_res, signal_event.clone())?;
                             record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
 
                             if let Some(ref mut curr) = current_speech {
