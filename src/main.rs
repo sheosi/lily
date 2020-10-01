@@ -24,9 +24,9 @@ use crate::python::python_init;
 use crate::config::get_conf;
 
 // Other crates
-use unic_langid::LanguageIdentifier;
 use anyhow::Result;
 use cpython::PyDict;
+use unic_langid::LanguageIdentifier;
 
 
 fn init_log() {
@@ -37,7 +37,7 @@ fn init_log() {
         pid: 0,
     };
 
-
+    // Use Debug log level for debug compilations
     let log_level = if cfg!(debug_assertions) {
         log::LevelFilter::Debug
     }
@@ -48,7 +48,7 @@ fn init_log() {
     let logger = syslog::unix(formatter).expect("could not connect to syslog");
     log::set_boxed_logger(Box::new(syslog::BasicLogger::new(logger)))
             .map(|()| log::set_max_level(log_level)).ok();
-            //simple_logger::init()?;
+    //simple_logger::init()?;
 
 }
 
@@ -63,6 +63,7 @@ fn get_locale_default() -> String {
 }
 
 fn main() -> Result<()> {
+    // Set explicit handle for Ctrl-C signal
     ctrlc::set_handler(move || {
         std::process::exit(0);
     }).expect("Error setting Ctrl-C handler");
@@ -70,12 +71,14 @@ fn main() -> Result<()> {
     init_log();
     python_init()?;
 
-    // Set language
+    // Set config on global
     let config = get_conf();
     crate::config::GLOBAL_CONF.with(|c|c.replace(Rc::new(config.clone())));
 
-    println!("{:?}", config);
+    // Show config on debug
+    log::debug!("{:?}", config);
 
+    // 
     let curr_lang : LanguageIdentifier = {
         let as_str =
             if let Some(ref lang) =  config.language {
@@ -102,7 +105,6 @@ fn main() -> Result<()> {
 
         PyDict::new(py)
     };
-
 
     signal_order.record_loop(&mut signal_event, &config, &base_context, &curr_lang)?;
 

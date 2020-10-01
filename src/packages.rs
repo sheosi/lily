@@ -117,7 +117,7 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<(Sig
     let gil = Python::acquire_gil();
     let py = gil.python();
 
-    let mut global_registry = Rc::new(RefCell::new(ActionRegistry::new()));
+    let global_registry = Rc::new(RefCell::new(ActionRegistry::new()));
     let mut base_registry = LocalActionRegistry::new(global_registry.clone(), py, &PYTHON_SDK_PATH.resolve())?;
 
     info!("PACKAGES_PATH:{}", path.to_str().ok_or_else(|| anyhow!("Can't transform the package path {:?}", path))?);

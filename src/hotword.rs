@@ -45,6 +45,7 @@ impl HotwordDetector for Snowboy {
             1      => Ok(true),
             0 | -2 => Ok(false),
             -1     => Err(HotwordError::Unknown.into()),
+            _ => {panic!("Received from snowboy a wrong value")}
         }
     }
 }
@@ -80,7 +81,7 @@ impl<V: Vad + Send, H: HotwordDetector + Send> VadHotword<V, H> {
 
 impl<V: Vad + Send, H: HotwordDetector + Send> HotwordDetector for VadHotword<V, H> {
     fn start_hotword_check(&mut self) -> Result<(), VadError> {
-        self.hotword_eng.start_hotword_check();
+        self.hotword_eng.start_hotword_check()?;
         self.vad.reset()?;
         self.someone_talking = false;
         info!("WaitingForHotword");
@@ -98,7 +99,7 @@ impl<V: Vad + Send, H: HotwordDetector + Send> HotwordDetector for VadHotword<V,
         }
         else {
             if self.someone_talking {
-                self.hotword_eng.start_hotword_check(); // Restart if no one is talking anymore
+                self.hotword_eng.start_hotword_check()?; // Restart if no one is talking anymore
             }
             self.someone_talking = false;
             Ok(false)

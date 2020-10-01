@@ -1,13 +1,16 @@
-from fluent.runtime import FluentBundle, FluentResource
+import datetime
+from enum import Enum
+import locale
+import os
+from pathlib import Path
+import random
+from typing import Tuple, List, Any, Dict
+
 import _lily_impl
 from _lily_impl import conf
-from pathlib import Path
-import os
-import datetime
-import locale
-import random
-from enum import Enum
-from typing import Tuple, List, Any
+
+from fluent.runtime import FluentBundle, FluentResource
+
 
 action_classes = {}
 packages_translations = {}
@@ -62,12 +65,14 @@ def _gen_trans_list(trans_name: str) -> Tuple[FluentBundle, List[Any]]:
     try:
         trans = translations.current.get_message(trans_name)
         translator = translations.current
-    except LookupError as e:
-        _lily_impl.log_warn("Translation not present in selected lang")
+    except LookupError as _e:
+        log_str = f"Translation '{trans_name}'  not present in selected lang"
         if translations.default:
+            _lily_impl.log_warn(log_str + ", using default translation")
             trans = translations.default.get_message(trans_name)
             translator = translations.default
         else:
+            _lily_impl.log_warn(log_str)
             raise
 
     all_trans = list(trans.attributes.values())
@@ -121,11 +126,10 @@ def answer(output):
 
 @action(name = "say")
 class Say():
-    def trigger_action(self, args, context):
+    def trigger_action(self, args: Dict[str, str], context: Dict[str, str]):
         answer(translate(args, context))
 
 @action(name = "play_file")
 class PlayFile():
     def trigger_action(self, args, _context):
         _lily_impl.__play_file(args)
-str_input = "tusa"
