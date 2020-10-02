@@ -59,7 +59,7 @@ pub fn call_for_pkg<F, R>(path: &Path, f: F) -> Result<R> where F: FnOnce(Rc<Str
 }
 
 
-pub fn yaml_to_python(yaml: &serde_yaml::Value, py: Python) -> cpython::PyObject {
+pub fn yaml_to_python(py: Python, yaml: &serde_yaml::Value) -> cpython::PyObject {
     // If for some reason we can't transform, just panic, but the odds should be really small
 
     match yaml {
@@ -86,7 +86,7 @@ pub fn yaml_to_python(yaml: &serde_yaml::Value, py: Python) -> cpython::PyObject
             string.into_py_object(py).into_object()
         }
         Value::Sequence(seq) => {
-            let vec: Vec<_> = seq.iter().map(|data| yaml_to_python(data, py)).collect();
+            let vec: Vec<_> = seq.iter().map(|data| yaml_to_python(py, data)).collect();
             cpython::PyList::new(py, &vec).into_object()
 
         }
@@ -94,7 +94,7 @@ pub fn yaml_to_python(yaml: &serde_yaml::Value, py: Python) -> cpython::PyObject
             let dict = PyDict::new(py);
             for (key, value) in mapping.iter() { 
                 // There shouldn't be a problem with this either
-                dict.set_item(py, yaml_to_python(key,py), yaml_to_python(value, py)).expect(PYDICT_SET_ERR_MSG);
+                dict.set_item(py, yaml_to_python(py, key), yaml_to_python(py, value)).expect(PYDICT_SET_ERR_MSG);
             }
             
             dict.into_object()
@@ -190,18 +190,18 @@ pub fn add_py_folder(python: Python, actions_path: &Path) -> Result<(Vec<(PyObje
         }
 
         Ok(())
-    })?;
+    })??;
 
     let signal_classes = {
         let lily_py_mod = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
-        let sgn_cls_obj = lily_py_mod.get(python, "action_classes").map_err(|py_err|anyhow!("Python error while obtaining signal_classes: {:?}", py_err))?;
+        let sgn_cls_obj = lily_py_mod.get(python, "_signal_classes").map_err(|py_err|anyhow!("Python error while obtaining signal_classes: {:?}", py_err))?;
         let sgn_cls_dict = sgn_cls_obj.cast_into::<PyDict>(python).map_err(|py_err|anyhow!("Python error while casting signal_classes into PyDict: {:?}", py_err))?;
         sgn_cls_dict.items(python)
     };
 
     let action_classes = {
         let lily_py_mod = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
-        let act_cls_obj = lily_py_mod.get(python, "action_classes").map_err(|py_err|anyhow!("Python error while obtaining action_classes: {:?}", py_err))?;
+        let act_cls_obj = lily_py_mod.get(python, "_action_classes").map_err(|py_err|anyhow!("Python error while obtaining action_classes: {:?}", py_err))?;
         let act_cls_dict = act_cls_obj.cast_into::<PyDict>(python).map_err(|py_err|anyhow!("Python error while casting action_classes into PyDict: {:?}", py_err))?;
         act_cls_dict.items(python)
     };
@@ -212,14 +212,14 @@ pub fn add_py_folder(python: Python, actions_path: &Path) -> Result<(Vec<(PyObje
 // Define executable module
 py_module_initializer!(_lily_impl, init__lily_impl, PyInit__lily_impl, |py, m| {
     m.add(py, "__doc__", "Internal implementations of Lily's Python functions")?;
-    m.add(py, "_say", py_fn!(py, python_say(input: &str)))?;
-    m.add(py, "__negotiate_lang", py_fn!(py, negotiate_lang(input: &str, default: &str, available: Vec<String>)))?;
-    m.add(py, "log_error", py_fn!(py, log_error(input: &str)))?;
-    m.add(py, "log_warn", py_fn!(py, log_warn(input: &str)))?;
-    m.add(py, "log_info", py_fn!(py, log_info(input: &str)))?;
-    m.add(py, "__get_curr_lily_package", py_fn!(py, get_current_package()))?;
-    m.add(py, "_PlayFile__play_file", py_fn!(py, play_file(input: &str)))?;
-    m.add(py, "conf", py_fn!(py,get_conf_string(input: &str)))?;
+    m.add(py, "_say", py_fn!(py, python_say(text: &str)))?;
+    m.add(py, "_negotiate_lang", py_fn!(py, negotiate_lang(input_lang: &str, default: &str, available: Vec<String>)))?;
+    m.add(py, "log_error", py_fn!(py, log_error(text: &str)))?;
+    m.add(py, "log_warn", py_fn!(py, log_warn(text: &str)))?;
+    m.add(py, "log_info", py_fn!(py, log_info(text: &str)))?;
+    m.add(py, "_get_curr_lily_package", py_fn!(py, get_current_package()))?;
+    m.add(py, "_play_file", py_fn!(py, play_file(file_name: &str)))?;
+    m.add(py, "conf", py_fn!(py,get_conf_string(conf_name: &str)))?;
 
     Ok(())
 });
@@ -234,8 +234,8 @@ fn make_err<T: std::fmt::Debug>(py: Python, err: T) -> cpython::PyErr {
     cpython::PyErr::new::<exc::AttributeError, _>(py, format!("{:?}", err))
 }
 
-fn negotiate_lang(py: Python, input: &str, default: &str, available: Vec<String>) -> PyResult<cpython::PyString> {
-    let in_lang: LanguageIdentifier = input.parse().map_err(|err|make_err(py, err))?;
+fn negotiate_lang(py: Python, input_lang: &str, default: &str, available: Vec<String>) -> PyResult<cpython::PyString> {
+    let in_lang: LanguageIdentifier = input_lang.parse().map_err(|err|make_err(py, err))?;
     let def_lang: LanguageIdentifier = default.parse().map_err(|err|make_err(py, err))?;
 
     // This is done with a for to have control over the return, so that an exception is thrown if
@@ -248,28 +248,28 @@ fn negotiate_lang(py: Python, input: &str, default: &str, available: Vec<String>
     Ok(negotiate_languages(&[in_lang],&available_langs, Some(&def_lang), NegotiationStrategy::Filtering)[0].to_string().into_py_object(py))
 }
 
-fn python_say(py: Python, input: &str) -> PyResult<cpython::PyObject> {
-    let res = CURR_INTERFACE.with(|itf|itf.borrow().lock().map_err(|e|make_err(py, e)).and_then(|mut i|i.answer(input).map_err(|e|make_err(py, e))));
+fn python_say(py: Python, text: &str) -> PyResult<cpython::PyObject> {
+    let res = CURR_INTERFACE.with(|itf|itf.borrow().lock().map_err(|e|make_err(py, e)).and_then(|mut i|i.answer(text).map_err(|e|make_err(py, e))));
     match res {
         Ok(()) => Ok(py.None()),
         Err(err) => Err(PyErr::new::<exc::OSError,_>(py, format!("Error while playing audio: {:?}", err)))
     }
 }
 
-fn log_info(python: Python, input: &str) -> PyResult<cpython::PyObject> {
-    log::info!("{}", input);
+fn log_info(python: Python, text: &str) -> PyResult<cpython::PyObject> {
+    log::info!("{}", text);
 
     Ok(python.None())
 }
 
-fn log_warn(python: Python, input: &str) -> PyResult<cpython::PyObject> {
-    log::warn!("{}", input);
+fn log_warn(python: Python, text: &str) -> PyResult<cpython::PyObject> {
+    log::warn!("{}", text);
 
     Ok(python.None())
 }
 
-fn log_error(python: Python, input: &str) -> PyResult<cpython::PyObject>  {
-    log::error!("{}", input);
+fn log_error(python: Python, text: &str) -> PyResult<cpython::PyObject>  {
+    log::error!("{}", text);
 
     Ok(python.None())
 }
@@ -284,10 +284,10 @@ fn play_file(py: Python, input: &str) -> PyResult<cpython::PyObject> {
     }
 }
 
-fn get_conf_string(py: Python, input: &str) -> PyResult<cpython::PyObject> {
+fn get_conf_string(py: Python, conf_name: &str) -> PyResult<cpython::PyObject> {
     let curr_conf = crate::config::GLOBAL_CONF.with(|c|c.borrow().clone());
     let conf_data = PYTHON_LILY_PKG.with(|n| {
-        curr_conf.get_package_path(&(&n).borrow(), input)
+        curr_conf.get_package_path(&(&n).borrow(), conf_name)
     });
     Ok(match conf_data {
         Some(string) => string.to_py_object(py).into_object(),

@@ -6,19 +6,29 @@ from pathlib import Path
 import random
 from typing import Tuple, List, Any, Dict
 
+from fluent.runtime import FluentBundle, FluentResource
+
 import _lily_impl
 from _lily_impl import conf
 
-from fluent.runtime import FluentBundle, FluentResource
+# We are going to access things from the runtime
+# that one else should
+# pylint: disable=protected-access
 
-
-action_classes = {}
-signal_classes = {}
+_action_classes: Dict[str, Any] = {}
+_signal_classes: Dict[str, Any] = {}
 packages_translations = {}
 
 def action(name: str):
     def inner_deco(cls):
-        action_classes[name] = cls
+        _action_classes[name] = cls
+        return cls
+
+    return inner_deco
+
+def signal(name: str):
+    def inner_deco(cls):
+        _signal_classes[name] = cls
         return cls
 
     return inner_deco
@@ -49,20 +59,20 @@ def __set_translations(curr_lang_str: str):
             if lang.is_dir():
                 lang_list.append(lang.name)
 
-        neg_lang = _lily_impl.__negotiate_lang(curr_lang_str, DEFAULT_LANG, lang_list)
+        neg_lang = _lily_impl._negotiate_lang(curr_lang_str, DEFAULT_LANG, lang_list)
         if neg_lang != DEFAULT_LANG:
             default_lang = __gen_bundle(DEFAULT_LANG, trans_path/DEFAULT_LANG)
         else:
             default_lang = None
 
-        packages_translations[_lily_impl.__get_curr_lily_package()] = TransPack(__gen_bundle(neg_lang, trans_path/neg_lang), default_lang)
+        packages_translations[_lily_impl._get_curr_lily_package()] = TransPack(__gen_bundle(neg_lang, trans_path/neg_lang), default_lang)
 
     else:
         _lily_impl.log_warn("Translations not present in " + os.getcwd())
 
 
 def _gen_trans_list(trans_name: str) -> Tuple[FluentBundle, List[Any]]:
-    translations = packages_translations[_lily_impl.__get_curr_lily_package()]
+    translations = packages_translations[_lily_impl._get_curr_lily_package()]
     try:
         trans = translations.current.get_message(trans_name)
         translator = translations.current
@@ -98,8 +108,8 @@ def _translate_impl(trans_name, dict_args):
     translations, all_trans = _gen_trans_list(trans_name)
     sel_trans = random.choice(all_trans)
     trans, err = translations.format_pattern(sel_trans, dict_args)
-    if err: # NOte this will only show the error for the one picked
-            _lily_impl.log_warn(str(err))
+    if err: # Note: this will only show the error for the one picked
+        _lily_impl.log_warn(str(err))
 
     return trans
 
@@ -133,4 +143,4 @@ class Say():
 @action(name = "play_file")
 class PlayFile():
     def trigger_action(self, args, _context):
-        _lily_impl.__play_file(args)
+        _lily_impl._play_file(args)

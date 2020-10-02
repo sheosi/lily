@@ -93,7 +93,7 @@ pub fn load_package(sigreg: &mut LocalSignalRegistry, action_registry: &LocalAct
 
                     for (sig_name, sig_arg) in signals.into_iter() {
                         if let Err(e) = sigreg.add_sigact_rel(&sig_name, sig_arg, skill_name, &pkg_name, act_set.clone()) {
-                            log::warn!("Package \"{}\" with skill \"{}\" refers to a signal \"{}\" which is inexistent or not available to the package, skill won't be loaded", &pkg_name, skill_name, sig_name);
+                            log::warn!("Package \"{}\" with skill \"{}\" that refers to a signal \"{}\" which is inexistent or not available to the package, skill won't be loaded, error: {}", &pkg_name, skill_name, sig_name, e);
                         }
                     }
 
@@ -131,7 +131,7 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<Sign
 
     let (initial_signals, initial_actions) = add_py_folder(py, &PYTHON_SDK_PATH.resolve())?;
 
-    let mut global_sigreg = Rc::new(RefCell::new(SignalRegistry::new()));
+    let global_sigreg = Rc::new(RefCell::new(SignalRegistry::new()));
     let mut base_sigreg = LocalSignalRegistry::init_from(global_sigreg.clone());
     base_sigreg.extend_and_init_classes_py(py, path, initial_signals)?;
 

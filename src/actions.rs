@@ -96,13 +96,12 @@ impl ActionSet {
     }
     pub fn add_action(&mut self, py: Python, act_name: &str, yaml: &serde_yaml::Value, action_registry: &LocalActionRegistry, lily_pkg_path: Rc<PathBuf>) -> Result<()>{
         let act_obj = action_registry.get(act_name).ok_or_else(||anyhow!("Action {} is not registered",act_name))?.clone_ref(py);
-        self.acts.push(ActionData{obj: act_obj, args: yaml_to_python(&yaml, py), lily_pkg_path});
+        self.acts.push(ActionData{obj: act_obj, args: yaml_to_python(py, &yaml), lily_pkg_path});
 
         Ok(())
     }
     pub fn call_all(&mut self, py: Python, context: &PyDict) -> Result<()> {
         for action in &self.acts {
-            // TODO: if an object doesn't implement trigger_action, don't panic, but decide what to do
             let trig_act = action.obj.getattr(py, "trigger_action").map_err(|py_err|anyhow!("Python error while accessing trigger_action: {:?}", py_err))?; 
             std::env::set_current_dir(action.lily_pkg_path.as_ref())?;
             call_for_pkg(action.lily_pkg_path.as_ref(), |_|trig_act.call(py, (action.args.clone_ref(py), context.clone_ref(py)), None).map_err(|py_err|{py_err.clone_ref(py).print(py);anyhow!("Python error while calling action: {:?}", py_err)}))??;

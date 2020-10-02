@@ -74,7 +74,7 @@ struct VadHotword<V: Vad + Send ,H: HotwordDetector + Send> {
 }
 
 impl<V: Vad + Send, H: HotwordDetector + Send> VadHotword<V, H> {
-    fn new(res_path: &Path, vad: V, hotword_eng: H) -> Self {
+    fn new(vad: V, hotword_eng: H) -> Self {
         Self {vad, someone_talking: false, hotword_eng}
     }
 }

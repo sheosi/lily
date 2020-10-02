@@ -11,11 +11,12 @@ use std::path::{Path, PathBuf};
 // This crate
 use crate::actions::ActionSet;
 use crate::config::Config;
-use crate::python::call_for_pkg;
+use crate::python::{call_for_pkg, yaml_to_python};
 
 // Other crates
 use anyhow::{anyhow, Result};
 use cpython::{ObjectProtocol, PyClone, PyDict, Python, PyObject, PyTuple, ToPyObject};
+use log::warn;
 use unic_langid::LanguageIdentifier;
 
 pub type SignalEventShared = Rc<RefCell<SignalEvent>>;
@@ -109,9 +110,21 @@ impl SignalRegistry {
 
     pub fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
 
-        for (_, signal) in self.signals.iter_mut() {
-            signal.borrow_mut().end_load(curr_lang);
+        let mut to_remove = Vec::new();
+
+        for (sig_name, signal) in self.signals.iter_mut() {
+            if let Err(e) = signal.borrow_mut().end_load(curr_lang) {
+                warn!("Signal \"{}\" had trouble in \"end_load\", will be disabled, error: {}", &sig_name, e);
+
+                to_remove.push(sig_name.to_owned());
+            }
         }
+
+        // Delete any signals which had problems during end_load
+        for sig_name in &to_remove {
+            self.signals.remove(sig_name);
+        }
+
         Ok(())
     }
 
@@ -156,11 +169,13 @@ impl PythonSignal {
 
 impl Signal for PythonSignal {
     fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Rc<RefCell<ActionSet>>) -> Result<()> {
-        // TODO: sig_arg and others into the call
+        // Pass act_set to python so that Python signals can somehow call their respective actions
         let gil= Python::acquire_gil();
         let py = gil.python();
 
-        self.call_py_method(py, "add_sig_receptor", PyTuple::empty(py))
+        let py_arg = yaml_to_python(py, &sig_arg);
+
+        self.call_py_method(py, "add_sig_receptor", (py_arg, skill_name, pkg_name))
     }
     fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
         let gil= Python::acquire_gil();
@@ -168,7 +183,7 @@ impl Signal for PythonSignal {
 
         self.call_py_method(py, "end_load", (curr_lang.to_string(),))
     }
-    fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &PyDict, curr_lang: &LanguageIdentifier) -> Result<()> {
+    fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, base_context: &PyDict, curr_lang: &LanguageIdentifier) -> Result<()> {
         let gil= Python::acquire_gil();
         let py = gil.python();
 
