@@ -25,7 +25,7 @@ use crate::config::get_conf;
 
 // Other crates
 use anyhow::Result;
-use cpython::PyDict;
+use pyo3::{conversion::IntoPy, Python, types::PyDict};
 use unic_langid::LanguageIdentifier;
 
 
@@ -91,7 +91,7 @@ fn main() -> Result<()> {
         as_str.parse().expect("Locale parsing failed")
     };
     {
-        let gil = cpython::Python::acquire_gil();
+        let gil = Python::acquire_gil();
         let py = gil.python();
 
         crate::python::set_python_locale(py, &curr_lang)?;
@@ -100,10 +100,10 @@ fn main() -> Result<()> {
     let mut sigreg = load_packages(&Path::new(&PACKAGES_PATH.resolve()), &curr_lang)?;
 
     let base_context = {
-        let gil = cpython::Python::acquire_gil();
+        let gil = Python::acquire_gil();
         let py = gil.python();
 
-        PyDict::new(py)
+        PyDict::new(py).into_py(py)
     };
 
     sigreg.call_loop("order", &config, &base_context, &curr_lang)?;

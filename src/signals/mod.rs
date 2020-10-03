@@ -15,7 +15,7 @@ use crate::python::{call_for_pkg, yaml_to_python};
 
 // Other crates
 use anyhow::{anyhow, Result};
-use cpython::{ObjectProtocol, PyClone, PyDict, Python, PyObject, PyTuple, ToPyObject};
+use pyo3::{conversion::IntoPy, types::{PyDict, PyTuple}, Py, Python, PyObject};
 use log::warn;
 use unic_langid::LanguageIdentifier;
 
@@ -36,7 +36,7 @@ impl SignalEvent {
         self.event_map.add_order(event_name, act_set)
     }
 
-    pub fn call(&mut self, event_name: &str, context: &PyDict) -> Result<()> {
+    pub fn call(&mut self, event_name: &str, context: &Py<PyDict>) -> Result<()> {
         self.event_map.call_order(event_name, context)
     }
 }
@@ -55,7 +55,7 @@ impl OrderMap {
         *action_entry = act_set;
     }
 
-    pub fn call_order(&mut self, act_name: &str, context: &PyDict) -> Result<()> {
+    pub fn call_order(&mut self, act_name: &str, context: &Py<PyDict>) -> Result<()> {
         if let Some(action_set) = self.map.get_mut(act_name) {
             let gil = Python::acquire_gil();
             let python = gil.python();
@@ -70,7 +70,7 @@ impl OrderMap {
 pub trait Signal {
     fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Rc<RefCell<ActionSet>>) -> Result<()>;
     fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()>;
-    fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &PyDict, curr_lang: &LanguageIdentifier) -> Result<()>;
+    fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()>;
 }
 
 #[derive(Clone)]
@@ -131,7 +131,7 @@ impl SignalRegistry {
     pub fn call_loop(&mut self,
         sig_name: &str,
         config: &Config,
-        base_context: &PyDict,
+        base_context: &Py<PyDict>,
         curr_lang: &LanguageIdentifier
     ) -> Result<()> {
         self.signals[sig_name].borrow_mut().event_loop(self.event.clone(), config, base_context, curr_lang)
@@ -148,7 +148,7 @@ impl PythonSignal {
         Self {sig_inst, lily_pkg_path}
     }
 
-    fn call_py_method<A:ToPyObject<ObjectType=PyTuple>>(&mut self, py: Python, name: &str, args: A) -> Result<()> {
+    fn call_py_method<A:IntoPy<Py<PyTuple>>>(&mut self, py: Python, name: &str, args: A) -> Result<()> {
         let meth = self.sig_inst.getattr(py, name).map_err(|py_err|anyhow!("Python error while accessing {}: {:?}", name, py_err))?;
         std::env::set_current_dir(self.lily_pkg_path.as_ref())?;
         call_for_pkg(
@@ -183,7 +183,7 @@ impl Signal for PythonSignal {
 
         self.call_py_method(py, "end_load", (curr_lang.to_string(),))
     }
-    fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, base_context: &PyDict, curr_lang: &LanguageIdentifier) -> Result<()> {
+    fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()> {
         let gil= Python::acquire_gil();
         let py = gil.python();
 

@@ -13,7 +13,7 @@ use crate::tts::{VoiceDescr, Gender, Tts, TtsFactory};
 use crate::vars::*;
 
 use anyhow::Result;
-use cpython::PyDict;
+use pyo3::{types::PyDict, Py};
 use log::{info, warn};
 use unic_langid::LanguageIdentifier;
 
@@ -73,7 +73,7 @@ impl DirectVoiceInterface {
         Ok(DirectVoiceInterface{stt, output})
     }
 
-    pub fn interface_loop<F: FnMut( Option<DecodeRes>, SignalEventShared)->Result<()>> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &PyDict, mut callback: F) -> Result<()> {
+    pub fn interface_loop<F: FnMut( Option<DecodeRes>, SignalEventShared)->Result<()>> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, mut callback: F) -> Result<()> {
         let mut record_device = RecDevice::new()?;
         let mut _play_device = PlayDevice::new();
 

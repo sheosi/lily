@@ -22,7 +22,7 @@ use crate::nlu::{RasaNlu, RasaNluManager};
 
 // Other crates
 use anyhow::{Result, anyhow};
-use cpython::PyDict;
+use pyo3::{Py, conversion::IntoPy, types::PyDict, Python};
 use log::{info, warn};
 use serde::Deserialize;
 use unic_langid::LanguageIdentifier;
@@ -180,9 +180,9 @@ impl SignalOrder {
     }
 
 
-    fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &PyDict) -> Result<()> {
+    fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &Py<PyDict>) -> Result<()> {
         match decode_res {
-            None => event_signal.borrow_mut().call("empty_reco", &base_context)?,
+            None => event_signal.borrow_mut().call("empty_reco", base_context)?,
             Some(decode_res) => {
                 
                 if !decode_res.hypothesis.is_empty() {
@@ -222,7 +222,7 @@ impl SignalOrder {
     Ok(())
     }
 
-    pub fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &PyDict, curr_lang: &LanguageIdentifier) -> Result<()> {
+    pub fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()> {
         let mut interface = DirectVoiceInterface::new(curr_lang, config)?;
         CURR_INTERFACE.with(|itf|itf.replace(interface.get_output()));
         interface.interface_loop(config, signal_event, base_context, |d, s|{self.received_order(d, s, base_context)})
@@ -230,20 +230,22 @@ impl SignalOrder {
 }
 
 
-fn add_slots(base_context: &PyDict, slots: Vec<NluResponseSlot>) -> Result<PyDict> {
-    let gil = cpython::Python::acquire_gil();
+fn add_slots(base_context: &Py<PyDict>, slots: Vec<NluResponseSlot>) -> Result<Py<PyDict>> {
+    let gil = Python::acquire_gil();
     let py = gil.python();
 
     // What to do here if this fails?
-    let result = base_context.copy(py).map_err(|py_err|anyhow!("Python error while copying base context: {:?}", py_err))?;
+    let result = base_context.as_ref(py).copy()?;
 
     for slot in slots.into_iter() {
-        result.set_item(py, slot.name, slot.value).map_err(
+        result.set_item(slot.name, slot.value).map_err(
             |py_err|anyhow!("Couldn't set name in base context: {:?}", py_err)
         )?;
     }
 
-    Ok(result)
+
+
+    Ok(result.into_py(py))
 
 }
 
@@ -264,7 +266,7 @@ impl Signal for SignalOrder {
     fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
         self.end_loading(curr_lang)
     }
-    fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &PyDict, curr_lang: &LanguageIdentifier) -> Result<()> {
+    fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()> {
         self.record_loop(signal_event, config, base_context, curr_lang)
     }
 }

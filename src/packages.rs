@@ -11,7 +11,7 @@ use crate::signals::{LocalSignalRegistry, SignalRegistry};
 
 // Other crates
 use anyhow::{anyhow, Result};
-use cpython::Python;
+use pyo3::Python;
 use log::{info, warn};
 use unic_langid::LanguageIdentifier;
 
@@ -31,7 +31,7 @@ impl IntoMapping for serde_yaml::Value {
 fn load_trans(python: Python, pkg_path: &Path, curr_lang: &LanguageIdentifier) -> Result<()>{
     let lily_py_mod = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
 
-    call_for_pkg(pkg_path, |_| lily_py_mod.call(python, "__set_translations", (curr_lang.to_string(),), None).map_err(|py_err|anyhow!("Python error while calling __set_translations: {:?}", py_err)))??;
+    call_for_pkg(pkg_path, |_| lily_py_mod.call("__set_translations", (curr_lang.to_string(),), None).map_err(|py_err|anyhow!("Python error while calling __set_translations: {:?}", py_err)))??;
 
     Ok(())
 }

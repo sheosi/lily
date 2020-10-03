@@ -9,13 +9,13 @@ use crate::python::{call_for_pkg, yaml_to_python};
 
 // Other crates
 use anyhow::{anyhow, Result};
-use cpython::{ObjectProtocol, PyClone, PyDict, PyObject, PyTuple, Python};
+use pyo3::{conversion::IntoPy, Py, types::{PyDict,PyTuple}, PyObject, Python};
 
 type ActionRegistryShared = Rc<RefCell<ActionRegistry>>;
 
 #[derive(Debug)]
 pub struct ActionRegistry {
-    map: HashMap<String, cpython::PyObject>
+    map: HashMap<String, PyObject>
 }
 
 impl ActionRegistry {
@@ -25,7 +25,7 @@ impl ActionRegistry {
     }
 
     // Imports all modules from that module and return the new actions
-    pub fn extend_and_init_classes(&mut self, python: Python, action_classes: Vec<(PyObject, PyObject)>) -> Result<HashMap<String, cpython::PyObject>> {
+    pub fn extend_and_init_classes(&mut self, python: Python, action_classes: Vec<(PyObject, PyObject)>) -> Result<HashMap<String, PyObject>> {
         let mut res = HashMap::new();
 
         for (key, val) in  &action_classes {
@@ -48,12 +48,12 @@ impl Clone for LocalActionRegistry {
         let gil = Python::acquire_gil();
         let python = gil.python();
 
-        let dup_refs = |pair:(&String, &cpython::PyObject)| {
+        let dup_refs = |pair:(&String, &PyObject)| {
             let (key, val) = pair;
             (key.to_owned(), val.clone_ref(python))
         };
 
-        let new_map: HashMap<String, cpython::PyObject> = self.map.iter().map(dup_refs).collect();
+        let new_map: HashMap<String, PyObject> = self.map.iter().map(dup_refs).collect();
         Self{map: new_map, global_reg: self.global_reg.clone()}
     }
 }
@@ -61,7 +61,7 @@ impl Clone for LocalActionRegistry {
 
 #[derive(Debug)]
 pub struct LocalActionRegistry {
-    map: HashMap<String, cpython::PyObject>,
+    map: HashMap<String, PyObject>,
     global_reg: Rc<RefCell<ActionRegistry>>
 }
 
@@ -75,14 +75,14 @@ impl LocalActionRegistry {
         Ok(())
     }
 
-    fn get(&self, action_name: &str) -> Option<&cpython::PyObject> {
+    fn get(&self, action_name: &str) -> Option<&PyObject> {
         self.map.get(action_name)
     }
 }
 
 struct ActionData {
-    obj: cpython::PyObject,
-    args: cpython::PyObject,
+    obj: PyObject,
+    args: PyObject,
     lily_pkg_path: Rc<PathBuf>
 }
 
@@ -100,11 +100,11 @@ impl ActionSet {
 
         Ok(())
     }
-    pub fn call_all(&mut self, py: Python, context: &PyDict) -> Result<()> {
+    pub fn call_all(&mut self, py: Python, context: &Py<PyDict>) -> Result<()> {
         for action in &self.acts {
             let trig_act = action.obj.getattr(py, "trigger_action").map_err(|py_err|anyhow!("Python error while accessing trigger_action: {:?}", py_err))?; 
             std::env::set_current_dir(action.lily_pkg_path.as_ref())?;
-            call_for_pkg(action.lily_pkg_path.as_ref(), |_|trig_act.call(py, (action.args.clone_ref(py), context.clone_ref(py)), None).map_err(|py_err|{py_err.clone_ref(py).print(py);anyhow!("Python error while calling action: {:?}", py_err)}))??;
+            call_for_pkg(action.lily_pkg_path.as_ref(), |_|trig_act.call(py, (action.args.clone_ref(py), context.into_py(py).clone_ref(py)), None).map_err(|py_err|{py_err.clone_ref(py).print(py);anyhow!("Python error while calling action: {:?}", py_err)}))??;
         }
 
         Ok(())
