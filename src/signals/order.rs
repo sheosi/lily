@@ -145,7 +145,8 @@ impl SignalOrder {
     #[cfg(not(feature = "devel_rasa_nlu"))]
     pub fn end_loading(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
         let res = match mem::replace(&mut self.nlu_man, None) {
-            Some(nlu_man) => {
+            Some(mut nlu_man) => {
+                nlu_man.ready_lang(curr_lang)?;
                 nlu_man.train(&NLU_TRAIN_SET_PATH.resolve(), &NLU_ENGINE_PATH.resolve(), curr_lang)
             }
             None => {
@@ -165,7 +166,8 @@ impl SignalOrder {
         let model_path = NLU_RASA_PATH.resolve().join("data");
         let train_path = NLU_RASA_PATH.resolve().join("models").join("main_model.tar.gz");
         let res = match mem::replace(&mut self.nlu_man, None) {
-            Some(nlu_man) => {
+            Some(mut nlu_man) => {
+                nlu_man.ready_lang(curr_lang)?;
                 nlu_man.train(&train_path, &model_path.join("main_model.json"), curr_lang)
             }
             None => {

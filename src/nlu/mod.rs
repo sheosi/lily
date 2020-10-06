@@ -19,6 +19,8 @@ mod rasa;
 pub use self::rasa::*;
 
 pub trait NluManager {
+    fn ready_lang(&mut self, lang: &LanguageIdentifier) -> Result<()>;
+
     fn add_intent(&mut self, order_name: &str, phrases: Vec<NluUtterance>);
     fn add_entity(&mut self, name:&str, def: EntityDef);
 

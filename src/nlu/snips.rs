@@ -141,6 +141,20 @@ impl SnipsNluManager {
 }
 
 impl NluManager for SnipsNluManager {
+    fn ready_lang(&mut self, lang: &LanguageIdentifier) -> Result<()> {
+        let lang_str = lang.language.as_str();
+        let success = std::process::Command::new("snips-nlu")
+        .args(&["download", lang_str]).status()
+        .expect("Failed to open snips-nlu binary").success();
+
+        if success {
+            Ok(())
+        }
+        else {
+            Err(anyhow!("Failed to download NLU's data for language \"{}\"", lang_str))
+        }
+    }
+
     fn add_intent(&mut self, order_name: &str, phrases: Vec<NluUtterance>) {
         self.intents.push((order_name.to_string(), phrases));
     }

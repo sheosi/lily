@@ -176,6 +176,11 @@ impl RasaNluManager {
 }
 
 impl NluManager for RasaNluManager {
+    fn ready_lang(&mut self, _lang: &LanguageIdentifier) -> Result<()> {
+        // Nothing to be done right now
+        Ok(())
+    }
+
     fn add_intent(&mut self, order_name: &str, phrases: Vec<NluUtterance>) {
         self.intents.push((order_name.to_string(), phrases));
     }
