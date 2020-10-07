@@ -3,13 +3,17 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::python::{call_for_pkg, yaml_to_python};
+use crate::python::{call_for_pkg, PyException, yaml_to_python};
 
 // Other crates
 use anyhow::{anyhow, Result};
-use pyo3::{conversion::IntoPy, Py, types::{PyDict,PyTuple}, PyObject, Python};
+use pyo3::{types::{PyDict,PyTuple}, PyObject, Python};
+use pyo3::prelude::{pyclass, pymethods};
+use pyo3::PyResult;
+use pyo3::exceptions::PyOSError;
 
 type ActionRegistryShared = Rc<RefCell<ActionRegistry>>;
 
@@ -83,7 +87,7 @@ impl LocalActionRegistry {
 struct ActionData {
     obj: PyObject,
     args: PyObject,
-    lily_pkg_path: Rc<PathBuf>
+    lily_pkg_path: Arc<PathBuf>
 }
 
 pub struct ActionSet {
@@ -91,22 +95,47 @@ pub struct ActionSet {
 }
 
 impl ActionSet {
-    pub fn create() -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {acts: Vec::new()}))
+    pub fn create() -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self {acts: Vec::new()}))
     }
-    pub fn add_action(&mut self, py: Python, act_name: &str, yaml: &serde_yaml::Value, action_registry: &LocalActionRegistry, lily_pkg_path: Rc<PathBuf>) -> Result<()>{
+
+    pub fn add_action(&mut self, py: Python, act_name: &str, yaml: &serde_yaml::Value, action_registry: &LocalActionRegistry, lily_pkg_path: Arc<PathBuf>) -> Result<()>{
         let act_obj = action_registry.get(act_name).ok_or_else(||anyhow!("Action {} is not registered",act_name))?.clone_ref(py);
         self.acts.push(ActionData{obj: act_obj, args: yaml_to_python(py, &yaml), lily_pkg_path});
 
         Ok(())
     }
-    pub fn call_all(&mut self, py: Python, context: &Py<PyDict>) -> Result<()> {
+
+    pub fn call_all(&mut self, py: Python, context: &PyDict) -> PyResult<()> {
         for action in &self.acts {
-            let trig_act = action.obj.getattr(py, "trigger_action").map_err(|py_err|anyhow!("Python error while accessing trigger_action: {:?}", py_err))?; 
+            let trig_act = action.obj.getattr(py, "trigger_action")?;
             std::env::set_current_dir(action.lily_pkg_path.as_ref())?;
-            call_for_pkg(action.lily_pkg_path.as_ref(), |_|trig_act.call(py, (action.args.clone_ref(py), context.into_py(py).clone_ref(py)), None).map_err(|py_err|{py_err.clone_ref(py).print(py);anyhow!("Python error while calling action: {:?}", py_err)}))??;
+            call_for_pkg(action.lily_pkg_path.as_ref(),
+            |_|trig_act.call(
+                py,
+                (action.args.clone_ref(py), context),
+                None)
+            ).py_excep::<PyOSError>()??;
         }
 
         Ok(())
+    }
+}
+
+#[pyclass]
+pub struct PyActionSet {
+    act_set: Arc<Mutex<ActionSet>>
+}
+
+impl PyActionSet {
+    pub fn from_arc(act_set: Arc<Mutex<ActionSet>>) -> Self {
+        Self {act_set}
+    }
+}
+
+#[pymethods]
+impl PyActionSet {
+    fn call(&mut self, py: Python, context: &PyDict) -> PyResult<()> {
+        self.act_set.lock().unwrap().call_all(py, context)
     }
 }

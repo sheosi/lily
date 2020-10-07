@@ -1,9 +1,8 @@
 // Standard library
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::mem;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::actions::ActionSet;
@@ -262,7 +261,7 @@ fn add_slots(base_context: &Py<PyDict>, slots: Vec<NluResponseSlot>) -> Result<P
 }
 
 impl Signal for SignalOrder {
-    fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Rc<RefCell<ActionSet>>) -> Result<()> {
+    fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
         match self.nlu_man {
             Some(ref mut nlu_man) => {
                 add_order(sig_arg, nlu_man, skill_name, pkg_name)?;

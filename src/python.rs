@@ -219,6 +219,7 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add("_get_curr_lily_package", wrap_pyfunction!(get_current_package, m)?)?;
     m.add("_play_file", wrap_pyfunction!(play_file, m)?)?;
     m.add("conf", wrap_pyfunction!(get_conf_string, m)?)?;
+    m.add_class::<crate::actions::PyActionSet>()?;
 
     Ok(())
 }
@@ -303,11 +304,6 @@ fn get_conf_string(py: Python, conf_name: &str) -> PyResult<PyObject> {
     })
 }
 
-#[pyfunction]
-fn do_signal(py: Python, uuid: &str) ->  PyResult<PyObject> {
-    Ok(py.None())
-}
-
 pub fn add_to_sys_path(py: Python, path: &Path) -> Result<()> {
     let sys = py.import("sys").map_err(|py_err|anyhow!("Failed while importing sys package: {:?}", py_err))?;
     let sys_path = {
@@ -334,7 +330,7 @@ pub fn set_python_locale(py: Python, lang_id: &LanguageIdentifier) -> Result<()>
 /**  Utilities ****************************************************************/
 
 // Transforms any error into a python exception
-trait PyException<T> {
+pub trait PyException<T> {
     fn py_excep<P: PyTypeObject>(self, ) -> PyResult<T>;
 }
 

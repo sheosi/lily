@@ -3,13 +3,14 @@ mod order;
 pub use self::order::*;
 
 // Standard library
-use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::ActionSet;
+use crate::actions::{ActionSet, PyActionSet};
 use crate::config::Config;
 use crate::python::{call_for_pkg, yaml_to_python};
 
@@ -32,7 +33,7 @@ impl SignalEvent {
         Self {event_map: OrderMap::new()}
     }
 
-    pub fn add(&mut self, event_name: &str, act_set: Rc<RefCell<ActionSet>>) {
+    pub fn add(&mut self, event_name: &str, act_set: Arc<Mutex<ActionSet>>) {
         self.event_map.add_order(event_name, act_set)
     }
 
@@ -42,7 +43,7 @@ impl SignalEvent {
 }
 
 pub struct OrderMap {
-    map: HashMap<String, Rc<RefCell<ActionSet>>>
+    map: HashMap<String, Arc<Mutex<ActionSet>>>
 }
 
 impl OrderMap {
@@ -50,7 +51,7 @@ impl OrderMap {
         Self{map: HashMap::new()}
     }
 
-    pub fn add_order(&mut self, order_name: &str, act_set: Rc<RefCell<ActionSet>>) {
+    pub fn add_order(&mut self, order_name: &str, act_set: Arc<Mutex<ActionSet>>) {
         let action_entry = self.map.entry(order_name.to_string()).or_insert(ActionSet::create());
         *action_entry = act_set;
     }
@@ -60,7 +61,7 @@ impl OrderMap {
             let gil = Python::acquire_gil();
             let python = gil.python();
 
-            action_set.borrow_mut().call_all(python, context)?;
+            action_set.lock().unwrap().call_all(python, context.as_ref(python))?;
         }
 
         Ok(())
@@ -68,7 +69,7 @@ impl OrderMap {
 }
 
 pub trait Signal {
-    fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Rc<RefCell<ActionSet>>) -> Result<()>;
+    fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()>;
     fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()>;
     fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()>;
 }
@@ -168,14 +169,15 @@ impl PythonSignal {
 
 
 impl Signal for PythonSignal {
-    fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Rc<RefCell<ActionSet>>) -> Result<()> {
+    fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
         // Pass act_set to python so that Python signals can somehow call their respective actions
         let gil= Python::acquire_gil();
         let py = gil.python();
 
         let py_arg = yaml_to_python(py, &sig_arg);
+        let a = PyActionSet::from_arc(act_set);
 
-        self.call_py_method(py, "add_sig_receptor", (py_arg, skill_name, pkg_name))
+        self.call_py_method(py, "add_sig_receptor", (py_arg, skill_name, pkg_name, a))
     }
     fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
         let gil= Python::acquire_gil();
@@ -183,7 +185,8 @@ impl Signal for PythonSignal {
 
         self.call_py_method(py, "end_load", (curr_lang.to_string(),))
     }
-    fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()> {
+    fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, base_context: &Py<PyDict>
+        , curr_lang: &LanguageIdentifier) -> Result<()> {
         let gil= Python::acquire_gil();
         let py = gil.python();
 
@@ -208,7 +211,7 @@ impl LocalSignalRegistry {
         }
     }
 
-    pub fn add_sigact_rel(&mut self,sig_name: &str, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Rc<RefCell<ActionSet>>) -> Result<()> {
+    pub fn add_sigact_rel(&mut self,sig_name: &str, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
         if sig_name == "event" {
             self.event.borrow_mut().add(skill_name, act_set);
             Ok(())

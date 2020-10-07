@@ -2,6 +2,7 @@
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::Arc;
 
 // This crate
 use crate::vars::{PYTHON_SDK_PATH, PACKAGES_PATH_ERR_MSG, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
@@ -40,7 +41,7 @@ pub fn load_package(sigreg: &mut LocalSignalRegistry, action_registry: &LocalAct
     // TODO: Don't load package if skills go wrong
     info!("Loading package: {}", path.to_str().ok_or_else(|| anyhow!("Failed to get the str from path {:?}", path))?);
 
-    let pkg_path = Rc::new(path.to_path_buf());
+    let pkg_path = Arc::new(path.to_path_buf());
     call_for_pkg::<_, Result<()>>(path, |pkg_name|{
 
         let yaml_path = path.join("skills_def.yaml");
@@ -87,7 +88,7 @@ pub fn load_package(sigreg: &mut LocalSignalRegistry, action_registry: &LocalAct
                     for (act_name, act_arg) in actions.into_iter() {
                         let gil = Python::acquire_gil();
                         let py = gil.python();
-                        act_set.borrow_mut().add_action(py, &act_name, &act_arg, &action_registry, pkg_path.clone())?;
+                        act_set.lock().unwrap().add_action(py, &act_name, &act_arg, &action_registry, pkg_path.clone())?;
                     }
 
 
