@@ -37,7 +37,7 @@ impl SignalEvent {
         self.event_map.add_order(event_name, act_set)
     }
 
-    pub fn call(&mut self, event_name: &str, context: &Py<PyDict>) -> Result<()> {
+    pub fn call(&mut self, event_name: &str, context: &Py<PyDict>) {
         self.event_map.call_order(event_name, context)
     }
 }
@@ -56,15 +56,13 @@ impl OrderMap {
         *action_entry = act_set;
     }
 
-    pub fn call_order(&mut self, act_name: &str, context: &Py<PyDict>) -> Result<()> {
+    pub fn call_order(&mut self, act_name: &str, context: &Py<PyDict>) {
         if let Some(action_set) = self.map.get_mut(act_name) {
             let gil = Python::acquire_gil();
             let python = gil.python();
 
-            action_set.lock().unwrap().call_all(python, context.as_ref(python))?;
+            action_set.lock().unwrap().call_all(python, context.as_ref(python));
         }
-
-        Ok(())
     }
 }
 
@@ -175,9 +173,9 @@ impl Signal for PythonSignal {
         let py = gil.python();
 
         let py_arg = yaml_to_python(py, &sig_arg);
-        let a = PyActionSet::from_arc(act_set);
+        let actset = PyActionSet::from_arc(act_set);
 
-        self.call_py_method(py, "add_sig_receptor", (py_arg, skill_name, pkg_name, a))
+        self.call_py_method(py, "add_sig_receptor", (py_arg, skill_name, pkg_name, actset))
     }
     fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
         let gil= Python::acquire_gil();

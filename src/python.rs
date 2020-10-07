@@ -207,6 +207,12 @@ pub fn add_py_folder(python: Python, actions_path: &Path) -> Result<(Vec<(PyObje
     Ok((signal_classes, action_classes))
 }
 
+pub fn get_inst_class_name(py: Python, instance: &PyObject) -> String {
+    let type_obj = instance.getattr(py, "__class__").unwrap();
+    let type_name = type_obj.getattr(py, "__name__").unwrap();
+    type_name.extract(py).unwrap()
+}
+
 // Define executable module
 #[pymodule]
 fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {

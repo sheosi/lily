@@ -4,7 +4,9 @@ import locale
 import os
 from pathlib import Path
 import random
-from typing import Tuple, List, Any, Dict
+import inspect
+from sys import version_info
+from typing import Any, Dict, get_type_hints, Mapping, List, Optional, Tuple
 
 from fluent.runtime import FluentBundle, FluentResource
 
@@ -19,16 +21,110 @@ _action_classes: Dict[str, Any] = {}
 _signal_classes: Dict[str, Any] = {}
 packages_translations = {}
 
+class __InterfaceErrs:
+    errs = ""
+    warns = ""
+
+    @staticmethod
+    def __add_str(probs: str, prob: str) -> str:
+        if probs:
+            probs += ","
+        probs += prob
+
+        return probs
+
+    def add_error(self, prob: str):
+        self.errs = self.__add_str(self.errs, prob)
+
+    def add_warn(self, prob: str):
+        self.warns = self.__add_str(self.warns, prob)
+
+    def has_errors(self) -> bool:
+        return self.errs != ""
+
+    def has_warns(self) -> bool:
+        return self.warns != ""
+
+def __compare_class_with(cls: Any, model: Any) -> __InterfaceErrs:
+    def are_arguments_optional_from(params: Mapping[str, inspect.Parameter], first: int) -> bool:
+        for idx, param  in enumerate(params.values()):
+            if idx >= first:
+                if param.default is None:
+                    return False
+
+        return True
+
+    res = __InterfaceErrs()
+
+    for attr in model:
+        mod_attr = getattr(model, attr)
+        cls_attr = getattr(cls, attr, None) # Need the none, might not have it
+        if callable(mod_attr):
+            if cls_attr is None:
+                res.add_error(f"lacks method {mod_attr}")
+            elif not callable(cls_attr):
+                res.add_error(f"has an attribute called {mod_attr}, but is not a method")
+            else:
+                mod_sig = inspect.signature(mod_attr)
+                cls_sig = inspect.signature(cls_attr)
+                n_params_mod = len(cls_sig.parameters)
+                n_params_cls = len(mod_sig.parameters)
+
+                if n_params_cls < n_params_mod :
+                    res.add_error(f"method {mod_attr} too few arguments")
+
+                elif n_params_cls > n_params_mod and not are_arguments_optional_from(cls_sig.parameters, n_params_mod):
+                    res.add_error(f"method {mod_attr} too many arguments and they are not optional")
+
+        else:
+            if cls_attr is None:
+                res.add_error(f"lacks attribute {cls_attr}")
+
+
+    return res
+
+
+class ActionProtocol:
+    """Just an example action to compare to incoming actions"""
+    def trigger_action(self, args, context):
+        pass
+
 def action(name: str):
-    def inner_deco(cls):
-        _action_classes[name] = cls
+    def inner_deco(cls: ActionProtocol):
+        cls_err = __compare_class_with(cls, ActionProtocol)
+        if cls_err.has_errors():
+            _lily_impl.log_error(f"Action {name} doesn't conform to the action protocol: {cls_err}. Won't be loaded")
+        else:
+            if cls_err.has_warns():
+                _lily_impl.log_warn(f"Action {name} might have some problems: {cls_err}")
+
+            _action_classes[name] = cls
+
         return cls
 
     return inner_deco
 
+
+class SignalProtocol:
+    def add_sig_receptor(self, args: Any, skill_name: str, pkg_name: str, actset: _lily_impl.PyActionSet):
+        pass
+
+    def end_load(self):
+        pass
+
+    def event_loop(self, base_context: Dict[str, str], curr_lang: str):
+        pass
+
 def signal(name: str):
     def inner_deco(cls):
-        _signal_classes[name] = cls
+        cls_err = __compare_class_with(cls, SignalProtocol)
+        if cls_err.has_errors():
+            _lily_impl.log_error(f"Signal {name} doesn't conform to the signal protocol: {cls_err}. Won't be loaded")
+        else:
+            if cls_err.has_warns():
+                _lily_impl.log_warn(f"Signal {name} might have some problems: {cls_err}")
+
+            _signal_classes[name] = cls
         return cls
 
     return inner_deco

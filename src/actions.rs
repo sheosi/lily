@@ -6,13 +6,13 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::python::{call_for_pkg, PyException, yaml_to_python};
+use crate::python::{call_for_pkg, get_inst_class_name, PyException, yaml_to_python};
 
 // Other crates
 use anyhow::{anyhow, Result};
+use log::error;
 use pyo3::{types::{PyDict,PyTuple}, PyObject, Python};
 use pyo3::prelude::{pyclass, pymethods};
-use pyo3::PyResult;
 use pyo3::exceptions::PyOSError;
 
 type ActionRegistryShared = Rc<RefCell<ActionRegistry>>;
@@ -106,8 +106,8 @@ impl ActionSet {
         Ok(())
     }
 
-    pub fn call_all(&mut self, py: Python, context: &PyDict) -> PyResult<()> {
-        for action in &self.acts {
+    pub fn call_all(&mut self, py: Python, context: &PyDict) {
+        fn call_action(py: Python, action: &ActionData, context: &PyDict) -> Result<()> {
             let trig_act = action.obj.getattr(py, "trigger_action")?;
             std::env::set_current_dir(action.lily_pkg_path.as_ref())?;
             call_for_pkg(action.lily_pkg_path.as_ref(),
@@ -116,9 +116,16 @@ impl ActionSet {
                 (action.args.clone_ref(py), context),
                 None)
             ).py_excep::<PyOSError>()??;
+
+            Ok(())
         }
 
-        Ok(())
+        for action in &self.acts {
+            if let Err(e) = call_action(py, action, context) {
+                let name = get_inst_class_name(py, &action.obj);
+                error!("Action {} failed while being triggered: {}", name, e);
+            }
+        }
     }
 }
 
@@ -135,7 +142,7 @@ impl PyActionSet {
 
 #[pymethods]
 impl PyActionSet {
-    fn call(&mut self, py: Python, context: &PyDict) -> PyResult<()> {
+    fn call(&mut self, py: Python, context: &PyDict) {
         self.act_set.lock().unwrap().call_all(py, context)
     }
 }

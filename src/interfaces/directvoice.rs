@@ -90,7 +90,7 @@ impl DirectVoiceInterface {
             Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res"), config.hotword_sensitivity)?
         };
         info!("Start Recording");
-        signal_event.borrow_mut().call("lily_start", &base_context)?;
+        signal_event.borrow_mut().call("lily_start", &base_context);
         // Start recording
         record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
         hotword_detector.start_hotword_check()?; 
@@ -111,7 +111,7 @@ impl DirectVoiceInterface {
                     match hotword_detector.check_hotword(microphone_data)? {
                         true => {
                             current_state = ProgState::Listening;
-                            signal_event.borrow_mut().call("init_reco", &base_context)?;
+                            signal_event.borrow_mut().call("init_reco", &base_context);
                             info!("Hotword detected");
                             // This could take a while 
                             self.stt.begin_decoding()?;

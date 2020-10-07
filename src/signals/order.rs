@@ -193,7 +193,7 @@ impl SignalOrder {
 
     fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &Py<PyDict>) -> Result<()> {
         match decode_res {
-            None => event_signal.borrow_mut().call("empty_reco", base_context)?,
+            None => event_signal.borrow_mut().call("empty_reco", base_context),
             Some(decode_res) => {
                 
                 if !decode_res.hypothesis.is_empty() {
@@ -208,15 +208,15 @@ impl SignalOrder {
                                 if let Some(intent_name) = result.name {
                                     info!("Let's call an action");
                                     let slots_context = add_slots(base_context,result.slots)?;
-                                    self.order_map.call_order(&intent_name, &slots_context)?;
+                                    self.order_map.call_order(&intent_name, &slots_context);
                                     info!("Action called");
                                 }
                                 else {
-                                    event_signal.borrow_mut().call("unrecognized", &base_context)?;
+                                    event_signal.borrow_mut().call("unrecognized", &base_context);
                                 }
                             }
                             else {
-                                event_signal.borrow_mut().call("unrecognized", &base_context)?;
+                                event_signal.borrow_mut().call("unrecognized", &base_context);
                             }
                             
                         },
@@ -226,7 +226,7 @@ impl SignalOrder {
                     }
                 }
                 else {
-                    event_signal.borrow_mut().call("empty_reco", &base_context)?;
+                    event_signal.borrow_mut().call("empty_reco", &base_context);
                 }
             }
         }
