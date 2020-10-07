@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::{Child, Command};
 
 use crate::nlu::{compare_sets_and_train, try_open_file_and_check, write_contents};
-use crate::nlu::{EntityDef, EntityData, Nlu, NluManager, NluResponse, NluResponseSlot, NluUtterance};
+use crate::nlu::{EntityDef, EntityData, Nlu, NluManager, NluManagerStatic, NluResponse, NluResponseSlot, NluUtterance};
 
 use anyhow::{anyhow, Result};
 use reqwest::blocking;
@@ -14,7 +14,7 @@ use maplit::hashmap;
 use serde::{Serialize, Deserialize};
 use serde_yaml::Value;
 use thiserror::Error;
-use unic_langid::LanguageIdentifier;
+use unic_langid::{langid, LanguageIdentifier};
 
 
 pub struct RasaNlu {
@@ -279,6 +279,21 @@ fn transform_intents(org: Vec<(String, Vec<NluUtterance>)>) -> Vec<RasaNluCommmo
     }
 
     result
+}
+
+impl NluManagerStatic {
+    fn list_compatible_langs() -> Vec<LanguageIdentifier> {
+        vec![
+            langid!("de"),
+            langid!("en"),
+            langid!("es"),
+            langid!("fr"),
+            langid!("it"),
+            langid!("nl"),
+            langid!("pt"),
+            langid!("zh")
+        ]
+    }
 }
 
 impl Into<NluResponse> for RasaResponse {

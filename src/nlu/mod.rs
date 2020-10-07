@@ -4,8 +4,10 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
+
 use anyhow::Result;
 use serde::Serialize;
+use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use unic_langid::LanguageIdentifier;
 
 #[cfg(not(feature="devel_rasa_nlu"))]
@@ -26,6 +28,17 @@ pub trait NluManager {
 
     // Consume the struct so that we can reuse memory
     fn train(self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<()>; 
+}
+
+pub trait NluManagerStatic {
+    fn list_compatible_langs() -> Vec<LanguageIdentifier>;
+    fn is_lang_compatible(lang: &LanguageIdentifier) -> bool {
+        !negotiate_languages(&[lang],
+            &Self::list_compatible_langs(),
+            None,
+            NegotiationStrategy::Filtering
+        ).is_empty()
+    }
 }
 
 pub enum NluUtterance{

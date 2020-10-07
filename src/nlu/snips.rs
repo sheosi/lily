@@ -3,13 +3,13 @@ use std::convert::Into;
 use std::path::Path;
 
 use crate::nlu::compare_sets_and_train;
-use crate::nlu::{EntityDef, Nlu, NluManager, NluResponse, NluResponseSlot, NluUtterance};
+use crate::nlu::{EntityDef, Nlu, NluManager, NluManagerStatic, NluResponse, NluResponseSlot, NluUtterance};
 
 use anyhow::{anyhow, Result};
 use regex::Regex;
 use serde::Serialize;
 use snips_nlu_lib::SnipsNluEngine;
-use unic_langid::LanguageIdentifier;
+use unic_langid::{langid, LanguageIdentifier};
 
 //// NluManager ///////////////////////////////////////////////////////////////////////////////////
 #[derive(Serialize)]
@@ -180,6 +180,22 @@ impl NluManager for SnipsNluManager {
 		
 
         Ok(())
+    }
+}
+
+impl NluManagerStatic for SnipsNluManager {
+    fn list_compatible_langs() -> Vec<LanguageIdentifier> {
+        vec![
+            langid!("de"),
+            langid!("en"),
+            langid!("es"),
+            langid!("fr"),
+            langid!("it"),
+            langid!("ja"),
+            langid!("ko"),
+            langid!("pt_br"),
+            langid!("pt_pt")
+        ]
     }
 }
 

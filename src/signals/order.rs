@@ -9,7 +9,7 @@ use std::rc::Rc;
 use crate::actions::ActionSet;
 use crate::config::Config;
 use crate::interfaces::{CURR_INTERFACE, DirectVoiceInterface, UserInterface};
-use crate::nlu::{Nlu, NluManager, NluResponseSlot, NluUtterance, EntityInstance, EntityDef, EntityData};
+use crate::nlu::{Nlu, NluManager, NluManagerStatic, NluResponseSlot, NluUtterance, EntityInstance, EntityDef, EntityData};
 use crate::python::{try_translate, try_translate_all};
 use crate::stt::DecodeRes;
 use crate::signals::{OrderMap, Signal, SignalEventShared};
@@ -146,8 +146,13 @@ impl SignalOrder {
     pub fn end_loading(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
         let res = match mem::replace(&mut self.nlu_man, None) {
             Some(mut nlu_man) => {
-                nlu_man.ready_lang(curr_lang)?;
-                nlu_man.train(&NLU_TRAIN_SET_PATH.resolve(), &NLU_ENGINE_PATH.resolve(), curr_lang)
+                if SnipsNluManager::is_lang_compatible(curr_lang) {
+                    nlu_man.ready_lang(curr_lang)?;
+                    nlu_man.train(&NLU_TRAIN_SET_PATH.resolve(), &NLU_ENGINE_PATH.resolve(), curr_lang)
+                }
+                else {
+                    Err(anyhow!("Snips NLU is not compatible with the selected language"))
+                }
             }
             None => {
                 panic!("Called end_loading twice");
@@ -167,8 +172,13 @@ impl SignalOrder {
         let train_path = NLU_RASA_PATH.resolve().join("models").join("main_model.tar.gz");
         let res = match mem::replace(&mut self.nlu_man, None) {
             Some(mut nlu_man) => {
-                nlu_man.ready_lang(curr_lang)?;
-                nlu_man.train(&train_path, &model_path.join("main_model.json"), curr_lang)
+                if SnipsNluManager::is_lang_compatible(curr_lang) {
+                    nlu_man.ready_lang(curr_lang)?;
+                    nlu_man.train(&train_path, &model_path.join("main_model.json"), curr_lang)
+                }
+                else {
+                    Err(anyhow!("Rasa NLU is not compatible with the selected language"))
+                }
             }
             None => {
                 panic!("Called end_loading twice");
