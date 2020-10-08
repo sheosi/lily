@@ -1,27 +1,28 @@
-mod stt;
-mod tts;
+mod actions;
 mod audio;
-mod nlu;
-mod vars;
+mod config;
 mod hotword;
+mod interfaces;
+mod mqtt;
+mod nlu;
+mod path_ext;
 mod python;
 mod packages;
-mod vad;
-mod actions;
-mod config;
-mod path_ext;
 mod signals;
-mod interfaces;
+mod stt;
+mod tts;
+mod vad;
+mod vars;
 
 // Standard library
 use std::path::Path;
 use std::rc::Rc;
 
 // This crate
-use crate::vars::PACKAGES_PATH;
+use crate::config::get_conf;
 use crate::packages::load_packages;
 use crate::python::python_init;
-use crate::config::get_conf;
+use crate::vars::PACKAGES_PATH;
 
 // Other crates
 use anyhow::Result;
