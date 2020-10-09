@@ -1,3 +1,5 @@
+"""Python module connecting Python code to Lily"""
+
 import datetime
 from enum import Enum
 import locale
@@ -21,7 +23,9 @@ _action_classes: Dict[str, Any] = {}
 _signal_classes: Dict[str, Any] = {}
 packages_translations = {}
 
-class __InterfaceErrs:
+#pylint: disable=invalid-name
+class __ProtocolErrs:
+    """A class to hold errors and warnings found while analyzing protocols"""
     errs = ""
     warns = ""
 
@@ -34,18 +38,22 @@ class __InterfaceErrs:
         return probs
 
     def add_error(self, prob: str):
+        """Appends prob to the error string (adding a comma if needed)"""
         self.errs = self.__add_str(self.errs, prob)
 
     def add_warn(self, prob: str):
+        """Appends prob to he warning string (adding a comma if needed)"""
         self.warns = self.__add_str(self.warns, prob)
 
     def has_errors(self) -> bool:
+        """Returns True if any error has been found"""
         return self.errs != ""
 
     def has_warns(self) -> bool:
+        """Returns True if any warning has been found"""
         return self.warns != ""
 
-def __compare_class_with(cls: Any, model: Any) -> __InterfaceErrs:
+def __compare_class_with(cls: Any, model: Any) -> __ProtocolErrs:
     def are_arguments_optional_from(params: Mapping[str, inspect.Parameter], first: int) -> bool:
         for idx, param  in enumerate(params.values()):
             if idx >= first:
@@ -54,7 +62,7 @@ def __compare_class_with(cls: Any, model: Any) -> __InterfaceErrs:
 
         return True
 
-    res = __InterfaceErrs()
+    res = __ProtocolErrs()
 
     for attr in model:
         mod_attr = getattr(model, attr)
@@ -87,9 +95,17 @@ def __compare_class_with(cls: Any, model: Any) -> __InterfaceErrs:
 class ActionProtocol:
     """Just an example action to compare to incoming actions"""
     def trigger_action(self, args, context):
-        pass
+        """This function is called when an action is triggered. 'args' is the
+        yaml data in python form (variables, dicts ...) comming from skill
+        definition while 'context' is filled by the signal, and mostly will have
+        things like slots or other relevant data"""
+
 
 def action(name: str):
+    """Declares a class an action, it will be available for skills to use. To 
+    learn more see the ActionProtocol class. Note: the class will be checked at
+    runtime and might be rejected if it doesn't conform to the ActionProtocol
+    (will also be checked at compile time with mypy and Python 3.8)"""
     def inner_deco(cls: ActionProtocol):
         cls_err = __compare_class_with(cls, ActionProtocol)
         if cls_err.has_errors():
@@ -106,16 +122,29 @@ def action(name: str):
 
 
 class SignalProtocol:
+    """The definition of a signal. A signal is in charge of reacting according
+    to the configuration in each skill (passed by 'args' as Python variables
+    from Yaml data) by activating an ActionSet"""
     def add_sig_receptor(self, args: Any, skill_name: str, pkg_name: str, actset: _lily_impl.PyActionSet):
-        pass
+        """Called by the app to add  saet of actions that should be executed in
+        relation to some event"""
 
-    def end_load(self):
-        pass
+    # TODO: Make this one optional
+    #def end_load(self):
+    #    """Called when load has been finished, use this to do any kind of
+    #    finalization, optimization or resource liberation needed. *Optional*"""
+
 
     def event_loop(self, base_context: Dict[str, str], curr_lang: str):
-        pass
+        """Start custom event loop, for the time being it is recomended that
+        you start your own thread as Lily doesn't do it (this will change in the
+        future)"""
 
 def signal(name: str):
+    """Declares a class a signal, it will be available for skills to react to.
+    To learn more see the SignalProtocol class. Note: the class will be checked
+    at runtime and might be reject if doesn't conform to the SignalProtocol
+    (will also be checked at compile time with mypy and Python 3.8)"""
     def inner_deco(cls):
         cls_err = __compare_class_with(cls, SignalProtocol)
         if cls_err.has_errors():
@@ -141,6 +170,9 @@ def __gen_bundle(lang: str, trans_path: Path) -> FluentBundle:
     return bundle
 
 class TransPack:
+    """Just a small class containing a set of translations, both in current
+    language and in the default one, this way we can fallback to the default one
+    if something ever happens"""
     def __init__(self, current, default):
         self.default = default
         self.current = current
@@ -149,7 +181,7 @@ def __set_translations(curr_lang_str: str):
     trans_path = Path('translations')
     DEFAULT_LANG = "en-US"
     if trans_path.is_dir():
-        
+
         lang_list = []
         for lang in trans_path.iterdir():
             if lang.is_dir():
@@ -211,6 +243,10 @@ def _translate_impl(trans_name, dict_args):
 
 
 def translate_all(trans_name, dict_args):
+    """If 'trans_name' starts with a '$' then it will translated using
+    'dict_args' as context variables for them to be used inside Fluent.
+    Returns a list with all possible alternatives for this translation"""
+
     if trans_name[0] == '$':
         what_to_say = _translate_all_impl(trans_name[1:], dict_args)
     else:
@@ -219,7 +255,9 @@ def translate_all(trans_name, dict_args):
     return what_to_say
 
 def translate(trans_name, dict_args):
-    """Returns a translated element, if multiple exist one at random is selected"""
+    """If 'trans_name' starts with a '$' then it will translated using
+    'dict_args' as context variables for them to be used inside Fluent.
+    If multiple alternatives exist returns one at random."""
     if trans_name[0] == '$':
         what_to_say = _translate_impl(trans_name[1:], dict_args)
     else:
@@ -228,15 +266,17 @@ def translate(trans_name, dict_args):
     return what_to_say
 
 def answer(output):
+    """'output' will be returned for it to be shown directly to the user or
+    voiced by the TTS engine according to what was originally used"""
     _lily_impl._say(output)
 
 
-@action(name = "say")
+@action(name="say")
 class Say():
     def trigger_action(self, args: Dict[str, str], context: Dict[str, str]):
         answer(translate(args, context))
 
-@action(name = "play_file")
+@action(name="play_file")
 class PlayFile():
     def trigger_action(self, args, _context):
         _lily_impl._play_file(args)

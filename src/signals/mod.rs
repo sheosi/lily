@@ -147,21 +147,33 @@ impl PythonSignal {
         Self {sig_inst, lily_pkg_path}
     }
 
-    fn call_py_method<A:IntoPy<Py<PyTuple>>>(&mut self, py: Python, name: &str, args: A) -> Result<()> {
-        let meth = self.sig_inst.getattr(py, name).map_err(|py_err|anyhow!("Python error while accessing {}: {:?}", name, py_err))?;
+    fn call_py_method<A:IntoPy<Py<PyTuple>>>(&mut self, py: Python, name: &str, args: A, required: bool) -> Result<()> {
         std::env::set_current_dir(self.lily_pkg_path.as_ref())?;
-        call_for_pkg(
-            self.lily_pkg_path.as_ref(),
-            |_| {
-                meth.call(py, args, None).map_err(
-                    |py_err|{
-                        py_err.clone_ref(py).print(py);
-                        anyhow!("Python error while calling {}: {:?}", name, py_err)
+        match self.sig_inst.getattr(py, name) {
+            Ok(meth) => {
+                call_for_pkg(
+                    self.lily_pkg_path.as_ref(),
+                    |_| {
+                        meth.call(py, args, None).map_err(
+                            |py_err|{
+                                py_err.clone_ref(py).print(py);
+                                anyhow!("Python error while calling {}: {:?}", name, py_err)
+                            }
+                        )?;
+                        Ok(())
                     }
-                )?;
-                Ok(())
+                )?
             }
-        )?
+
+            Err(e) => {
+                if required {
+                    Err(e.into())
+                }
+                else {
+                    Ok(())
+                }
+            }
+        }        
     }
 }
 
@@ -175,20 +187,20 @@ impl Signal for PythonSignal {
         let py_arg = yaml_to_python(py, &sig_arg);
         let actset = PyActionSet::from_arc(act_set);
 
-        self.call_py_method(py, "add_sig_receptor", (py_arg, skill_name, pkg_name, actset))
+        self.call_py_method(py, "add_sig_receptor", (py_arg, skill_name, pkg_name, actset), true)
     }
     fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
         let gil= Python::acquire_gil();
         let py = gil.python();
 
-        self.call_py_method(py, "end_load", (curr_lang.to_string(),))
+        self.call_py_method(py, "end_load", (curr_lang.to_string(),), false)
     }
     fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, base_context: &Py<PyDict>
         , curr_lang: &LanguageIdentifier) -> Result<()> {
         let gil= Python::acquire_gil();
         let py = gil.python();
 
-        self.call_py_method(py, "event_loop", (base_context, curr_lang.to_string()))
+        self.call_py_method(py, "event_loop", (base_context, curr_lang.to_string()), true)
     }
 }
 
