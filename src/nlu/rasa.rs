@@ -281,7 +281,7 @@ fn transform_intents(org: Vec<(String, Vec<NluUtterance>)>) -> Vec<RasaNluCommmo
     result
 }
 
-impl NluManagerStatic {
+impl NluManagerStatic for RasaNluManager {
     fn list_compatible_langs() -> Vec<LanguageIdentifier> {
         vec![
             langid!("de"),

@@ -89,10 +89,10 @@ impl Tts for EspeakTts {
 
         match SOUND_BUFFER.lock() {
             Ok(buffer) => Ok(Audio::new_raw(buffer.replace(Vec::new()), DEFAULT_SAMPLES_PER_SECOND)),
-            Err(poisoned) => Ok(){
+            Err(poisoned) => {
                 warn!("Espeak TTS buffer was corrupted");
                 poisoned.into_inner().replace(Vec::new());
-                Audio::new_empty(DEFAULT_SAMPLES_PER_SECOND)
+                Ok(Audio::new_empty(DEFAULT_SAMPLES_PER_SECOND))
             }
         }
 

@@ -177,7 +177,7 @@ impl SignalOrder {
         let train_path = NLU_RASA_PATH.resolve().join("models").join("main_model.tar.gz");
         let res = match mem::replace(&mut self.nlu_man, None) {
             Some(mut nlu_man) => {
-                if SnipsNluManager::is_lang_compatible(curr_lang) {
+                if RasaNluManager::is_lang_compatible(curr_lang) {
                     nlu_man.ready_lang(curr_lang)?;
                     nlu_man.train(&train_path, &model_path.join("main_model.json"), curr_lang)
                 }

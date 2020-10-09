@@ -19,7 +19,7 @@ fn transcript_to_string(tr: &CandidateTranscript) -> String {
     for token in tr.tokens() {
         match token.text() {
             Ok(text) =>  {res += text}
-            Err(err) => {warn!("Part of transcript ({:?}) couldn't be transformed: {:?}", tr, err)}
+            Err(err) => {warn!("Part of transcript ({}) couldn't be transformed: {:?}", tr, err)}
         }
     }
 
@@ -79,7 +79,7 @@ impl SttVadless for DeepSpeechStt {
     }
 
     fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError> {
-        let stream = replace(&mut self.current_stream, None).ok_or_else(||panic!("end_decoding can't be called before begin decoding"));
+        let stream = replace(&mut self.current_stream, None).ok_or_else(||panic!("end_decoding can't be called before begin decoding")).unwrap();
         let metadata = stream.finish_with_metadata(1)?;
         let transcript = &metadata.transcripts()[0];
 
