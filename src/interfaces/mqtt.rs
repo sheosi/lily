@@ -12,6 +12,25 @@ use pyo3::{types::PyDict, Py};
 use rmp_serde::{decode, encode};
 use rumqttc::{Event, MqttOptions, Client, Packet, QoS};
 use serde::{Deserialize, Serialize};
+use url::Url;
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct MqttConfig {
+    #[serde(default = "def_broker")]
+    broker: String
+}
+
+impl Default for MqttConfig {
+    fn default() -> Self {
+        Self {
+            broker: def_broker()
+        }
+    }
+}
+
+fn def_broker() -> String {
+    "127.0.0.1".to_owned()
+}
 
 pub struct MqttInterface {
     output: Arc<Mutex<MqttInterfaceOutput>>,
@@ -36,10 +55,12 @@ struct MsgNlu {
 }
 
 impl UserInterface for MqttInterface {
-    fn interface_loop<F: FnMut( Option<DecodeRes>, SignalEventShared)->Result<()>> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, mut callback: F) -> Result<()> {
-        const BROKER_URL: &str = "127.0.0.1";
-        const PORT: u16 = 1883;
-        let mut mqttoptions = MqttOptions::new("lily-server", BROKER_URL, PORT);
+    fn interface_loop<F: FnMut( Option<DecodeRes>, SignalEventShared)->Result<()>> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, mut callback: F) -> Result<()> { 
+        let mqtt_conf = config.mqtt_conf.unwrap_or(MqttConfig::default());
+        let url = Url::parse(&mqtt_conf.broker).unwrap();
+        let host = url.host_str().unwrap();
+        let port: u16 = url.port().unwrap_or(1883);
+        let mut mqttoptions = MqttOptions::new("lily-server", host, port);
         // TODO: Set username and passwd
         mqttoptions.set_keep_alive(5);
     
