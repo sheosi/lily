@@ -3,7 +3,6 @@ mod audio;
 mod config;
 mod hotword;
 mod interfaces;
-mod mqtt;
 mod nlu;
 mod path_ext;
 mod python;

@@ -19,6 +19,8 @@ ctrlc = "^3.1" # To catch ctrl-c in all platforms and exit the program
 #tokio = {version = "^0.2", features = ["full"]}
 #futures = "^0.3"
 #async-trait = "^0.1"
+rumqttc = {version = "^0.1", optional = true}
+rmp-serde = {version = "^0.14", optional = true}
 
 rsnowboy = {git = "https://github.com/sheosi/rsnowboy"} # Hotword detector
 #vad = "0.1.5" # Note: Had to be disabled because syntex_syntax was causing problems
@@ -64,3 +66,4 @@ deepspeech_stt = ["deepspeech"]
 devel_cpal_rec = ["cpal", "ringbuf"]
 devel_rasa_nlu= []
 unused_stt_batcher= []
+mqtt_interface = ["rumqttc", "rmp-serde"]

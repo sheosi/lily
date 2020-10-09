@@ -72,8 +72,38 @@ impl DirectVoiceInterface {
 
         Ok(DirectVoiceInterface{stt, output})
     }
+}
 
-    pub fn interface_loop<F: FnMut( Option<DecodeRes>, SignalEventShared)->Result<()>> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, mut callback: F) -> Result<()> {
+
+struct DirectVoiceInterfaceOutput {
+    tts: Box<dyn Tts>
+}
+
+impl DirectVoiceInterfaceOutput {
+    fn new(curr_lang: &LanguageIdentifier, config: &Config) -> Result<Self> {
+        const VOICE_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};
+        let ibm_tts_gateway_key = config.extract_ibm_tts_data();
+
+        let tts = TtsFactory::load_with_prefs(curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS)?;
+        info!("Using tts {}", tts.get_info());
+
+        Ok(Self{tts})
+    }
+}
+
+impl UserInterfaceOutput for DirectVoiceInterfaceOutput {
+    fn answer(&mut self, input: &str) -> Result<()> {
+        let audio = self.tts.synth_text(input)?;
+        PlayDevice::new()?.wait_audio(audio)?;
+        Ok(())
+    }
+}
+
+
+
+impl UserInterface for DirectVoiceInterface {
+
+    fn interface_loop<F: FnMut( Option<DecodeRes>, SignalEventShared)->Result<()>> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, mut callback: F) -> Result<()> {
         let mut record_device = RecDevice::new()?;
         let mut _play_device = PlayDevice::new();
 
@@ -151,36 +181,7 @@ impl DirectVoiceInterface {
             }
         }
     }
-}
 
-
-struct DirectVoiceInterfaceOutput {
-    tts: Box<dyn Tts>
-}
-
-impl DirectVoiceInterfaceOutput {
-    fn new(curr_lang: &LanguageIdentifier, config: &Config) -> Result<Self> {
-        const VOICE_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};
-        let ibm_tts_gateway_key = config.extract_ibm_tts_data();
-
-        let tts = TtsFactory::load_with_prefs(curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS)?;
-        info!("Using tts {}", tts.get_info());
-
-        Ok(Self{tts})
-    }
-}
-
-impl UserInterfaceOutput for DirectVoiceInterfaceOutput {
-    fn answer(&mut self, input: &str) -> Result<()> {
-        let audio = self.tts.synth_text(input)?;
-        PlayDevice::new()?.wait_audio(audio)?;
-        Ok(())
-    }
-}
-
-
-
-impl UserInterface for DirectVoiceInterface {
     fn get_output(&self) -> SharedOutput {
         self.output.clone()
     }
