@@ -2,11 +2,13 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use crate::stt::IbmSttData;
-use crate::interfaces::MqttConfig;
 use crate::vars::{DEFAULT_HOTWORD_SENSITIVITY, MAIN_CONF_PATH, NO_KEY_MSG};
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use serde_yaml::Value;
+
+#[cfg(feature="mqtt_interface")]
+use crate::interfaces::MqttConfig;
 
 thread_local! {
      pub static GLOBAL_CONF: RefCell<Rc<Config>> = RefCell::new(Rc::new(Config::default()));
@@ -31,6 +33,7 @@ pub struct Config {
     #[serde(default = "false_val")]
     pub debug_record_active_speech: bool,
 
+    #[cfg(feature="mqtt_interface")]
     #[serde(default = "none_mqtt")]
     pub mqtt_conf: Option<MqttConfig>,
 
@@ -47,6 +50,7 @@ fn none_ibm_stt() -> Option<IbmSttData> {
     None
 }
 
+#[cfg(feature="mqtt_interface")]
 fn none_mqtt() -> Option<MqttConfig> {
     None
 }
@@ -77,6 +81,21 @@ fn load_conf() -> Result<Config> {
 }
 
 impl Config {
+    #[cfg(not(feature = "mqtt_interface"))]
+    fn default() -> Self {
+        Config{
+            prefer_online_tts: false,
+            prefer_online_stt: false,
+            ibm_tts_key: None,
+            ibm_stt: None,
+            ibm_gateway: None,
+            language: None,
+            hotword_sensitivity: DEFAULT_HOTWORD_SENSITIVITY,
+            debug_record_active_speech: false,
+            pkgs_conf: HashMap::new()
+        }
+    }
+    #[cfg(feature = "mqtt_interface")]
     fn default() -> Self {
         Config{
             prefer_online_tts: false,
