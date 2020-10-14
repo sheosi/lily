@@ -56,7 +56,7 @@ struct MsgNlu {
 
 impl UserInterface for MqttInterface {
     fn interface_loop<F: FnMut( Option<DecodeRes>, SignalEventShared)->Result<()>> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, mut callback: F) -> Result<()> { 
-        let mqtt_conf = config.mqtt_conf.unwrap_or(MqttConfig::default());
+        let mqtt_conf = config.mqtt_conf.clone().unwrap_or(MqttConfig::default());
         let url = Url::parse(&mqtt_conf.broker).unwrap();
         let host = url.host_str().unwrap();
         let port: u16 = url.port().unwrap_or(1883);
