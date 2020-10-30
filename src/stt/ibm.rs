@@ -1,10 +1,10 @@
 use std::time::{Duration, Instant};
 
-use crate::audio::AudioRaw;
 use crate::stt::{DecodeRes, OnlineSttError, SttInfo, SttConstructionError, SttBatched,SttError, SttVadless};
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
+use lily_common::audio::AudioRaw;
 use maplit::hashmap;
 use reqwest::{blocking, header};
 use tungstenite::{client::AutoStream, connect, Message, WebSocket};
@@ -286,7 +286,7 @@ impl IbmSttEngine {
 		Ok(())
 	}
 
-	pub fn live_process(&mut self, audio: &crate::audio::AudioRaw) -> Result<(), OnlineSttError> {
+	pub fn live_process(&mut self, audio: &AudioRaw) -> Result<(), OnlineSttError> {
 		let socket = {
 			if let Some(ref mut sck) = self.curr_socket {
 				sck

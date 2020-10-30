@@ -1,7 +1,9 @@
-use crate::audio::AudioRaw;
+
 use crate::stt::{DecodeState, SttError, SttStream, SttVadless, SttInfo};
-use crate::vad::Vad;
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
+
+use lily_common::audio::AudioRaw;
+use lily_common::vad::Vad;
 
 #[cfg(feature = "unused_stt_batcher")]
 use crate::stt::SttBatched;

@@ -10,7 +10,7 @@ pub enum SttError {
     OnlineError(#[from] OnlineSttError),
 
     #[error("Error from the vad")]
-    Vad(#[from] crate::vad::VadError),
+    Vad(#[from] lily_common::vad::VadError),
 
     #[cfg(feature = "deepspeech_stt")]
     #[error("Deepspeech error")]
@@ -39,7 +39,7 @@ pub enum SttConstructionError {
     CantLoadFiles,
 
     #[error("Vad couldn't be constructed")]
-    CantConstrucVad(#[from] crate::vad::VadError)
+    CantConstrucVad(#[from] lily_common::vad::VadError)
 }
 
 #[derive(Error,Debug)]
@@ -51,7 +51,7 @@ pub enum OnlineSttError {
 	UrlParse(#[from] url::ParseError),
 
 	#[error("wav conversion")]
-	WavConvert(#[from] crate::audio::AudioError),
+	WavConvert(#[from] lily_common::audio::AudioError),
 
 	#[error("json parsing")]
 	JsonParse(#[from] serde_json::Error),

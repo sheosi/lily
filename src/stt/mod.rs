@@ -15,13 +15,13 @@ pub use self::pocketsphinx::*;
 pub use self::deepspeech::*;
 
 use core::fmt::Display;
-use crate::audio::AudioRaw;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use unic_langid::LanguageIdentifier;
 use log::info;
 
-use crate::vad::SnowboyVad;
-use crate::vars::SNOWBOY_DATA_PATH;
+use lily_common::audio::AudioRaw;
+use lily_common::vad::SnowboyVad;
+use lily_common::vars::SNOWBOY_DATA_PATH;
 
 
 #[derive(Debug, Clone)]

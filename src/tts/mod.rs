@@ -18,10 +18,10 @@ mod google;
 #[cfg(feature = "google_tts")]
 pub use self::google::*;
 
-use crate::audio::Audio;
-
-use unic_langid::LanguageIdentifier;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
+use lily_common::audio::Audio;
+use unic_langid::LanguageIdentifier;
+
 // Traits //////////////////////////////////////////////////////////////////////
 pub trait Tts {
     fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError>;

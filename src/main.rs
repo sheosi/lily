@@ -1,7 +1,5 @@
 mod actions;
-mod audio;
 mod config;
-mod hotword;
 mod interfaces;
 mod nlu;
 mod path_ext;
@@ -10,7 +8,6 @@ mod packages;
 mod signals;
 mod stt;
 mod tts;
-mod vad;
 mod vars;
 
 // Standard library
@@ -21,10 +18,10 @@ use std::rc::Rc;
 use crate::config::get_conf;
 use crate::packages::load_packages;
 use crate::python::python_init;
-use crate::vars::PACKAGES_PATH;
 
 // Other crates
 use anyhow::Result;
+use lily_common::vars::PACKAGES_PATH;
 use pyo3::{conversion::IntoPy, Python, types::PyDict};
 use unic_langid::LanguageIdentifier;
 

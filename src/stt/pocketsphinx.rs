@@ -1,10 +1,10 @@
-use crate::audio::AudioRaw;
 use crate::stt::{calc_threshold, DecodeRes, DecodeState, SttConstructionError, SttError, SttStream, SttInfo};
-use crate::vad::{Vad, VadError};
 use crate::vars::*;
 use crate::path_ext::ToStrResult;
 
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
+use lily_common::audio::AudioRaw;
+use lily_common::vad::{Vad, VadError};
 use pocketsphinx::{PsDecoder, CmdLn};
 use unic_langid::{LanguageIdentifier, langid, langids};
 pub struct Pocketsphinx {

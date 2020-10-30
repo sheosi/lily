@@ -21,12 +21,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 use crate::tts::{TtsConstructionError, VoiceDescr, TtsError, Tts, TtsInfo, TtsStatic, Gender, negotiate_langs_res};
-use crate::audio::Audio;
 use crate::path_ext::ToStrResult;
 use crate::vars::{PICO_DATA_PATH, NO_COMPATIBLE_LANG_MSG};
 
-use unic_langid::{LanguageIdentifier, langid, langids};
+use lily_common::audio::Audio;
 use ttspico as pico;
+use unic_langid::{LanguageIdentifier, langid, langids};
 
 pub struct PicoTts {
     engine: pico::Engine

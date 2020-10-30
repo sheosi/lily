@@ -57,7 +57,9 @@ struct MsgNlu {
 impl UserInterface for MqttInterface {
     fn interface_loop<F: FnMut( Option<DecodeRes>, SignalEventShared)->Result<()>> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, mut callback: F) -> Result<()> { 
         let mqtt_conf = config.mqtt_conf.clone().unwrap_or(MqttConfig::default());
-        let url = Url::parse(&mqtt_conf.broker).unwrap();
+        let url = Url::parse(
+            &format!("http://{}", mqtt_conf.broker) // WOn't work without protocol
+        ).unwrap();
         let host = url.host_str().unwrap();
         let port: u16 = url.port().unwrap_or(1883);
         let mut mqttoptions = MqttOptions::new("lily-server", host, port);
@@ -92,7 +94,7 @@ impl UserInterface for MqttInterface {
             {   
                 let msg_vec = replace(self.common_out.lock().unwrap().deref_mut(), Vec::new());
                 for msg in msg_vec {
-                    let msg_pack = encode::to_vec(&MsgAnswer{data: msg}).unwrap();
+                    let msg_pack = encode::to_vec(&MsgAnswer{data: msg}).unwrap(); 
                     client.publish("lily/say_msg", QoS::AtMostOnce, false, msg_pack).unwrap();
                 }
             }

@@ -6,12 +6,12 @@ use std::ffi::{CStr, CString};
 use std::ptr::null;
 use std::sync::Mutex;
 
-use crate::audio::Audio;
 use crate::tts::{Gender, TtsError, TtsConstructionError,  VoiceDescr, TtsInfo, Tts, TtsStatic};
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
 use espeak_ng_sys::*;
 use lazy_static::lazy_static;
+use lily_common::audio::Audio;
 use libc::{c_short, c_int};
 use log::warn;
 use unic_langid::LanguageIdentifier;

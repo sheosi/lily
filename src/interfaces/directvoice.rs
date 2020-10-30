@@ -3,19 +3,20 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::thread::sleep;
 
-use crate::audio::{AudioRaw, PlayDevice, Recording, RecDevice};
 use crate::config::Config;
-use crate::hotword::{HotwordDetector, Snowboy};
 use crate::interfaces::{SharedOutput, UserInterface, UserInterfaceOutput};
 use crate::signals::SignalEventShared;
 use crate::stt::{DecodeRes, DecodeState, SttFactory, SttStream};
 use crate::tts::{VoiceDescr, Gender, Tts, TtsFactory};
-use crate::vars::*;
 
 use anyhow::Result;
 use pyo3::{types::PyDict, Py};
+use lily_common::audio::{Audio, AudioRaw, PlayDevice, Recording, RecDevice};
+use lily_common::hotword::{HotwordDetector, Snowboy};
+use lily_common::vars::*;
 use log::{info, warn};
 use unic_langid::LanguageIdentifier;
+
 
 #[derive(PartialEq)]
 enum ProgState {
@@ -23,7 +24,7 @@ enum ProgState {
     Listening,
 }
 
-fn save_recording_to_disk(recording: &mut crate::audio::Audio, path: &Path) {
+fn save_recording_to_disk(recording: &mut Audio, path: &Path) {
     if let Some(str_path) = path.to_str() {
         if let Err(err) = recording.write_ogg(str_path) {
             warn!("Couldn't save recording: {:?}", err);
@@ -108,7 +109,7 @@ impl UserInterface for DirectVoiceInterface {
         let mut _play_device = PlayDevice::new();
 
         let mut current_speech = if config.debug_record_active_speech{
-            Some(crate::audio::Audio::new_empty(DEFAULT_SAMPLES_PER_SECOND))
+            Some(Audio::new_empty(DEFAULT_SAMPLES_PER_SECOND))
         }
         else {
             None

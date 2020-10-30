@@ -22,15 +22,11 @@ ctrlc = "^3.1" # To catch ctrl-c in all platforms and exit the program
 rumqttc = {version = "^0.1", optional = true}
 rmp-serde = {version = "^0.14", optional = true}
 
-rsnowboy = {git = "https://github.com/sheosi/rsnowboy"} # Hotword detector
 #vad = "0.1.5" # Note: Had to be disabled because syntex_syntax was causing problems
 pocketsphinx = "^0.6.0" # Offline Stt
-deepspeech = {version = "^0.8", optional = true} # More correct and better (also slower) Stt 
+deepspeech = {version = "^0.8", optional = true} # More correct and better (also slower) Stt
 sphinxad = "^0.1" # Recording library
-cpal = {version = "^0.12", optional = true} # For recording (future substitute of sphinxad)
-ringbuf = {version = "^0.2", optional = true} # Send what is recorded from the consumer to the producer
-ogg = "^0.7" # Send to web services audio and to save into disk
-opus = "^0.2" # The format we use in ogg
+opus = "^0.2" # Still used to propagate errors
 
 snips-nlu-lib = { git = "https://github.com/snipsco/snips-nlu-rs", branch = "master" } # NLU
 snips-nlu-ontology = { git = "https://github.com/snipsco/snips-nlu-ontology", tag = "0.67.1"  } # NLU-related things
@@ -53,6 +49,8 @@ url = "^2.1"
 base64 = "^0.12" # For sending data to the online TTS and STT
 tungstenite = "^0.11" # Web sockets for online STT
 
+lily_common = {path = "common"}
+
 # Localization
 unic-langid = {version="^0.9", features = ["macros"]} # For parsing Unicode Language Identifiers
 locale_config = "*" # Interact with the system locale, the * is suggestednby it's author
@@ -63,7 +61,7 @@ default = ["devel_cpal_rec"]
 extra_langs_tts = ["espeak-ng-sys"]
 google_tts = ["google_translate_tts"]
 deepspeech_stt = ["deepspeech"]
-devel_cpal_rec = ["cpal", "ringbuf"]
+devel_cpal_rec = ["lily_common/devel_cpal_rec"]
 devel_rasa_nlu= []
 unused_stt_batcher= []
 mqtt_interface = ["rumqttc", "rmp-serde"]

@@ -1,7 +1,7 @@
 use crate::tts::{Tts, VoiceDescr, TtsConstructionError, Gender, TtsError, TtsInfo, TtsStatic, OnlineTtsError, negotiate_langs_res};
-use crate::audio::Audio;
 use crate::vars::{NO_COMPATIBLE_LANG_MSG, DEFAULT_SAMPLES_PER_SECOND};
 
+use lily_common::audio::Audio;
 use unic_langid::{LanguageIdentifier, langid, langids};
 
 pub struct IbmTts {
