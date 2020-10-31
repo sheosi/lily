@@ -17,7 +17,8 @@ anyhow = "^1.0" # For error handling overall in the app
 log = "^0.4" # Common API for logging so we can change backend easily
 rodio = {git = "https://github.com/RustAudio/rodio"} # Playback library
 lazy_static = "^1.4" # We use this for the path were the data is stored
-
+sphinxad = "^0.1" # Recording library
+serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
 
 [features]
 devel_cpal_rec = ["cpal", "ringbuf"]

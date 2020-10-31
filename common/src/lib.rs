@@ -1,4 +1,5 @@
 pub mod audio;
+pub mod communication;
 pub mod hotword;
 pub mod vad;
 pub mod vars;

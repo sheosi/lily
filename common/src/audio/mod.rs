@@ -5,6 +5,7 @@ pub use self::playdevice::*;
 pub use self::recdevice::*;
 
 use std::io::Write;
+use std::path::Path;
 use crate::vars::{DEFAULT_SAMPLES_PER_SECOND, LILY_VER};
 use thiserror::Error;
 
@@ -75,13 +76,13 @@ impl Audio {
         }
     }
 
-    pub fn write_ogg(&self, filename:&str) -> Result<(), AudioError> {
+    pub fn write_ogg(&self, file_path:&Path) -> Result<(), AudioError> {
 
         match &self.buffer {
             Data::Raw(vec_data) => {
                 let audio_raw = AudioRaw::new_raw(vec_data.clone(), self.samples_per_second);
                 let as_ogg = audio_raw.to_ogg_opus()?;
-                let mut file = std::fs::File::create(filename)?;
+                let mut file = std::fs::File::create(file_path)?;
                 file.write_all(&as_ogg)?;
             }
             Data::Encoded(_) => {panic!("Can't transform to ogg an encoded audio");}

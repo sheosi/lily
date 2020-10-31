@@ -61,6 +61,7 @@ checksum = "3441f0f7b02788e948e47f457ca01f1d7e6d92c693bc132c22b087d3141c03ff"
 name = "base_client"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "cpal",
  "lily_common",
  "rmp-serde",
@@ -368,6 +369,8 @@ dependencies = [
  "opus",
  "rodio 0.12.0 (git+https://github.com/RustAudio/rodio)",
  "rsnowboy",
+ "serde",
+ "sphinxad",
  "thiserror",
 ]
 
@@ -908,6 +911,25 @@ dependencies = [
  "libc",
  "redox_syscall",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "sphinxad"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25243eb30561e022342cfab96bbb0107e25119d71defea2b2e3f7e31446057b3"
+dependencies = [
+ "sphinxad-sys",
+]
+
+[[package]]
+name = "sphinxad-sys"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4a1bd3e2883d802d4e55327473eb5e175bc4020a9ea3e3dacca56e828f68b33"
+dependencies = [
+ "libc",
+ "pkg-config",
 ]
 
 [[package]]

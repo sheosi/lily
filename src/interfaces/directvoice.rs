@@ -24,17 +24,6 @@ enum ProgState {
     Listening,
 }
 
-fn save_recording_to_disk(recording: &mut Audio, path: &Path) {
-    if let Some(str_path) = path.to_str() {
-        if let Err(err) = recording.write_ogg(str_path) {
-            warn!("Couldn't save recording: {:?}", err);
-        }
-    }
-    else {
-        warn!("Couldn't save recording, failed to transform path to unicode: {:?}", path);
-    }
-}
-
 pub struct DirectVoiceInterface {
     stt: Box<dyn SttStream>,
     output: Arc<Mutex<DirectVoiceInterfaceOutput>>,
@@ -126,15 +115,15 @@ impl UserInterface for DirectVoiceInterface {
         record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
         hotword_detector.start_hotword_check()?; 
 
-            loop {
-                let interval =
-                    if current_state == ProgState::WaitingForHotword {HOTWORD_CHECK_INTERVAL_MS}
-                    else {ACTIVE_LISTENING_INTERVAL_MS};
+        loop {
+            let interval =
+                if current_state == ProgState::WaitingForHotword {HOTWORD_CHECK_INTERVAL_MS}
+                else {ACTIVE_LISTENING_INTERVAL_MS};
 
-                let microphone_data = match record_device.read_for_ms(interval)? {
-                    Some(d) => d,
-                    None => continue,
-                };
+            let microphone_data = match record_device.read_for_ms(interval)? {
+                Some(d) => d,
+                None => continue,
+            };
 
 
             match current_state {
@@ -170,7 +159,8 @@ impl UserInterface for DirectVoiceInterface {
                             record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
 
                             if let Some(ref mut curr) = current_speech {
-                                save_recording_to_disk(curr, LAST_SPEECH_PATH.resolve().as_path());
+                                let last_speech_path = LAST_SPEECH_PATH.resolve().as_path();
+                                curr.write_ogg(last_speech_path).map_err(|err|warn!("Couldn't save recording: {:?}", err));
                                 curr.clear();
                             }
 

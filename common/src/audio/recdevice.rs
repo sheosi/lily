@@ -1,6 +1,7 @@
 use std::time::{SystemTime, Duration, UNIX_EPOCH};
 use crate::vars::{CLOCK_TOO_EARLY_MSG, DEFAULT_SAMPLES_PER_SECOND, RECORD_BUFFER_SIZE};
 use log::info;
+use thiserror::Error;
 
 #[cfg(feature = "devel_cpal_rec")]
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -10,8 +11,6 @@ use cpal::{BufferSize, SampleRate, Stream, StreamConfig};
 use ringbuf::{Consumer, RingBuffer};
 #[cfg(feature = "devel_cpal_rec")]
 use log::error;
-#[cfg(feature = "devel_cpal_rec")]
-use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum RecordingError {
@@ -71,7 +70,7 @@ impl RecDevice {
 impl Recording for RecDevice {
     fn read(&mut self) -> Result<Option<&[i16]>, RecordingError> {
         self.last_read = Self::get_millis();
-        self.device.read(&mut self.buffer[..])
+        Ok(self.device.read(&mut self.buffer[..])?)
     }
 
     fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, RecordingError> {
@@ -90,10 +89,10 @@ impl Recording for RecDevice {
 
     fn start_recording(&mut self) -> Result<(), RecordingError> {
         self.last_read = SystemTime::now().duration_since(UNIX_EPOCH).expect(CLOCK_TOO_EARLY_MSG).as_millis();
-        self.device.start_recording()
+        Ok(self.device.start_recording()?)
     }
     fn stop_recording(&mut self) -> Result<(), RecordingError> {
-        self.device.stop_recording()
+        Ok(self.device.stop_recording()?)
     }
 }
 
