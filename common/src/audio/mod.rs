@@ -4,9 +4,13 @@ mod recdevice;
 pub use self::playdevice::*;
 pub use self::recdevice::*;
 
-use std::io::Write;
+use std::io::{Cursor, Write};
 use std::path::Path;
 use crate::vars::{DEFAULT_SAMPLES_PER_SECOND, LILY_VER};
+
+use ogg::{PacketReader, PacketWriter};
+use opus::{Decoder as OpusDec, Encoder as OpusEnc};
+
 use thiserror::Error;
 
 enum Data {
@@ -93,6 +97,16 @@ impl Audio {
         Ok(())
     }
 
+    pub fn into_encoded(self) -> Result<Vec<u8>, AudioError> {
+        match self.buffer {
+            Data::Raw(vec_data) => {
+                let audio_raw = AudioRaw::new_raw(vec_data.clone(), self.samples_per_second);
+                audio_raw.to_ogg_opus()
+            }
+            Data::Encoded(vec_data) => {Ok(vec_data)}
+        }
+    }
+
     pub fn clear(&mut self) {
         self.buffer.clear();
     }
@@ -139,6 +153,22 @@ impl AudioRaw {
         }
     }
 
+    pub fn from_ogg_opus(data: Vec<u8>) -> Result<Self, AudioError> {
+        let mut reader = PacketReader::new(Cursor::new(&data));
+        let mut decoder =  OpusDec::new(DEFAULT_SAMPLES_PER_SECOND, opus::Channels::Mono)?;
+
+        let mut buffer: Vec<i16> = Vec::new();
+
+        reader.read_packet_expected().map_err(|_| AudioError::MalformedAudio)?; // Header
+        reader.read_packet_expected().map_err(|_| AudioError::MalformedAudio)?; // Tags
+        
+        while let Some(data) = reader.read_packet()? {
+            decoder.decode(&data.data, &mut buffer, false)?;
+        }
+
+        Ok(AudioRaw::new_raw(buffer, DEFAULT_SAMPLES_PER_SECOND))
+    }
+
     pub fn to_ogg_opus(&self) -> Result<Vec<u8>, AudioError> {
         // This should have a bitrate of 25.6 Kb/s, above the 24 Kb/s that IBM recomends
 
@@ -149,8 +179,8 @@ impl AudioRaw {
 
         let mut buffer: Vec<u8> = Vec::new();
         {
-            let mut packet_writer = ogg::PacketWriter::new(&mut buffer);
-            let mut opus_encoder = opus::Encoder::new(16000, opus::Channels::Mono, opus::Application::Audio)?;
+            let mut packet_writer = PacketWriter::new(&mut buffer);
+            let mut opus_encoder = OpusEnc::new(16000, opus::Channels::Mono, opus::Application::Audio)?;
 
 
             let max = {
@@ -227,6 +257,13 @@ impl AudioRaw {
 pub enum AudioError {
     #[error("Io Error")]
     IOError(#[from] std::io::Error),
+
     #[error("Encoding error")]
-    OpusError(#[from] opus::Error)
+    OpusError(#[from] opus::Error),
+
+    #[error("Input audio was malformed")]
+    MalformedAudio,
+
+    #[error("Failed to decode ogg")]
+    OggReadError(#[from] ogg::OggReadError)
 }

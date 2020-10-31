@@ -19,6 +19,7 @@ rodio = {git = "https://github.com/RustAudio/rodio"} # Playback library
 lazy_static = "^1.4" # We use this for the path were the data is stored
 sphinxad = "^0.1" # Recording library
 serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
+syslog = "^5.0" # Linux log interface
 
 [features]
 devel_cpal_rec = ["cpal", "ringbuf"]

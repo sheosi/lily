@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::thread::sleep;
@@ -95,7 +94,6 @@ impl UserInterface for DirectVoiceInterface {
 
     fn interface_loop<F: FnMut( Option<DecodeRes>, SignalEventShared)->Result<()>> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, mut callback: F) -> Result<()> {
         let mut record_device = RecDevice::new()?;
-        let mut _play_device = PlayDevice::new();
 
         let mut current_speech = if config.debug_record_active_speech{
             Some(Audio::new_empty(DEFAULT_SAMPLES_PER_SECOND))

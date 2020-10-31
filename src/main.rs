@@ -21,33 +21,12 @@ use crate::python::python_init;
 
 // Other crates
 use anyhow::Result;
+use lily_common::other::init_log;
 use lily_common::vars::PACKAGES_PATH;
 use pyo3::{conversion::IntoPy, Python, types::PyDict};
 use unic_langid::LanguageIdentifier;
 
 
-fn init_log() {
-    let formatter = syslog::Formatter3164 {
-        facility: syslog::Facility::LOG_USER,
-        hostname: None,
-        process: "lily".into(),
-        pid: 0,
-    };
-
-    // Use Debug log level for debug compilations
-    let log_level = if cfg!(debug_assertions) {
-        log::LevelFilter::Debug
-    }
-    else {
-        log::LevelFilter::Info
-    };
-
-    let logger = syslog::unix(formatter).expect("could not connect to syslog");
-    log::set_boxed_logger(Box::new(syslog::BasicLogger::new(logger)))
-            .map(|()| log::set_max_level(log_level)).ok();
-    //simple_logger::init()?;
-
-}
 
 fn get_locale_default() -> String {
     for (tag, val) in locale_config::Locale::user_default().tags() {

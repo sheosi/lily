@@ -5,13 +5,19 @@ use std::ops::DerefMut;
 use crate::interfaces::{SharedOutput, UserInterface, UserInterfaceOutput};
 use crate::config::Config;
 use crate::signals::SignalEventShared;
-use crate::stt::DecodeRes;
+use crate::stt::{DecodeRes, DecodeState, IbmSttData, SttFactory};
+use crate::tts::{Gender, TtsFactory, VoiceDescr};
+use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
 use anyhow::Result;
+use lily_common::audio::AudioRaw;
+use lily_common::communication::{MsgAnswerVoice, MsgNluVoice};
+use log::info;
 use pyo3::{types::PyDict, Py};
 use rmp_serde::{decode, encode};
 use rumqttc::{Event, MqttOptions, Client, Packet, QoS};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use unic_langid::LanguageIdentifier;
 use url::Url;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -34,25 +40,24 @@ fn def_broker() -> String {
 
 pub struct MqttInterface {
     output: Arc<Mutex<MqttInterfaceOutput>>,
-    common_out: Arc<Mutex<Vec<String>>>
+    common_out: Arc<Mutex<Vec<String>>>,
+    curr_lang: LanguageIdentifier,
+    ibm_data: Option<IbmSttData>
 }
 
 impl MqttInterface {
-    pub fn new() -> Self {        
+    pub fn new(curr_lang: LanguageIdentifier, config: &Config) -> Self {        
         let common_out = Arc::new(Mutex::new(Vec::new()));
-        Self {output: Arc::new(Mutex::new(MqttInterfaceOutput::create(common_out.clone()))), common_out}
+        let ibm_data = config.extract_ibm_stt_data();
+        Self {
+            output: Arc::new(Mutex::new(MqttInterfaceOutput::create(common_out.clone()))),
+            common_out,
+            curr_lang,
+            ibm_data
+        }
     }
 }
 
-#[derive(Serialize)]
-struct MsgAnswer {
-    data: String
-}
-
-#[derive(Deserialize)]
-struct MsgNlu {
-    hypothesis: String
-}
 
 impl UserInterface for MqttInterface {
     fn interface_loop<F: FnMut( Option<DecodeRes>, SignalEventShared)->Result<()>> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, mut callback: F) -> Result<()> { 
@@ -68,6 +73,16 @@ impl UserInterface for MqttInterface {
     
         let (mut client, mut connection) = Client::new(mqttoptions, 10);
         client.subscribe("lily/nlu_process", QoS::AtMostOnce).unwrap();
+
+        let dummy_sample = AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND);
+        let stt = SttFactory::load(&self.curr_lang, &dummy_sample,  config.prefer_online_stt, self.ibm_data)?;
+        info!("Using stt {}", stt.get_info());
+
+        const VOICE_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};
+        let ibm_tts_gateway_key = config.extract_ibm_tts_data();
+
+        let tts = TtsFactory::load_with_prefs(&self.curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS)?;
+
         
         for notification in connection.iter() {
             
@@ -78,9 +93,17 @@ impl UserInterface for MqttInterface {
                         Packet::Publish(pub_msg) => {
                             match pub_msg.topic.as_str() {
                                 "lily/nlu_process" => {
-                                    let msg_nlu: MsgNlu = decode::from_read(std::io::Cursor::new(pub_msg.payload)).unwrap();
-                                    let hypothesis = msg_nlu.hypothesis;
-                                    callback(Some(DecodeRes{hypothesis}), signal_event.clone())?;                
+                                    let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload)).unwrap();
+                                    let as_raw = AudioRaw::from_ogg_opus(msg_nlu.audio)?;
+                                    match stt.decode(&as_raw.buffer)? {
+                                        DecodeState::Finished(decode_res) => {
+                                            callback(decode_res, signal_event.clone())?;
+                                        }
+                                        
+                                        _ => {}
+                                    }
+                                    
+                                    
                                 }
                                 _ => {}
                             }
@@ -94,7 +117,8 @@ impl UserInterface for MqttInterface {
             {   
                 let msg_vec = replace(self.common_out.lock().unwrap().deref_mut(), Vec::new());
                 for msg in msg_vec {
-                    let msg_pack = encode::to_vec(&MsgAnswer{data: msg}).unwrap(); 
+                    let synth_audio = tts.synth_text(&msg)?;
+                    let msg_pack = encode::to_vec(&MsgAnswerVoice{data: synth_audio.into_encoded()?}).unwrap(); 
                     client.publish("lily/say_msg", QoS::AtMostOnce, false, msg_pack).unwrap();
                 }
             }

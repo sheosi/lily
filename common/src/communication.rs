@@ -5,7 +5,7 @@ pub struct MsgAnswerVoice {
     pub data: Vec<u8>
 }
 
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
 pub struct MsgNluVoice {
     pub audio: Vec<u8>,
     pub is_final: bool
