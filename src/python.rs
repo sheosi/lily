@@ -2,7 +2,6 @@ use std::cell::{RefCell, Ref};
 use std::rc::Rc;
 use std::path::Path;
 
-use crate::interfaces::CURR_INTERFACE;
 use crate::vars::{PYDICT_SET_ERR_MSG, NO_YAML_FLOAT_MSG};
 
 use anyhow::{anyhow, Result};

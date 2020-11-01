@@ -18,8 +18,8 @@ ctrlc = "^3.1" # To catch ctrl-c in all platforms and exit the program
 # Some async deps
 tokio = {version = "^0.3", features = ["rt", "macros"]}
 async-trait = "^0.1"
-rumqttc = {version = "^0.1", optional = true}
-rmp-serde = {version = "^0.14", optional = true}
+rumqttc = "^0.1"
+rmp-serde = "^0.14"
 
 #vad = "0.1.5" # Note: Had to be disabled because syntex_syntax was causing problems
 pocketsphinx = "^0.6.0" # Offline Stt
@@ -54,10 +54,9 @@ locale_config = "*" # Interact with the system locale, the * is suggestednby it'
 fluent-langneg = "^0.13" # Language negotiation
 
 [features]
-default = ["mqtt_interface"]
+default = []
 extra_langs_tts = ["espeak-ng-sys"]
 google_tts = ["google_translate_tts"]
 deepspeech_stt = ["deepspeech"]
 devel_rasa_nlu= []
 unused_stt_batcher= []
-mqtt_interface = ["rumqttc", "rmp-serde"]

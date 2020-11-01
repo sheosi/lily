@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 // This crate
 use crate::actions::ActionSet;
 use crate::config::Config;
-use crate::interfaces::{CURR_INTERFACE, UserInterface};
+use crate::interfaces::MqttInterface;
 use crate::nlu::{Nlu, NluManager, NluManagerStatic, NluResponseSlot, NluUtterance, EntityInstance, EntityDef, EntityData};
 use crate::python::{try_translate, try_translate_all};
 use crate::stt::DecodeRes;
@@ -18,12 +18,6 @@ use crate::vars::*;
 use crate::nlu::{SnipsNlu, SnipsNluManager};
 #[cfg(feature="devel_rasa_nlu")]
 use crate::nlu::{RasaNlu, RasaNluManager};
-
-
-#[cfg(not(feature="mqtt_interface"))]
-use crate::interfaces::DirectVoiceInterface;
-#[cfg(feature="mqtt_interface")]
-use crate::interfaces::MqttInterface;
 
 // Other crates
 use anyhow::{Result, anyhow};
@@ -238,18 +232,9 @@ impl SignalOrder {
         }
     Ok(())
     }
-
-    #[cfg(not(feature = "mqtt_interface"))]
-    pub fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()> {
-        let mut interface = DirectVoiceInterface::new(curr_lang, config)?;
-        CURR_INTERFACE.with(|itf|itf.replace(interface.get_output()));
-        interface.interface_loop(config, signal_event, base_context, |d, s|{self.received_order(d, s, base_context)})
-    }
-
-    #[cfg(feature = "mqtt_interface")]    
+ 
     pub fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()> {
         let mut interface = MqttInterface::new(curr_lang, config);
-        CURR_INTERFACE.with(|itf|itf.replace(interface.get_output()));
         interface.interface_loop(config, signal_event, base_context, |d, s|{self.received_order(d, s, base_context)})
     }
 }
