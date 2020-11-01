@@ -43,7 +43,6 @@ fn def_broker() -> String {
 }
 
 pub struct MqttInterface {
-    output: MqttInterfaceOutput,
     common_out: Arc<Mutex<Vec<String>>>,
     curr_lang: LanguageIdentifier,
     ibm_data: Option<IbmSttData>
@@ -56,7 +55,6 @@ impl MqttInterface {
         let output = MqttInterfaceOutput::create(common_out.clone());
         MSG_OUTPUT.lock().unwrap().replace(output.clone());
         Self {
-            output,
             common_out,
             curr_lang: curr_lang.to_owned(),
             ibm_data
