@@ -75,13 +75,13 @@ impl UserInterface for MqttInterface {
         client.subscribe("lily/nlu_process", QoS::AtMostOnce).unwrap();
 
         let dummy_sample = AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND);
-        let stt = SttFactory::load(&self.curr_lang, &dummy_sample,  config.prefer_online_stt, self.ibm_data)?;
+        let mut stt = SttFactory::load(&self.curr_lang, &dummy_sample,  config.prefer_online_stt, self.ibm_data.clone())?;
         info!("Using stt {}", stt.get_info());
 
         const VOICE_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};
         let ibm_tts_gateway_key = config.extract_ibm_tts_data();
 
-        let tts = TtsFactory::load_with_prefs(&self.curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS)?;
+        let mut tts = TtsFactory::load_with_prefs(&self.curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS)?;
 
         
         for notification in connection.iter() {
