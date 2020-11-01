@@ -157,8 +157,9 @@ impl UserInterface for DirectVoiceInterface {
                             record_device.start_recording().expect(AUDIO_REC_START_ERR_MSG);
 
                             if let Some(ref mut curr) = current_speech {
-                                let last_speech_path = LAST_SPEECH_PATH.resolve().as_path();
-                                curr.write_ogg(last_speech_path).map_err(|err|warn!("Couldn't save recording: {:?}", err));
+                                let last_speech_pathbuf = LAST_SPEECH_PATH.resolve();
+                                let last_speech_path = last_speech_pathbuf.as_path();
+                                curr.write_ogg(last_speech_path).map_err(|err|warn!("Couldn't save recording: {:?}", err))?;
                                 curr.clear();
                             }
 
