@@ -248,7 +248,7 @@ impl SignalOrder {
 
     #[cfg(feature = "mqtt_interface")]    
     pub fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()> {
-        let mut interface = MqttInterface::new();
+        let mut interface = MqttInterface::new(curr_lang, config);
         CURR_INTERFACE.with(|itf|itf.replace(interface.get_output()));
         interface.interface_loop(config, signal_event, base_context, |d, s|{self.received_order(d, s, base_context)})
     }

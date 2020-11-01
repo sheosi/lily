@@ -15,7 +15,6 @@ Lily is written in Rust + Python.
 - libasound2-dev
 - libpocketsphinx-dev
 - libsphinxbase-dev
-- (also needs sphinxad, but is the same pacakge on debina)
 - python3-all-dev
 - libopus-dev
 - clang

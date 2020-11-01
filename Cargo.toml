@@ -16,16 +16,14 @@ thiserror = "^1.0" # For error handling in parts that can be made their own crat
 regex = "^1.3" # To parse configuration
 ctrlc = "^3.1" # To catch ctrl-c in all platforms and exit the program
 # Some async deps
-#tokio = {version = "^0.2", features = ["full"]}
-#futures = "^0.3"
-#async-trait = "^0.1"
+tokio = {version = "^0.3", features = ["rt", "macros"]}
+async-trait = "^0.1"
 rumqttc = {version = "^0.1", optional = true}
 rmp-serde = {version = "^0.14", optional = true}
 
 #vad = "0.1.5" # Note: Had to be disabled because syntex_syntax was causing problems
 pocketsphinx = "^0.6.0" # Offline Stt
 deepspeech = {version = "^0.8", optional = true} # More correct and better (also slower) Stt
-sphinxad = "^0.1" # Recording library
 opus = "^0.2" # Still used to propagate errors
 
 snips-nlu-lib = { git = "https://github.com/snipsco/snips-nlu-rs", branch = "master" } # NLU
@@ -39,7 +37,6 @@ espeak-ng-sys = {git = "https://github.com/sheosi/espeak-ng-sys", optional = tru
 libc = "^0.2" # Required to interface with espeak-ng-sys
 rodio = {git = "https://github.com/RustAudio/rodio"} # Playback library
 
-syslog = "^5.0" # Linux log interface
 log = "^0.4" # Common API for logging so we can change backend easily
 
 #Cloud-based

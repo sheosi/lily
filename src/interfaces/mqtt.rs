@@ -46,13 +46,13 @@ pub struct MqttInterface {
 }
 
 impl MqttInterface {
-    pub fn new(curr_lang: LanguageIdentifier, config: &Config) -> Self {        
+    pub fn new(curr_lang: &LanguageIdentifier, config: &Config) -> Self {
         let common_out = Arc::new(Mutex::new(Vec::new()));
         let ibm_data = config.extract_ibm_stt_data();
         Self {
             output: Arc::new(Mutex::new(MqttInterfaceOutput::create(common_out.clone()))),
             common_out,
-            curr_lang,
+            curr_lang: curr_lang.to_owned(),
             ibm_data
         }
     }
@@ -88,30 +88,23 @@ impl UserInterface for MqttInterface {
             
             println!("Notification = {:?}", notification);
             match notification.unwrap() {
-                Event::Incoming(inc_msg) => {
-                    match inc_msg {
-                        Packet::Publish(pub_msg) => {
-                            match pub_msg.topic.as_str() {
-                                "lily/nlu_process" => {
-                                    let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload)).unwrap();
-                                    let as_raw = AudioRaw::from_ogg_opus(msg_nlu.audio)?;
-                                    match stt.decode(&as_raw.buffer)? {
-                                        DecodeState::Finished(decode_res) => {
-                                            callback(decode_res, signal_event.clone())?;
-                                        }
-                                        
-                                        _ => {}
-                                    }
-                                    
-                                    
+                Event::Incoming(Packet::Publish(pub_msg)) => {
+                    match pub_msg.topic.as_str() {
+                        "lily/nlu_process" => {
+                            let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload)).unwrap();
+                            let as_raw = AudioRaw::from_ogg_opus(msg_nlu.audio)?;
+                            match stt.decode(&as_raw.buffer)? {
+                                DecodeState::Finished(decode_res) => {
+                                    callback(decode_res, signal_event.clone())?;
                                 }
+                                
                                 _ => {}
                             }
                         }
                         _ => {}
                     }
                 }
-                Event::Outgoing(_) => {}
+                _ => {}
             }
 
             {   

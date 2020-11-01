@@ -159,7 +159,7 @@ impl UserInterface for DirectVoiceInterface {
                             if let Some(ref mut curr) = current_speech {
                                 let last_speech_pathbuf = LAST_SPEECH_PATH.resolve();
                                 let last_speech_path = last_speech_pathbuf.as_path();
-                                curr.write_ogg(last_speech_path).map_err(|err|warn!("Couldn't save recording: {:?}", err))?;
+                                curr.write_ogg(last_speech_path).map_err(|err|warn!("Couldn't save recording: {:?}", err));
                                 curr.clear();
                             }
 
