@@ -84,7 +84,6 @@ impl MqttInterface {
 
         let mut tts = TtsFactory::load_with_prefs(&self.curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS)?;
 
-        
         for notification in connection.iter() {
             
             println!("Notification = {:?}", notification);

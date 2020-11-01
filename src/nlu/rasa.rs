@@ -1,11 +1,12 @@
 // Note: Rasa needs tensorflow_text
 use std::collections::HashMap;
 use std::convert::{Into, TryInto};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 
 use crate::nlu::{compare_sets_and_train, try_open_file_and_check, write_contents};
-use crate::nlu::{EntityDef, EntityData, Nlu, NluManager, NluManagerStatic, NluResponse, NluResponseSlot, NluUtterance};
+use crate::nlu::{EntityDef, EntityData, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponse, NluResponseSlot, NluUtterance};
+use crate::vars::NLU_RASA_PATH;
 
 use anyhow::{anyhow, Result};
 use reqwest::blocking;
@@ -23,7 +24,8 @@ pub struct RasaNlu {
 }
 
 impl RasaNlu {
-    pub fn new(model_path: &Path) -> Result<Self> {
+
+    fn new(model_path: &Path) -> Result<Self> {
         let mod_path_str =model_path.to_str().ok_or_else(||anyhow!("Can't use provided path to rasa NLU data contains non-UTF8 characters"))?;
         let process_res = Command::new("rasa").args(&["run", "--enable-api", "-m", mod_path_str]).spawn();
         let _process = process_res.map_err(|err|anyhow!("Rasa can't be executed: {:?}", err))?;
@@ -124,10 +126,6 @@ pub struct RasaNluManager {
 }
 
 impl RasaNluManager {
-    pub fn new() -> Self {
-        Self{intents: vec![], synonyms: vec![]}
-    }
-
     fn make_pipeline() -> Vec<HashMap<String, Value>> {
 
         vec![
@@ -176,6 +174,8 @@ impl RasaNluManager {
 }
 
 impl NluManager for RasaNluManager {
+    type NluType = RasaNlu;
+
     fn ready_lang(&mut self, _lang: &LanguageIdentifier) -> Result<()> {
         // Nothing to be done right now
         Ok(())
@@ -189,7 +189,7 @@ impl NluManager for RasaNluManager {
         self.synonyms.extend(def.data.into_iter());
     }
 
-    fn train(self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<()> {
+    fn train(self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<RasaNlu> {
 
         let train_set = self.make_train_set_json()?;
         let train_conf = Self::make_train_conf(lang)?;
@@ -209,7 +209,7 @@ impl NluManager for RasaNluManager {
                 .wait().expect("rasa failed it's training, maybe some argument it's wrong?");
             })?;
 
-        Ok(())
+        RasaNlu::new(engine_path)
     }
 }
 
@@ -282,6 +282,11 @@ fn transform_intents(org: Vec<(String, Vec<NluUtterance>)>) -> Vec<RasaNluCommmo
 }
 
 impl NluManagerStatic for RasaNluManager {
+    fn new() -> Self {
+        Self{intents: vec![], synonyms: vec![]}
+    }
+
+
     fn list_compatible_langs() -> Vec<LanguageIdentifier> {
         vec![
             langid!("de"),
@@ -293,6 +298,10 @@ impl NluManagerStatic for RasaNluManager {
             langid!("pt"),
             langid!("zh")
         ]
+    }
+
+    fn name() -> &'static str {
+        "Rasa"
     }
 }
 
@@ -308,6 +317,14 @@ impl Into<NluResponse> for RasaResponse {
     }
 }
 
+impl NluManagerConf for RasaNluManager {
+    fn get_paths() -> (PathBuf, PathBuf) {
+        let train_path = NLU_RASA_PATH.resolve().join("models").join("main_model.tar.gz");
+        let model_path = NLU_RASA_PATH.resolve().join("data");
+
+        (train_path, model_path)
+    }
+}
 #[derive(Error, Debug)]
 pub enum RasaError {
     #[error("Failed to write training configuration")]

@@ -1,5 +1,5 @@
 // Standard library
-use std::collections::HashMap;
+ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::mem;
 use std::sync::{Arc, Mutex};
@@ -8,16 +8,11 @@ use std::sync::{Arc, Mutex};
 use crate::actions::ActionSet;
 use crate::config::Config;
 use crate::interfaces::MqttInterface;
-use crate::nlu::{Nlu, NluManager, NluManagerStatic, NluResponseSlot, NluUtterance, EntityInstance, EntityDef, EntityData};
+use crate::nlu::{EntityInstance, EntityDef, EntityData, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponseSlot, NluUtterance};
 use crate::python::{try_translate, try_translate_all};
 use crate::stt::DecodeRes;
 use crate::signals::{OrderMap, Signal, SignalEventShared};
-use crate::vars::*;
-
-#[cfg(not(feature="devel_rasa_nlu"))]
-use crate::nlu::{SnipsNlu, SnipsNluManager};
-#[cfg(feature="devel_rasa_nlu")]
-use crate::nlu::{RasaNlu, RasaNluManager};
+use crate::vars::MIN_SCORE_FOR_ACTION;
 
 // Other crates
 use anyhow::{Result, anyhow};
@@ -25,6 +20,12 @@ use pyo3::{Py, conversion::IntoPy, types::PyDict, Python};
 use log::{info, warn};
 use serde::Deserialize;
 use unic_langid::LanguageIdentifier;
+
+#[cfg(not(feature = "devel_rasa_nlu"))]
+use crate::nlu::SnipsNluManager;
+
+#[cfg(feature = "devel_rasa_nlu")]
+use crate::nlu::RasaNluManager;
 
 #[derive(Deserialize)]
 struct YamlEntityDef {
@@ -108,49 +109,32 @@ pub fn add_order<N: NluManager>(
 }
 
 // Answers to a user order (either by voice or by text)
-#[cfg(not(feature = "devel_rasa_nlu"))]
-pub struct SignalOrder {
+
+pub struct SignalOrder<M: NluManager + NluManagerStatic + NluManagerConf> {
     order_map: OrderMap,
-    nlu_man: Option<SnipsNluManager>,
-    nlu: Option<SnipsNlu>
+    nlu_man: Option<M>,
+    nlu: Option<M::NluType>
 }
 
-#[cfg(feature = "devel_rasa_nlu")]
-pub struct SignalOrder {
-    order_map: OrderMap,
-    nlu_man: Option<RasaNluManager>,
-    nlu: Option<RasaNlu>
-}
-
-impl SignalOrder {
-    #[cfg(not(feature = "devel_rasa_nlu"))]
+impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
     pub fn new() -> Self {
         SignalOrder {
             order_map: OrderMap::new(),
-            nlu_man: Some(SnipsNluManager::new()),
+            nlu_man: Some(M::new()),
             nlu: None
         }
     }
 
-    #[cfg(feature = "devel_rasa_nlu")]
-    pub fn new() -> Self {
-        SignalOrder {
-            order_map: OrderMap::new(),
-            nlu_man: Some(RasaNluManager::new()),
-            nlu: None
-        }
-    }
-
-    #[cfg(not(feature = "devel_rasa_nlu"))]
     pub fn end_loading(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
-        let res = match mem::replace(&mut self.nlu_man, None) {
+        let (train_path, model_path) = M::get_paths();
+        self.nlu = match mem::replace(&mut self.nlu_man, None) {
             Some(mut nlu_man) => {
-                if SnipsNluManager::is_lang_compatible(curr_lang) {
+                if M::is_lang_compatible(curr_lang) {
                     nlu_man.ready_lang(curr_lang)?;
-                    nlu_man.train(&NLU_TRAIN_SET_PATH.resolve(), &NLU_ENGINE_PATH.resolve(), curr_lang)
+                    Some(nlu_man.train(&train_path, &model_path.join("main_model.json"), curr_lang)?)
                 }
                 else {
-                    Err(anyhow!("Snips NLU is not compatible with the selected language"))
+                    Err(anyhow!("{} NLU is not compatible with the selected language", M::name()))?
                 }
             }
             None => {
@@ -158,38 +142,10 @@ impl SignalOrder {
             }
         };
 
-        info!("Init Nlu");
-        self.nlu = Some(SnipsNlu::new(&NLU_ENGINE_PATH.resolve())?);
+        info!("Initted Nlu");
         
-        res
+        Ok(())
     }
-    
-
-    #[cfg(feature = "devel_rasa_nlu")]
-    pub fn end_loading(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
-        let model_path = NLU_RASA_PATH.resolve().join("data");
-        let train_path = NLU_RASA_PATH.resolve().join("models").join("main_model.tar.gz");
-        let res = match mem::replace(&mut self.nlu_man, None) {
-            Some(mut nlu_man) => {
-                if RasaNluManager::is_lang_compatible(curr_lang) {
-                    nlu_man.ready_lang(curr_lang)?;
-                    nlu_man.train(&train_path, &model_path.join("main_model.json"), curr_lang)
-                }
-                else {
-                    Err(anyhow!("Rasa NLU is not compatible with the selected language"))
-                }
-            }
-            None => {
-                panic!("Called end_loading twice");
-            }
-        };
-
-        info!("Init Nlu");
-        self.nlu = Some(RasaNlu::new(&train_path)?);
-        
-        res
-    }
-
 
     fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &Py<PyDict>) -> Result<()> {
         match decode_res {
@@ -259,7 +215,7 @@ fn add_slots(base_context: &Py<PyDict>, slots: Vec<NluResponseSlot>) -> Result<P
 
 }
 
-impl Signal for SignalOrder {
+impl<M:NluManager + NluManagerStatic + NluManagerConf> Signal for SignalOrder<M> {
     fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
         match self.nlu_man {
             Some(ref mut nlu_man) => {
@@ -296,3 +252,14 @@ impl TryInto<EntityDef> for YamlEntityDef {
         Ok(EntityDef{data, use_synonyms: true, automatically_extensible: true})
     }
 }
+
+#[cfg(not(feature = "devel_rasa_nlu"))]
+pub fn new_signal_order() -> SignalOrder<SnipsNluManager> {
+    SignalOrder::new()
+}
+
+#[cfg(feature = "devel_rasa_nlu")]
+pub fn new_signal_order() -> SignalOrder<RasaNluManager> {
+    SignalOrder::new()
+}
+

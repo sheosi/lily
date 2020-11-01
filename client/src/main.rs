@@ -246,7 +246,7 @@ struct ConnectionConf {
 impl Default for ConnectionConf {
     fn default() -> Self {
         Self {
-            url_str: "127.0.0.1:1883".to_owned()
+            url_str: "127.0.0.1".to_owned()
         }
     }
 }

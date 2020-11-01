@@ -79,9 +79,10 @@ pub struct SignalRegistry {
 }
 
 impl SignalRegistry {
+
     pub fn new() -> Self {
         let mut signals: HashMap<String, Rc<RefCell<dyn Signal>>> = HashMap::new();
-        signals.insert("order".to_string(), Rc::new(RefCell::new(SignalOrder::new())));
+        signals.insert("order".to_string(), Rc::new(RefCell::new(new_signal_order())));
 
         Self {
             event: Rc::new(RefCell::new(SignalEvent::new())),

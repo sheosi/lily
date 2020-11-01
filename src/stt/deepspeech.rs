@@ -36,7 +36,7 @@ impl DeepSpeechStt {
         let dir_path = DEEPSPEECH_DATA_PATH.resolve().join(&lang_str);
         if dir_path.is_dir() {
             let mut model = Model::load_from_files(&dir_path.join(&format!("{}.pbmm", &lang_str))).map_err(|_| SttConstructionError::CantLoadFiles)?;
-            model.enable_external_scorer(&dir_path.join(&format!("{}.scorer", &lang_str)));
+            model.enable_external_scorer(&dir_path.join(&format!("{}.scorer", &lang_str)))?;
             model.set_scorer_alpha_beta(ALPHA, BETA).expect(ALPHA_BETA_MSG);
             model.set_model_beam_width(BEAM_WIDTH).expect(SET_BEAM_MSG);
 

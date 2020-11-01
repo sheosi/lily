@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use serde::Serialize;
@@ -21,16 +21,18 @@ mod rasa;
 pub use self::rasa::*;
 
 pub trait NluManager {
+    type NluType: Nlu;
     fn ready_lang(&mut self, lang: &LanguageIdentifier) -> Result<()>;
 
     fn add_intent(&mut self, order_name: &str, phrases: Vec<NluUtterance>);
     fn add_entity(&mut self, name:&str, def: EntityDef);
 
     // Consume the struct so that we can reuse memory
-    fn train(self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<()>; 
+    fn train(self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<Self::NluType>;
 }
 
 pub trait NluManagerStatic {
+    fn new() -> Self;
     fn list_compatible_langs() -> Vec<LanguageIdentifier>;
     fn is_lang_compatible(lang: &LanguageIdentifier) -> bool {
         !negotiate_languages(&[lang],
@@ -39,6 +41,11 @@ pub trait NluManagerStatic {
             NegotiationStrategy::Filtering
         ).is_empty()
     }
+    fn name() -> &'static str;
+}
+
+pub trait NluManagerConf {
+    fn get_paths() -> (PathBuf, PathBuf);
 }
 
 pub enum NluUtterance{
@@ -141,3 +148,5 @@ pub fn compare_sets_and_train<F: FnOnce()>(train_set_path: &Path, train_set:&str
 
     Ok(())
 }
+
+

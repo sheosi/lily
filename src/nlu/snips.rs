@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::convert::Into;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::nlu::compare_sets_and_train;
-use crate::nlu::{EntityDef, Nlu, NluManager, NluManagerStatic, NluResponse, NluResponseSlot, NluUtterance};
+use crate::nlu::{EntityDef, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponse, NluResponseSlot, NluUtterance};
+use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH};
 
 use anyhow::{anyhow, Result};
 use regex::Regex;
@@ -49,12 +50,6 @@ pub struct EntityValue {
 pub struct SnipsNluManager {
     intents: Vec<(String, Vec<NluUtterance>)>,
     entities: HashMap<String, EntityDef>
-}
-
-impl SnipsNluManager {
-    pub fn new() -> Self {
-        SnipsNluManager {intents: vec![], entities:HashMap::new()}
-    }
 }
 
 #[derive(Debug)]
@@ -141,6 +136,7 @@ impl SnipsNluManager {
 }
 
 impl NluManager for SnipsNluManager {
+    type NluType = SnipsNlu;
     fn ready_lang(&mut self, lang: &LanguageIdentifier) -> Result<()> {
         let lang_str = lang.language.as_str();
         let success = std::process::Command::new("snips-nlu")
@@ -163,7 +159,7 @@ impl NluManager for SnipsNluManager {
         self.entities.insert(name.to_string(), def);
     }
 
-    fn train(self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<()> {
+    fn train(self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<SnipsNlu> {
 
     	let train_set = self.make_train_set_json(lang)?;
 
@@ -176,14 +172,16 @@ impl NluManager for SnipsNluManager {
             .expect("Failed to open snips-nlu binary")
             .wait().expect("snips-nlu failed it's execution, maybe some argument it's wrong?");
         })?;
-			
-		
 
-        Ok(())
+        SnipsNlu::new(engine_path)
     }
 }
 
 impl NluManagerStatic for SnipsNluManager {
+    fn new() -> Self {
+        SnipsNluManager {intents: vec![], entities:HashMap::new()}
+    }
+
     fn list_compatible_langs() -> Vec<LanguageIdentifier> {
         vec![
             langid!("de"),
@@ -197,6 +195,19 @@ impl NluManagerStatic for SnipsNluManager {
             langid!("pt_pt")
         ]
     }
+
+    fn name() -> &'static str {
+        "Snips"
+    }
+}
+
+impl NluManagerConf for SnipsNluManager {
+    fn get_paths() -> (PathBuf, PathBuf) {
+        let train_path = NLU_TRAIN_SET_PATH.resolve().to_path_buf();
+        let model_path = NLU_ENGINE_PATH.resolve().to_path_buf();
+
+        (train_path, model_path)
+    }
 }
 
 /// Nlu ////////////////////////////////////////////////////////////////////////////////////////////
@@ -206,7 +217,7 @@ pub struct SnipsNlu {
 }
 
 impl SnipsNlu {
-    pub fn new(engine_path: &Path) -> Result<SnipsNlu> {
+    fn new(engine_path: &Path) -> Result<SnipsNlu> {
         let engine = SnipsNluEngine::from_path(engine_path).map_err(|err|anyhow!("Error while creating NLU engine, details: {:?}", err))?; 
 
         Ok(SnipsNlu { engine })
