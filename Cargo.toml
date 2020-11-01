@@ -57,7 +57,7 @@ locale_config = "*" # Interact with the system locale, the * is suggestednby it'
 fluent-langneg = "^0.13" # Language negotiation
 
 [features]
-default = []
+default = ["mqtt_interface"]
 extra_langs_tts = ["espeak-ng-sys"]
 google_tts = ["google_translate_tts"]
 deepspeech_stt = ["deepspeech"]

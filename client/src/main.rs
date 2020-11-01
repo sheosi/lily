@@ -239,10 +239,23 @@ async fn user_listen(rec_dev: Rc<Mutex<RecDevice>>,config: &ClientConf, mut clie
     }
 }
 
+struct ConnectionConf {
+    url_str: String
+}
+
+impl Default for ConnectionConf {
+    fn default() -> Self {
+        Self {
+            url_str: "127.0.0.1:1883".to_owned()
+        }
+    }
+}
+
 #[tokio::main(flavor = "current_thread")]
 pub async fn main() {
 
-    let url_str = "127.0.0.1:1883";
+    let con_conf = ConnectionConf::default();
+    let url_str = con_conf.url_str;
     let url = Url::parse(
         &format!("http://{}",url_str) // Let's add some protocol
     ).unwrap();

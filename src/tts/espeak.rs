@@ -58,7 +58,7 @@ extern "C" fn espeak_callback(wav: *mut c_short, num_samples: c_int, _: *mut esp
             warn!("Espeak TTS buffer was corrupted");
             let mut new_buffer = Vec::new();
             new_buffer.extend_from_slice(wav_slc);
-            poisoned.into_inner().borrow_mut().replace(new_buffer);
+            poisoned.into_inner().replace(new_buffer);
         }
 
     }
