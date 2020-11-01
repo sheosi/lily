@@ -2,6 +2,7 @@ use std::cell::{RefCell, Ref};
 use std::rc::Rc;
 use std::path::Path;
 
+use crate::interfaces::MSG_OUTPUT;
 use crate::vars::{PYDICT_SET_ERR_MSG, NO_YAML_FLOAT_MSG};
 
 use anyhow::{anyhow, Result};
@@ -231,16 +232,13 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
 
 #[pyfunction]
 fn python_say(py: Python, text: &str) -> PyResult<PyObject> {
-    let res = CURR_INTERFACE.with(
-        |itf|itf.borrow().lock().py_excep::<PyAttributeError>().and_then(
-            |mut i|i.answer(text).py_excep::<PyAttributeError>()
-        )
-    );
-
-    match res {
-        Ok(()) => Ok(py.None()),
-        Err(err) => Err(PyErr::new::<PyOSError,_>(format!("Error while playing audio: {:?}", err)))
+    match *MSG_OUTPUT.lock().py_excep::<PyAttributeError>()? {
+        Some(ref mut output) => {
+            output.answer(text).py_excep::<PyAttributeError>()?;
+        }
+        _=>{}
     }
+    Ok(py.None())
 }
 
 #[pyfunction]

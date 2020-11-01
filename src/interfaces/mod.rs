@@ -9,6 +9,7 @@ use crate::tts::{Gender, TtsFactory, VoiceDescr};
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
 use anyhow::Result;
+use lazy_static::lazy_static;
 use lily_common::audio::AudioRaw;
 use lily_common::communication::{MsgAnswerVoice, MsgNluVoice};
 use log::info;
@@ -18,6 +19,10 @@ use rumqttc::{Event, MqttOptions, Client, Packet, QoS};
 use serde::Deserialize;
 use unic_langid::LanguageIdentifier;
 use url::Url;
+
+lazy_static!{
+    pub static ref MSG_OUTPUT: Mutex<Option<MqttInterfaceOutput>> = Mutex::new(None);
+}
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct MqttConfig {
@@ -48,8 +53,10 @@ impl MqttInterface {
     pub fn new(curr_lang: &LanguageIdentifier, config: &Config) -> Self {
         let common_out = Arc::new(Mutex::new(Vec::new()));
         let ibm_data = config.extract_ibm_stt_data();
+        let output = MqttInterfaceOutput::create(common_out.clone());
+        MSG_OUTPUT.lock().unwrap().replace(output.clone());
         Self {
-            output: MqttInterfaceOutput::create(common_out.clone()),
+            output,
             common_out,
             curr_lang: curr_lang.to_owned(),
             ibm_data
@@ -115,10 +122,6 @@ impl MqttInterface {
 
         Ok(())
     }
-
-    fn get_output(&self) -> MqttInterfaceOutput {
-        self.output.clone()
-    }
 }
 
 #[derive(Clone)]
@@ -131,7 +134,7 @@ impl MqttInterfaceOutput {
         Self{common_out}
     }
 
-    fn answer(&mut self, input: &str) -> Result<()> {
+    pub fn answer(&mut self, input: &str) -> Result<()> {
         self.common_out.lock().unwrap().push(input.to_owned());
         Ok(())
     }
