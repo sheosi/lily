@@ -57,11 +57,10 @@ locale_config = "*" # Interact with the system locale, the * is suggestednby it'
 fluent-langneg = "^0.13" # Language negotiation
 
 [features]
-default = ["devel_cpal_rec"]
+default = []
 extra_langs_tts = ["espeak-ng-sys"]
 google_tts = ["google_translate_tts"]
 deepspeech_stt = ["deepspeech"]
-devel_cpal_rec = ["lily_common/devel_cpal_rec"]
 devel_rasa_nlu= []
 unused_stt_batcher= []
 mqtt_interface = ["rumqttc", "rmp-serde"]

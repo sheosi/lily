@@ -26,13 +26,6 @@ is said to be the fastest AI-based Voice Recognition software.
 Features that are in development, in the future they are expected to be the
 default.
 
-- `devel_cpal_rec`: Uses a custom-made _cpal_-based module for recording instead
-of Sphinxad, though Sphinxad might be faster (at least it's pulseaudio
-implementation is very simple), not depending on it, makes building Lily easier,
-and makes us less dependent on pocketsphinx (which might be removed from being
-by default in the future).
-
-
 - `devel_rasa_nlu`: Use _rasa_ as the NLU, instead of Snips, Rasa is much less
 constrained when it comes to languages, can be installed with "pip --user"
 effortlessly (Snips uses a custom script to install languages, this script does

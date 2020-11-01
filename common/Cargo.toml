@@ -8,8 +8,8 @@ edition = "2018"
 
 [dependencies]
 rsnowboy = {git = "https://github.com/sheosi/rsnowboy"} # Hotword detector
-cpal = {version = "^0.12", optional = true} # For recording (future substitute of sphinxad)
-ringbuf = {version = "^0.2", optional = true} # Send what is recorded from the consumer to the producer
+cpal = "^0.12"# For recording (future substitute of sphinxad)
+ringbuf = "^0.2"# Send what is recorded from the consumer to the producer
 ogg = "^0.7" # Send to web services audio and to save into disk
 opus = "^0.2" # The format we use in ogg
 thiserror = "^1.0" # For error handling in parts that can be made their own crate
@@ -17,9 +17,5 @@ anyhow = "^1.0" # For error handling overall in the app
 log = "^0.4" # Common API for logging so we can change backend easily
 rodio = {git = "https://github.com/RustAudio/rodio"} # Playback library
 lazy_static = "^1.4" # We use this for the path were the data is stored
-sphinxad = "^0.1" # Recording library
 serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
 syslog = "^5.0" # Linux log interface
-
-[features]
-devel_cpal_rec = ["cpal", "ringbuf"]

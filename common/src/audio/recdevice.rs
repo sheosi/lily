@@ -3,13 +3,9 @@ use crate::vars::{CLOCK_TOO_EARLY_MSG, DEFAULT_SAMPLES_PER_SECOND, RECORD_BUFFER
 use log::info;
 use thiserror::Error;
 
-#[cfg(feature = "devel_cpal_rec")]
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-#[cfg(feature = "devel_cpal_rec")]
 use cpal::{BufferSize, SampleRate, Stream, StreamConfig};
-#[cfg(feature = "devel_cpal_rec")]
 use ringbuf::{Consumer, RingBuffer};
-#[cfg(feature = "devel_cpal_rec")]
 use log::error;
 
 #[derive(Error, Debug)]
@@ -17,15 +13,12 @@ pub enum RecordingError {
     #[error("Failed to do I/O operations")]
     IoError(#[from]std::io::Error),
 
-    #[cfg(feature = "devel_cpal_rec")]
     #[error("No input device")]
     NoInputDevice,
 
-    #[cfg(feature = "devel_cpal_rec")]
     #[error("Couldn't build stream")]
     BuildStream(#[from] cpal::BuildStreamError),
 
-    #[cfg(feature = "devel_cpal_rec")]
     #[error("Failed to play the stream")]
     PlayStreamError(#[from] cpal::PlayStreamError)
 }
@@ -37,80 +30,18 @@ pub trait Recording {
     fn stop_recording(&mut self) -> Result<(), RecordingError>;
 }
 
-#[cfg(not(feature = "devel_cpal_rec"))]
-pub struct RecDevice {
-    device: sphinxad::AudioDevice,
-    buffer: [i16; RECORD_BUFFER_SIZE],
-    last_read: u128
-}
-
-#[cfg(not(feature = "devel_cpal_rec"))]
-impl RecDevice {
-    pub fn new() -> Result<RecDevice, RecordingError> {
-        info!("Using sphinxad");
-        //let host = cpal::default_host();
-        //let device = host.default_input_device().expect("Something failed");
-
-        let device = sphinxad::AudioDevice::default_with_sps(DEFAULT_SAMPLES_PER_SECOND as usize)?;
-
-        Ok(RecDevice {
-            device,
-            buffer: [0i16; RECORD_BUFFER_SIZE],
-            last_read: 0
-        })
-
-    }
-
-    fn get_millis() -> u128 {
-        SystemTime::now().duration_since(UNIX_EPOCH).expect(CLOCK_TOO_EARLY_MSG).as_millis()
-    }
-}
-
-#[cfg(not(feature = "devel_cpal_rec"))]
-impl Recording for RecDevice {
-    fn read(&mut self) -> Result<Option<&[i16]>, RecordingError> {
-        self.last_read = Self::get_millis();
-        Ok(self.device.read(&mut self.buffer[..])?)
-    }
-
-    fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, RecordingError> {
-        let curr_time = Self::get_millis();
-        let diff_time = (curr_time - self.last_read) as u16;
-        if milis > diff_time{
-            let sleep_time = (milis  - diff_time) as u64 ;
-            std::thread::sleep(Duration::from_millis(sleep_time));
-        }
-        else {
-            //log::info!("We took {}ms more from what we were asked ({})", diff_time - milis, milis);
-        }
-        
-        self.read()
-    }
-
-    fn start_recording(&mut self) -> Result<(), RecordingError> {
-        self.last_read = SystemTime::now().duration_since(UNIX_EPOCH).expect(CLOCK_TOO_EARLY_MSG).as_millis();
-        Ok(self.device.start_recording()?)
-    }
-    fn stop_recording(&mut self) -> Result<(), RecordingError> {
-        Ok(self.device.stop_recording()?)
-    }
-}
-
 // Cpal version
-#[cfg(feature = "devel_cpal_rec")]
 pub struct RecDevice {
     external_buffer: [i16; RECORD_BUFFER_SIZE],
     stream_data: Option<StreamData>
 }
 
-#[cfg(feature = "devel_cpal_rec")]
 struct StreamData {
     internal_buffer_consumer: Consumer<i16>,
     last_read: u128,
     _stream: Stream
 }
 
-#[cfg(feature = "devel_cpal_rec")]
 impl RecDevice {
     // For now just use that error to original RecDevice
     pub fn new() -> Result<Self, RecordingError> {
@@ -160,7 +91,6 @@ impl RecDevice {
     }
 }
 
-#[cfg(feature = "devel_cpal_rec")]
 impl Recording for RecDevice {
     fn read(&mut self) -> Result<Option<&[i16]>, RecordingError> {
         match self.stream_data {
