@@ -18,13 +18,15 @@ mod google;
 #[cfg(feature = "google_tts")]
 pub use self::google::*;
 
+use async_trait::async_trait;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use lily_common::audio::Audio;
 use unic_langid::LanguageIdentifier;
 
 // Traits //////////////////////////////////////////////////////////////////////
+#[async_trait(?Send)]
 pub trait Tts {
-    fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError>;
+    async fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError>;
     fn get_info(&self) -> TtsInfo;
 }
 
@@ -63,12 +65,13 @@ impl<O: Tts> TtsOnlineInterface<O> {
     }
 }
 
+#[async_trait(?Send)]
 impl<O: Tts> Tts for TtsOnlineInterface <O> {
-    fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
-        match self.online.synth_text(input) {
+    async fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
+        match self.online.synth_text(input).await {
             Ok(audio) => Ok(audio),
             // If it didn't work try with local
-            Err(_) => self.local.synth_text(input)
+            Err(_) => self.local.synth_text(input).await
         }
     }
 

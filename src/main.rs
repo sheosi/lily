@@ -38,7 +38,8 @@ fn get_locale_default() -> String {
     "".to_string()
 }
 
-fn main() -> Result<()> {
+#[tokio::main(flavor="current_thread")]
+pub async fn main()  -> Result<()> {
     // Set explicit handle for Ctrl-C signal
     ctrlc::set_handler(move || {
         std::process::exit(0);
@@ -82,7 +83,7 @@ fn main() -> Result<()> {
         PyDict::new(py).into_py(py)
     };
 
-    sigreg.call_loop("order", &config, &base_context, &curr_lang)?;
+    sigreg.call_loop("order", &config, &base_context, &curr_lang).await?;
 
     Ok(())
 }

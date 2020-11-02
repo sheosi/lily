@@ -7,6 +7,7 @@ use crate::nlu::{EntityDef, Nlu, NluManager, NluManagerConf, NluManagerStatic, N
 use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH};
 
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use regex::Regex;
 use serde::Serialize;
 use snips_nlu_lib::SnipsNluEngine;
@@ -224,10 +225,10 @@ impl SnipsNlu {
     }
 }
 
-
+#[async_trait(?Send)]
 impl Nlu for SnipsNlu {
 
-    fn parse(&self, input: &str) -> Result<NluResponse> {
+    async fn parse(&self, input: &str) -> Result<NluResponse> {
         self.engine.parse_with_alternatives(&input, None, None, 3, 3)
         .map(|r|r.into())
         .map_err(|_|anyhow!("Failed snips NLU"))

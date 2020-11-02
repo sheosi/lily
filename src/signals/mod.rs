@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError/*To make a sendable error*/};
 
 // This crate
 use crate::actions::{ActionSet, PyActionSet};
@@ -16,12 +16,34 @@ use crate::python::{call_for_pkg, yaml_to_python};
 
 // Other crates
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use pyo3::{conversion::IntoPy, types::{PyDict, PyTuple}, Py, Python, PyObject};
 use log::warn;
+use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 
-pub type SignalEventShared = Rc<RefCell<SignalEvent>>;
+pub type SignalEventShared = Arc<Mutex<SignalEvent>>;
 type SignalRegistryShared = Rc<RefCell<SignalRegistry>>;
+
+#[derive(Error, Debug)]
+#[error("Poisoned lock: an error happened inside")]
+struct SendablePoisonError;
+
+impl<A> From<PoisonError<A>> for SendablePoisonError {
+    fn from(_other: PoisonError<A>) -> SendablePoisonError {
+        Self
+    }
+}
+
+trait MakeSendable<A> {
+    fn sendable(self) -> Result<A,SendablePoisonError>;
+}
+
+impl<A,B> MakeSendable<A> for Result<A,PoisonError<B>> {
+    fn sendable(self) -> Result<A,SendablePoisonError> {
+        self.map_err(|e|e.into())
+    }
+}
 
 // A especial signal to be called by the system whenever something happens
 pub struct SignalEvent {
@@ -66,10 +88,11 @@ impl OrderMap {
     }
 }
 
+#[async_trait(?Send)]
 pub trait Signal {
     fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()>;
     fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()>;
-    fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()>;
+    async fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()>;
 }
 
 #[derive(Clone)]
@@ -85,14 +108,14 @@ impl SignalRegistry {
         signals.insert("order".to_string(), Rc::new(RefCell::new(new_signal_order())));
 
         Self {
-            event: Rc::new(RefCell::new(SignalEvent::new())),
+            event: Arc::new(Mutex::new(SignalEvent::new())),
             signals
         }
     }
 
     pub fn extend_and_init_classes_py(&mut self, py: Python, pkg_path: &Path, signal_classes: Vec<(PyObject,PyObject)>) -> Result<HashMap<String, Rc<RefCell<dyn Signal>>>> {
         let mut res = HashMap::new();
-        let pkg_path = Rc::new(pkg_path.to_owned());
+        let pkg_path = Arc::new(pkg_path.to_owned());
 
         for (key, val) in  &signal_classes {
             let name = key.to_string();
@@ -128,23 +151,23 @@ impl SignalRegistry {
         Ok(())
     }
 
-    pub fn call_loop(&mut self,
+    pub async fn call_loop(&mut self,
         sig_name: &str,
         config: &Config,
         base_context: &Py<PyDict>,
         curr_lang: &LanguageIdentifier
     ) -> Result<()> {
-        self.signals[sig_name].borrow_mut().event_loop(self.event.clone(), config, base_context, curr_lang)
+        self.signals[sig_name].borrow_mut().event_loop(self.event.clone(), config, base_context, curr_lang).await
     }
 }
 
 struct PythonSignal {
     sig_inst: PyObject,
-    lily_pkg_path: Rc<PathBuf>
+    lily_pkg_path: Arc<PathBuf>
 }
 
 impl PythonSignal {
-    fn new(sig_inst: PyObject, lily_pkg_path: Rc<PathBuf>) -> Self {
+    fn new(sig_inst: PyObject, lily_pkg_path: Arc<PathBuf>) -> Self {
         Self {sig_inst, lily_pkg_path}
     }
 
@@ -178,7 +201,7 @@ impl PythonSignal {
     }
 }
 
-
+#[async_trait(?Send)]
 impl Signal for PythonSignal {
     fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
         // Pass act_set to python so that Python signals can somehow call their respective actions
@@ -196,7 +219,7 @@ impl Signal for PythonSignal {
 
         self.call_py_method(py, "end_load", (curr_lang.to_string(),), false)
     }
-    fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, base_context: &Py<PyDict>
+    async fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, base_context: &Py<PyDict>
         , curr_lang: &LanguageIdentifier) -> Result<()> {
         let gil= Python::acquire_gil();
         let py = gil.python();
@@ -224,7 +247,7 @@ impl LocalSignalRegistry {
 
     pub fn add_sigact_rel(&mut self,sig_name: &str, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
         if sig_name == "event" {
-            self.event.borrow_mut().add(skill_name, act_set);
+            self.event.lock().sendable()?.add(skill_name, act_set);
             Ok(())
         }
         else {

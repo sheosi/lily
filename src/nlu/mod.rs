@@ -6,6 +6,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use async_trait::async_trait;
 use serde::Serialize;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use unic_langid::LanguageIdentifier;
@@ -53,8 +54,9 @@ pub enum NluUtterance{
     WithEntities {text: String, entities: HashMap<String, EntityInstance>}
 }
 
+#[async_trait(?Send)]
 pub trait Nlu {
-    fn parse(&self, input: &str) -> Result<NluResponse>;
+    async fn parse(&self, input: &str) -> Result<NluResponse>;
 }
 
 #[derive(Clone)]

@@ -3,10 +3,11 @@ use std::time::{Duration, Instant};
 use crate::stt::{DecodeRes, OnlineSttError, SttInfo, SttConstructionError, SttBatched,SttError, SttVadless};
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
+use async_trait::async_trait;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use lily_common::audio::AudioRaw;
 use maplit::hashmap;
-use reqwest::{blocking, header};
+use reqwest::{Client, header};
 use tungstenite::{client::AutoStream, connect, Message, WebSocket};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -27,8 +28,8 @@ pub struct IbmSttData {
 
 impl IbmStt {
 
-    pub fn new(lang: &LanguageIdentifier, data: IbmSttData) -> Result<Self, SttConstructionError> {
-        Ok(IbmStt{engine: IbmSttEngine::new(data), model: Self::model_from_lang(lang)?.to_string()})
+    pub async fn new(lang: &LanguageIdentifier, data: IbmSttData) -> Result<Self, SttConstructionError> {
+        Ok(IbmStt{engine: IbmSttEngine::new(data).await, model: Self::model_from_lang(lang)?.to_string()})
     }
 
     fn model_from_lang(lang: &LanguageIdentifier) -> Result<String, SttConstructionError> {
@@ -46,10 +47,11 @@ impl IbmStt {
     }
 }
 
+#[async_trait(?Send)]
 impl SttBatched for IbmStt {
     
-    fn decode(&mut self, audio: &[i16]) -> Result<Option<DecodeRes>, SttError> {
-        Ok(self.engine.decode(&AudioRaw::new_raw(audio.to_vec(), DEFAULT_SAMPLES_PER_SECOND), &self.model)?)
+    async fn decode(&mut self, audio: &[i16]) -> Result<Option<DecodeRes>, SttError> {
+        Ok(self.engine.decode(&AudioRaw::new_raw(audio.to_vec(), DEFAULT_SAMPLES_PER_SECOND), &self.model).await?)
     }
 
     fn get_info(&self) -> SttInfo {
@@ -57,9 +59,10 @@ impl SttBatched for IbmStt {
     }
 }
 
+#[async_trait(?Send)]
 impl SttVadless for IbmStt {
-	fn begin_decoding(&mut self) -> Result<(), SttError> {
-		self.engine.live_process_begin(&self.model)?;
+	async fn begin_decoding(&mut self) -> Result<(), SttError> {
+		self.engine.live_process_begin(&self.model).await?;
 		Ok(())
 	}
     fn process(&mut self, audio: &[i16]) -> Result<(), SttError> {
@@ -192,35 +195,35 @@ struct TokenCache {
 }
 
 impl TokenCache {
-	fn new(api_key: &str) -> Self {
+	async fn new(api_key: &str) -> Self {
 		let mut res = TokenCache{data: None};
-		if let Err(err) = res.get(api_key) {
+		if let Err(err) = res.get(api_key).await {
 			warn!("Initial IBM API key couldn't be obtained, continuing regardless: {:?}", err);
 		}
 
 		res
 	}
 
-	fn gen_iam_token(api_key: &str) -> Result<(String, u16), OnlineSttError> {
+	async fn gen_iam_token(api_key: &str) -> Result<(String, u16), OnlineSttError> {
 		#[derive(Debug, Deserialize)]
 		struct IamResponse {
 			access_token: String,
 			expires_in: u16
 		}
 
-		let clnt = blocking::Client::new();
+		let clnt = Client::new();
 		let url = Url::parse_with_params("https://iam.cloud.ibm.com/identity/token", &[
 			("grant_type", "urn:ibm:params:oauth:grant-type:apikey"),
 			("apikey", api_key)
 			])?;
 		let resp = clnt.post(url)
 		.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-		.header(header::ACCEPT, "application/json").send()?;
-		let resp: IamResponse =  resp.json()?;
+		.header(header::ACCEPT, "application/json").send().await?;
+		let resp: IamResponse =  resp.json().await?;
 		Ok((resp.access_token, resp.expires_in))
 	}
 
-	fn get(&mut self, api_key: &str) -> Result<&str, OnlineSttError> {
+	async fn get(&mut self, api_key: &str) -> Result<&str, OnlineSttError> {
 		let must_redo = if let Some(ref data) = self.data {
 			Instant::now() > data.1
 		}
@@ -231,7 +234,7 @@ impl TokenCache {
 		if must_redo {
 			// A token is valid for 3600 seconds (60 minutes), but to be on the 
 			// safe side let's give it 3480 seconds (58 minutes).
-			let (token, valid_time) = Self::gen_iam_token(api_key)?;
+			let (token, valid_time) = Self::gen_iam_token(api_key).await?;
 			self.data = Some((token, Instant::now() + Duration::new((valid_time - (2 * 60)).into(),0)));
 		}
 
@@ -247,7 +250,7 @@ impl TokenCache {
 
 impl IbmSttEngine {
 
-	pub fn new(data: IbmSttData) -> Self {
+	pub async fn new(data: IbmSttData) -> Self {
 		let location = hashmap! {
 			"Dallas".to_owned() => "us-south",
 			"Washington, DC".to_owned() => "us-east",
@@ -257,7 +260,7 @@ impl IbmSttEngine {
 			"London".to_owned() => "eu-gb",
 			"Seoul".to_owned() => "kr-seo"
 		};
-		IbmSttEngine{curr_socket: None, token_cache: TokenCache::new(&data.api_key), data: IbmSttData {
+		IbmSttEngine{curr_socket: None, token_cache: TokenCache::new(&data.api_key).await, data: IbmSttData {
 			api_key: data.api_key,
 			instance: data.instance,
 			gateway: location[&data.gateway].to_owned()
@@ -265,8 +268,8 @@ impl IbmSttEngine {
 	}
 
 	// Send all audio in one big chunk
-	pub fn decode(&mut self, audio: &AudioRaw, model: &str) -> Result<Option<DecodeRes>, OnlineSttError> {
-		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key)?)?;
+	pub async fn decode(&mut self, audio: &AudioRaw, model: &str) -> Result<Option<DecodeRes>, OnlineSttError> {
+		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key).await?)?;
 		socket.send_order(WatsonOrder::Start)?;
 		socket.send_audio(audio)?;
 		socket.send_order(WatsonOrder::Stop)?;
@@ -278,8 +281,8 @@ impl IbmSttEngine {
 		res
 	}
 
-	pub fn live_process_begin(&mut self, model: &str) -> Result<(), OnlineSttError> {
-		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key)?)?;
+	pub async fn live_process_begin(&mut self, model: &str) -> Result<(), OnlineSttError> {
+		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key).await?)?;
 		socket.send_order(WatsonOrder::Start)?;
 		self.curr_socket = Some(socket);
 		

@@ -2,6 +2,7 @@
 use crate::stt::{DecodeState, SttError, SttStream, SttVadless, SttInfo};
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
+use async_trait::async_trait;
 use lily_common::audio::AudioRaw;
 use lily_common::vad::Vad;
 
@@ -26,8 +27,9 @@ impl<S: SttBatched, V: Vad> SttBatcher<S, V> {
 }
 
 #[cfg(feature = "unused_stt_batcher")]
-impl<S: SttBatched, V: Vad> SttStream for SttBatcher<S, V> {
-    fn begin_decoding(&mut self) -> Result<(),SttError> {
+#[async_trait(?Send)]
+impl<S: SttBatched , V: Vad> SttStream for SttBatcher<S, V> {
+    async fn begin_decoding(&mut self) -> Result<(),SttError> {
         self.copy_audio.clear();
         self.vad.reset()?;
         self.someone_was_talking = false;
@@ -35,7 +37,7 @@ impl<S: SttBatched, V: Vad> SttStream for SttBatcher<S, V> {
         Ok(())
     }
 
-    fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
+    async fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
         self.copy_audio.append_audio(audio, DEFAULT_SAMPLES_PER_SECOND);
         if self.vad.is_someone_talking(audio)? {
             if self.someone_was_talking {
@@ -49,7 +51,7 @@ impl<S: SttBatched, V: Vad> SttStream for SttBatcher<S, V> {
         }
         else {
             if self.someone_was_talking {
-                let res = self.batch_stt.decode(&self.copy_audio.buffer)?;
+                let res = self.batch_stt.decode(&self.copy_audio.buffer).await?;
                 self.someone_was_talking = false;
                 Ok(DecodeState::Finished(res))
             }
@@ -83,17 +85,18 @@ impl<S: SttStream> SttFallback<S> {
     }
 }
 
+#[async_trait(?Send)]
 impl<S: SttStream> SttStream for SttFallback<S> {
-    fn begin_decoding(&mut self) -> Result<(),SttError> {
+    async fn begin_decoding(&mut self) -> Result<(),SttError> {
         self.copy_audio.clear();
-        self.main_stt.begin_decoding()?;
+        self.main_stt.begin_decoding().await?;
         Ok(())
 
     }
 
-    fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
+    async fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
         if !self.using_fallback {
-            match self.main_stt.decode(audio) {
+            match self.main_stt.decode(audio).await {
                 Ok(inter_res) => {
                     if inter_res != DecodeState::NotStarted {
                         self.copy_audio.append_audio(audio, DEFAULT_SAMPLES_PER_SECOND);
@@ -103,9 +106,9 @@ impl<S: SttStream> SttStream for SttFallback<S> {
                 },
                 Err(err) => {
                     warn!("Problem with online STT: {}", err);
-                    self.fallback.begin_decoding()?;
+                    self.fallback.begin_decoding().await?;
                     self.copy_audio.append_audio(audio, DEFAULT_SAMPLES_PER_SECOND);
-                    let inter_res = self.fallback.decode(&self.copy_audio.buffer);
+                    let inter_res = self.fallback.decode(&self.copy_audio.buffer).await;
                     self.copy_audio.clear(); // We don't need the copy audio anymore
                     self.using_fallback = true;
 
@@ -115,7 +118,7 @@ impl<S: SttStream> SttStream for SttFallback<S> {
             }
         }
         else {
-            self.fallback.decode(audio)
+            self.fallback.decode(audio).await
         }
     }
 
@@ -138,15 +141,16 @@ impl<S: SttVadless, V: Vad> SttVadlessInterface<S, V> {
     }
 }
 
+#[async_trait(?Send)]
 impl<S: SttVadless, V: Vad> SttStream for SttVadlessInterface<S,V> {
-    fn begin_decoding(&mut self) -> Result<(),SttError> {
+    async fn begin_decoding(&mut self) -> Result<(),SttError> {
         self.vad.reset()?;
-        self.vadless.begin_decoding()?;
+        self.vadless.begin_decoding().await?;
         Ok(())
 
     }
 
-    fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
+    async fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
         self.vadless.process(audio)?;
         if self.vad.is_someone_talking(audio)? {
             if self.someone_was_talking {

@@ -14,6 +14,7 @@ pub use self::pocketsphinx::*;
 #[cfg(feature = "deepspeech_stt")]
 pub use self::deepspeech::*;
 
+use async_trait::async_trait;
 use core::fmt::Display;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use unic_langid::LanguageIdentifier;
@@ -55,21 +56,24 @@ pub struct DecodeRes {
     pub hypothesis: String
 }
 
+#[async_trait(?Send)]
 // An Stt which accepts an Stream
 pub trait SttStream {
-    fn begin_decoding(&mut self) -> Result<(),SttError>;
-    fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError>;
+    async fn begin_decoding(&mut self) -> Result<(),SttError>;
+    async fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError>;
     fn get_info(&self) -> SttInfo;
 }
 
+#[async_trait(?Send)]
 // An Stt which accepts only audio batches
 pub trait SttBatched {
-    fn decode(&mut self, audio: &[i16]) -> Result<Option<DecodeRes>, SttError>;
+    async fn decode(&mut self, audio: &[i16]) -> Result<Option<DecodeRes>, SttError>;
     fn get_info(&self) -> SttInfo;
 }
 
+#[async_trait(?Send)]
 pub trait SttVadless {
-    fn begin_decoding(&mut self) -> Result<(), SttError>;
+    async fn begin_decoding(&mut self) -> Result<(), SttError>;
     fn process(&mut self, audio: &[i16]) -> Result<(), SttError>;
     fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError>;
     fn get_info(&self) -> SttInfo;
@@ -136,7 +140,7 @@ impl SttFactory {
     }
 
 
-	pub fn load(lang: &LanguageIdentifier, audio_sample: &AudioRaw, prefer_cloud: bool, ibm_data: Option<IbmSttData>) -> Result<Box<dyn SttStream>, SttConstructionError> {
+	pub async fn load(lang: &LanguageIdentifier, audio_sample: &AudioRaw, prefer_cloud: bool, ibm_data: Option<IbmSttData>) -> Result<Box<dyn SttStream>, SttConstructionError> {
 
 		let local_stt = Self::make_local(lang, audio_sample)?;
         if prefer_cloud {
@@ -144,7 +148,7 @@ impl SttFactory {
             if let Some(ibm_data_obj) = ibm_data {
                 info!("Construct online Stt");
                 let vad = SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res"))?;
-                let online = SttVadlessInterface::new(IbmStt::new(lang,ibm_data_obj)?,vad);
+                let online = SttVadlessInterface::new(IbmStt::new(lang,ibm_data_obj).await?,vad);
                 //let online = SttBatcher::new(IbmStt::new(lang,ibm_data_obj)?,vad);
                 Ok(Box::new(SttFallback::new(online, local_stt)))
             }

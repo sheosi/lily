@@ -3,6 +3,7 @@ use std::mem::replace;
 use crate::stt::{DecodeRes, SpecifiesLangs, SttConstructionError, SttError, SttBatched, SttInfo, SttVadless};
 use crate::vars::{ALPHA_BETA_MSG, DEEPSPEECH_DATA_PATH, DEEPSPEECH_READ_FAIL_MSG, SET_BEAM_MSG};
 
+use async_trait::async_trait;
 use anyhow::anyhow;
 use deepspeech::{CandidateTranscript, Model, Stream};
 use log::warn;
@@ -48,8 +49,9 @@ impl DeepSpeechStt {
     }
 }
 
+#[async_trait(?Send)]
 impl SttBatched for DeepSpeechStt {
-    fn decode(&mut self, audio: &[i16]) -> Result<Option<DecodeRes>, SttError> {
+    async fn decode(&mut self, audio: &[i16]) -> Result<Option<DecodeRes>, SttError> {
         let metadata = self.model.speech_to_text_with_metadata(audio, 1)?;
         let transcript = &metadata.transcripts()[0];
 
@@ -64,8 +66,9 @@ impl SttBatched for DeepSpeechStt {
     }
 }
 
+#[async_trait(?Send)]
 impl SttVadless for DeepSpeechStt {
-    fn begin_decoding(&mut self) -> Result<(), SttError> {
+    async fn begin_decoding(&mut self) -> Result<(), SttError> {
         self.current_stream = Some(self.model.create_stream()?);
         Ok(())
     }

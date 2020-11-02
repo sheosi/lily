@@ -24,6 +24,7 @@ use crate::tts::{TtsConstructionError, VoiceDescr, TtsError, Tts, TtsInfo, TtsSt
 use crate::path_ext::ToStrResult;
 use crate::vars::{PICO_DATA_PATH, NO_COMPATIBLE_LANG_MSG};
 
+use async_trait::async_trait;
 use lily_common::audio::Audio;
 use ttspico as pico;
 use unic_langid::{LanguageIdentifier, langid, langids};
@@ -96,8 +97,9 @@ impl PicoTts {
     }
 }
 
+#[async_trait(?Send)]
 impl Tts for PicoTts {
-    fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
+    async fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
         // 5. Put (UTF-8) text to be spoken into the engine
         // See `Engine::put_text()` for more details.
         let input = std::ffi::CString::new(input).expect("CString::new failed");

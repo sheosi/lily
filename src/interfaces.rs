@@ -3,8 +3,9 @@ use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
 
 use crate::config::Config;
-use crate::signals::SignalEventShared;
-use crate::stt::{DecodeRes, DecodeState, IbmSttData, SttFactory};
+use crate::nlu::{NluManager, NluManagerConf, NluManagerStatic};
+use crate::signals::{SignalEventShared, SignalOrder};
+use crate::stt::{DecodeState, IbmSttData, SttFactory};
 use crate::tts::{Gender, TtsFactory, VoiceDescr};
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
@@ -61,7 +62,7 @@ impl MqttInterface {
         }
     }
 
-    pub fn interface_loop<F: FnMut( Option<DecodeRes>, SignalEventShared)->Result<()>> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, mut callback: F) -> Result<()> { 
+    pub async fn interface_loop<M: NluManager + NluManagerConf + NluManagerStatic> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, order: &mut SignalOrder<M>) -> Result<()> {
         let mqtt_conf = config.mqtt_conf.clone().unwrap_or(MqttConfig::default());
         let url = Url::parse(
             &format!("http://{}", mqtt_conf.broker) // WOn't work without protocol
@@ -76,7 +77,7 @@ impl MqttInterface {
         client.subscribe("lily/nlu_process", QoS::AtMostOnce).unwrap();
 
         let dummy_sample = AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND);
-        let mut stt = SttFactory::load(&self.curr_lang, &dummy_sample,  config.prefer_online_stt, self.ibm_data.clone())?;
+        let mut stt = SttFactory::load(&self.curr_lang, &dummy_sample,  config.prefer_online_stt, self.ibm_data.clone()).await?;
         info!("Using stt {}", stt.get_info());
 
         const VOICE_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};
@@ -93,9 +94,9 @@ impl MqttInterface {
                         "lily/nlu_process" => {
                             let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload)).unwrap();
                             let as_raw = AudioRaw::from_ogg_opus(msg_nlu.audio)?;
-                            match stt.decode(&as_raw.buffer)? {
+                            match stt.decode(&as_raw.buffer).await? {
                                 DecodeState::Finished(decode_res) => {
-                                    callback(decode_res, signal_event.clone())?;
+                                    order.received_order(decode_res, signal_event.clone(), base_context).await?;
                                 }
                                 
                                 _ => {}
@@ -110,7 +111,7 @@ impl MqttInterface {
             {   
                 let msg_vec = replace(self.common_out.lock().unwrap().deref_mut(), Vec::new());
                 for msg in msg_vec {
-                    let synth_audio = tts.synth_text(&msg)?;
+                    let synth_audio = tts.synth_text(&msg).await?;
                     let msg_pack = encode::to_vec(&MsgAnswerVoice{data: synth_audio.into_encoded()?}).unwrap(); 
                     client.publish("lily/say_msg", QoS::AtMostOnce, false, msg_pack).unwrap();
                 }

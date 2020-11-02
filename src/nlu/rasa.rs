@@ -9,7 +9,8 @@ use crate::nlu::{EntityDef, EntityData, Nlu, NluManager, NluManagerConf, NluMana
 use crate::vars::NLU_RASA_PATH;
 
 use anyhow::{anyhow, Result};
-use reqwest::blocking;
+use async_trait::async_trait;
+use reqwest::Client;
 use log::error;
 use maplit::hashmap;
 use serde::{Serialize, Deserialize};
@@ -19,7 +20,7 @@ use unic_langid::{langid, LanguageIdentifier};
 
 
 pub struct RasaNlu {
-    client: blocking::Client,
+    client: Client,
     _process: Child
 }
 
@@ -29,7 +30,7 @@ impl RasaNlu {
         let mod_path_str =model_path.to_str().ok_or_else(||anyhow!("Can't use provided path to rasa NLU data contains non-UTF8 characters"))?;
         let process_res = Command::new("rasa").args(&["run", "--enable-api", "-m", mod_path_str]).spawn();
         let _process = process_res.map_err(|err|anyhow!("Rasa can't be executed: {:?}", err))?;
-        let client = blocking::Client::new();
+        let client = Client::new();
 
         Ok(Self{client, _process})
 
@@ -49,13 +50,14 @@ pub struct RasaIntent {
     pub confidence: f32
 }
 
+#[async_trait(?Send)]
 impl Nlu for RasaNlu {
-    fn parse (&self, input: &str) -> Result<NluResponse> {
+    async fn parse (&self, input: &str) -> Result<NluResponse> {
         let map = hashmap!{"text" => input};
 
         let resp: RasaResponse = self.client.post("localhost:5005/model/parse")
-                                       .json(&map).send()?
-                                       .json()?;
+                                       .json(&map).send().await?
+                                       .json().await?;
 
         Ok(resp.into())
         

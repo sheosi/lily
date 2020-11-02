@@ -1,7 +1,9 @@
 use crate::tts::{Tts, VoiceDescr, TtsConstructionError, Gender, TtsError, TtsInfo, TtsStatic, OnlineTtsError, negotiate_langs_res};
 use crate::vars::{NO_COMPATIBLE_LANG_MSG, DEFAULT_SAMPLES_PER_SECOND};
 
+use async_trait::async_trait;
 use lily_common::audio::Audio;
+use reqwest::Client;
 use unic_langid::{LanguageIdentifier, langid, langids};
 
 pub struct IbmTts {
@@ -97,9 +99,10 @@ impl IbmTts {
     }
 }
 
+#[async_trait(?Send)]
 impl Tts for IbmTts {
-    fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
-        Ok(self.engine.synth(input, &self.curr_voice).map(|b|Audio::new_encoded(b, DEFAULT_SAMPLES_PER_SECOND))?)
+    async fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
+        Ok(self.engine.synth(input, &self.curr_voice).await.map(|b|Audio::new_encoded(b, DEFAULT_SAMPLES_PER_SECOND))?)
     }
 
     fn get_info(&self) -> TtsInfo {
@@ -123,23 +126,23 @@ impl TtsStatic for IbmTts {
 }
 
 pub struct IbmTtsEngine {
-	client: reqwest::blocking::Client,
+	client: Client,
 	api_gateway: String,
 	api_key: String
 }
 
+
 impl IbmTtsEngine {
 
 	pub fn new(api_gateway: String, api_key: String) -> Self {
-		IbmTtsEngine{client: reqwest::blocking::Client::new(), api_gateway, api_key}
+		IbmTtsEngine{client: Client::new(), api_gateway, api_key}
 	}
 
-	pub fn synth(&mut self, text: &str, voice: &str) -> Result<Vec<u8>, OnlineTtsError> {
+	pub async fn synth(&mut self, text: &str, voice: &str) -> Result<Vec<u8>, OnlineTtsError> {
 	    let url_str = format!("https://{}/text-to-speech/api/v1/synthesize?voice=", self.api_gateway);
 	    let url = reqwest::Url::parse(&format!("{}{}&text={}", url_str, voice, text))?;
 
-		let mut buf: Vec<u8> = vec![];
-	    self.client.post(url).header("accept", "audio/mp3").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send()?.copy_to(&mut buf)?;
+		let buf = self.client.post(url).header("accept", "audio/mp3").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send().await?.bytes().await?.to_vec();
 
 		Ok(buf)
 	}

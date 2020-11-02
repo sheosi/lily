@@ -2,6 +2,7 @@ use crate::stt::{calc_threshold, DecodeRes, DecodeState, SttConstructionError, S
 use crate::vars::*;
 use crate::path_ext::ToStrResult;
 
+use async_trait::async_trait;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use lily_common::audio::AudioRaw;
 use lily_common::vad::{Vad, VadError};
@@ -51,12 +52,13 @@ impl Pocketsphinx {
     }
 }
 
-impl SttStream for Pocketsphinx {
-    fn begin_decoding(&mut self) -> Result<(), SttError> {
+impl Pocketsphinx {
+    fn base_begin(&mut self) -> Result<(), SttError> {
         self.decoder.start_utt(None)?;
         Ok(())
-    }   
-    fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
+    }
+
+    fn base_decode(&mut self, audio:&[i16]) -> Result<DecodeState, SttError> {
         self.decoder.process_raw(audio, false, false)?;
         if self.decoder.get_in_speech() {
             if !self.is_speech_started {
@@ -78,6 +80,16 @@ impl SttStream for Pocketsphinx {
             }
         }
     }
+}
+
+#[async_trait(?Send)]
+impl SttStream for Pocketsphinx {
+    async fn begin_decoding(&mut self) -> Result<(), SttError> {
+        self.base_begin()
+    }
+    async fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
+        self.base_decode(audio)
+    }
     fn get_info(&self) -> SttInfo {
         SttInfo {name: "Pocketsphinx".to_string(), is_online: false}
     }
@@ -85,12 +97,12 @@ impl SttStream for Pocketsphinx {
 
 impl Vad for Pocketsphinx {
     fn reset(&mut self) -> Result<(), VadError> {
-        self.begin_decoding().map_err(|_|VadError::Unknown)?;
+        self.base_begin().map_err(|_|VadError::Unknown)?;
         Ok(())
     }
 
     fn is_someone_talking(&mut self, audio: &[i16]) -> Result<bool, VadError> {
-        self.decode(audio).map_err(|_|VadError::Unknown)?;
+        self.base_decode(audio).map_err(|_|VadError::Unknown)?;
         Ok(self.is_speech_started)
     }
 }

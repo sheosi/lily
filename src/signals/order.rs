@@ -1,5 +1,5 @@
 // Standard library
- use std::collections::HashMap;
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::mem;
 use std::sync::{Arc, Mutex};
@@ -11,11 +11,12 @@ use crate::interfaces::MqttInterface;
 use crate::nlu::{EntityInstance, EntityDef, EntityData, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponseSlot, NluUtterance};
 use crate::python::{try_translate, try_translate_all};
 use crate::stt::DecodeRes;
-use crate::signals::{OrderMap, Signal, SignalEventShared};
+use crate::signals::{MakeSendable, OrderMap, Signal, SignalEventShared};
 use crate::vars::MIN_SCORE_FOR_ACTION;
 
 // Other crates
 use anyhow::{Result, anyhow};
+use async_trait::async_trait;
 use pyo3::{Py, conversion::IntoPy, types::PyDict, Python};
 use log::{info, warn};
 use serde::Deserialize;
@@ -147,15 +148,15 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
         Ok(())
     }
 
-    fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &Py<PyDict>) -> Result<()> {
+    pub async fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &Py<PyDict>) -> Result<()> {
         match decode_res {
-            None => event_signal.borrow_mut().call("empty_reco", base_context),
+            None => event_signal.lock().sendable()?.call("empty_reco", base_context),
             Some(decode_res) => {
                 
                 if !decode_res.hypothesis.is_empty() {
                     match self.nlu {
                         Some(ref mut nlu) => {
-                            let result = nlu.parse(&decode_res.hypothesis).map_err(|err|anyhow!("Failed to parse: {:?}", err))?;
+                            let result = nlu.parse(&decode_res.hypothesis).await.map_err(|err|anyhow!("Failed to parse: {:?}", err))?;
                             info!("{:?}", result);
 
                             // Do action if at least we are 80% confident on
@@ -168,11 +169,11 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
                                     info!("Action called");
                                 }
                                 else {
-                                    event_signal.borrow_mut().call("unrecognized", &base_context);
+                                    event_signal.lock().sendable()?.call("unrecognized", &base_context);
                                 }
                             }
                             else {
-                                event_signal.borrow_mut().call("unrecognized", &base_context);
+                                event_signal.lock().sendable()?.call("unrecognized", &base_context);
                             }
                             
                         },
@@ -182,16 +183,16 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
                     }
                 }
                 else {
-                    event_signal.borrow_mut().call("empty_reco", &base_context);
+                    event_signal.lock().sendable()?.call("empty_reco", &base_context);
                 }
             }
         }
     Ok(())
     }
  
-    pub fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()> {
+    pub async fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()> {
         let mut interface = MqttInterface::new(curr_lang, config);
-        interface.interface_loop(config, signal_event, base_context, |d, s|{self.received_order(d, s, base_context)})
+        interface.interface_loop(config, signal_event, base_context, self).await
     }
 }
 
@@ -215,6 +216,7 @@ fn add_slots(base_context: &Py<PyDict>, slots: Vec<NluResponseSlot>) -> Result<P
 
 }
 
+#[async_trait(?Send)]
 impl<M:NluManager + NluManagerStatic + NluManagerConf> Signal for SignalOrder<M> {
     fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
         match self.nlu_man {
@@ -232,8 +234,8 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> Signal for SignalOrder<M>
     fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
         self.end_loading(curr_lang)
     }
-    fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()> {
-        self.record_loop(signal_event, config, base_context, curr_lang)
+    async fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()> {
+        self.record_loop(signal_event, config, base_context, curr_lang).await
     }
 }
 

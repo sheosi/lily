@@ -1,21 +1,23 @@
 use crate::tts::{OnlineTtsError, Tts, TtsStatic, TtsError, TtsInfo, VoiceDescr, TtsConstructionError, negotiate_langs_res};
 use crate::vars::{NO_COMPATIBLE_LANG_MSG, DEFAULT_SAMPLES_PER_SECOND};
+use async_trait::async_trait;
+use reqwest::Client;
 use unic_langid::{LanguageIdentifier, langid, langids};
 
 use lily_common::audio::Audio;
 
 pub struct GttsEngine {
-	client: reqwest::blocking::Client
+	client: Client
 }
 
 
 impl GttsEngine {
 	pub fn new() -> Self {
-		GttsEngine{client: reqwest::blocking::Client::new()}
+		GttsEngine{client: Client::new()}
 	}
 
 	// This one will return an MP3
-	pub fn synth(&mut self, text: &str, lang: &str) -> Result<Vec<u8>, OnlineTtsError> {
+	pub async fn synth(&mut self, text: &str, lang: &str) -> Result<Vec<u8>, OnlineTtsError> {
 		const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; WOW64) \
 	            AppleWebKit/537.36 (KHTML, like Gecko) \
 	            Chrome/47.0.2526.106 Safari/537.36";
@@ -23,11 +25,11 @@ impl GttsEngine {
 	    let url = google_translate_tts::url(text, lang);
 	    log::info!("{}", url);
 
-	    let mut buf: Vec<u8> = vec![];
-	    self.client.get(&url).header("Referer", "http://translate.google.com/").header("User-Agent", USER_AGENT).send()?
-	    .copy_to(&mut buf)?;
 
-		Ok(buf)
+        let buf  = self.client.get(&url).header("Referer", "http://translate.google.com/").header("User-Agent", USER_AGENT).send().await?
+        .bytes().await?.to_vec();
+
+	    Ok(buf)
 	}
 }
 
@@ -56,9 +58,10 @@ impl GTts {
     }
 }
 
+#[async_trait(?Send)]
 impl Tts for GTts {
-    fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
-        self.engine.synth(input, &self.curr_lang).map(|b|Ok(Audio::new_encoded(b, DEFAULT_SAMPLES_PER_SECOND)))?
+    async fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
+        self.engine.synth(input, &self.curr_lang).await.map(|b|Ok(Audio::new_encoded(b, DEFAULT_SAMPLES_PER_SECOND)))?
     }
 
     fn get_info(&self) -> TtsInfo {

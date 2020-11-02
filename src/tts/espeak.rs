@@ -9,6 +9,7 @@ use std::sync::Mutex;
 use crate::tts::{Gender, TtsError, TtsConstructionError,  VoiceDescr, TtsInfo, Tts, TtsStatic};
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
+use async_trait::async_trait;
 use espeak_ng_sys::*;
 use lazy_static::lazy_static;
 use lily_common::audio::Audio;
@@ -78,9 +79,9 @@ impl EspeakTts {
     }
 }
 
-
+#[async_trait(?Send)]
 impl Tts for EspeakTts {
-    fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
+    async fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
         let synth_cstr = CString::new(input.to_string())?;
         let synth_flags = espeakCHARS_AUTO | espeakPHONEMES | espeakENDPAUSE;
 
