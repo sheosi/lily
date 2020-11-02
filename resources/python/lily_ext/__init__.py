@@ -64,7 +64,11 @@ def __compare_class_with(cls: Any, model: Any) -> __ProtocolErrs:
 
     res = __ProtocolErrs()
 
-    for attr in model:
+    for attr in dir(model):
+        # Ignore privates, builtins and other specials
+        if attr[0:2] == "__":
+            continue
+
         mod_attr = getattr(model, attr)
         cls_attr = getattr(cls, attr, None) # Need the none, might not have it
         if callable(mod_attr):
