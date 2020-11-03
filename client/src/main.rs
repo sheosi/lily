@@ -1,26 +1,33 @@
+use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::thread::sleep;
 
+use lazy_static::lazy_static;
 use lily_common::audio::{Audio, AudioRaw, PlayDevice, RecDevice, Recording};
+use lily_common::communication::*;
+use lily_common::extensions::MakeSendable;
 use lily_common::hotword::{HotwordDetector, Snowboy};
-use lily_common::communication::{MsgAnswerVoice, MsgNluVoice};
 use lily_common::other::init_log;
 use lily_common::vad::{SnowboyVad, Vad, VadError};
 use lily_common::vars::*;
 use log::warn;
 use rmp_serde::{decode, encode};
 use rumqttc::{AsyncClient, Event, EventLoop, MqttOptions, Packet, QoS};
-use tokio::{try_join, sync::{Mutex, MutexGuard}};
+use tokio::{try_join, sync::{Mutex as AsyncMutex, MutexGuard as AsyncMGuard}};
 use url::Url;
 
 const ENERGY_SAMPLING_TIME_MS: u64 = 500;
 
+lazy_static! {
+    static ref MY_UUID: Mutex<Option<String>> = Mutex::new(None);
+}
 
 
 enum ProgState<'a> {
     PasiveListening,
-    ActiveListening(MutexGuard<'a,RecDevice>),
+    ActiveListening(AsyncMGuard<'a,RecDevice>),
 }
 
 impl<'a> PartialEq for ProgState<'a> {
@@ -105,30 +112,18 @@ impl<'a> AudioRef<'a> {
     }
 }
 
-struct ClientConf {
-    hotword_sensitivity: f32
-}
 
-impl Default for ClientConf {
-    fn default() -> Self {
-        Self{
-            hotword_sensitivity: DEFAULT_HOTWORD_SENSITIVITY
-        }
-    }
-}
-
-
-async fn send_audio<'a>(client: &mut AsyncClient,data: AudioRef<'a>, is_final: bool)-> anyhow::Result<()> {
+async fn send_audio<'a>(client: Rc<RefCell<AsyncClient>>,data: AudioRef<'a>, is_final: bool)-> anyhow::Result<()> {
     let msgpack_data = MsgNluVoice{
         audio: data.into_owned().to_ogg_opus()?,
         is_final
     };
     let msg_pack = encode::to_vec(&msgpack_data).unwrap();
-    client.publish("lily/nlu_process", QoS::AtMostOnce, false, msg_pack).await?;
+    client.borrow_mut().publish("lily/nlu_process", QoS::AtMostOnce, false, msg_pack).await?;
     Ok(())
 }
 
-fn record_env(mut rec_dev: MutexGuard<RecDevice>) -> anyhow::Result<AudioRaw> {
+fn record_env(mut rec_dev: AsyncMGuard<RecDevice>) -> anyhow::Result<AudioRaw> {
     // Record environment to get minimal energy threshold
     rec_dev.start_recording().expect(AUDIO_REC_START_ERR_MSG);
     sleep(Duration::from_millis(ENERGY_SAMPLING_TIME_MS));
@@ -149,16 +144,31 @@ fn record_env(mut rec_dev: MutexGuard<RecDevice>) -> anyhow::Result<AudioRaw> {
     Ok(audio_sample)
 }
 
-async fn receive (rec_dev: Rc<Mutex<RecDevice>>,eloop: &mut EventLoop) -> anyhow::Result<()> {
+async fn receive (rec_dev: Rc<AsyncMutex<RecDevice>>,eloop: &mut EventLoop, my_name: &str, client:Rc<RefCell<AsyncClient>>) -> anyhow::Result<()> {
     let mut play_dev = PlayDevice::new().unwrap();
-
+    // We will be listening from now on, say hello
+    let msg_pack = encode::to_vec(&MsgNewSatellite{name: my_name.to_string()})?;
+    client.borrow_mut().publish("lily/new_satellite", QoS::AtLeastOnce, false, msg_pack).await?;
     loop {
         let sps =  DEFAULT_SAMPLES_PER_SECOND;
 
         match eloop.poll().await.unwrap() {
             Event::Incoming(Packet::Publish(pub_msg)) => {
-                match pub_msg.topic.as_str() {
-                    "lily/say_msg" => {
+                let topic = pub_msg.topic.as_str();
+                match  topic {
+                    "lily/satellite_welcome" => {
+                        let input :MsgWelcome = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
+                        if input.name == my_name {
+                            let mut uuid = MY_UUID.lock().sendable()?;
+                            if uuid.is_none() {
+                                let as_string = input.uuid.to_string();
+                                client.borrow_mut().subscribe(format!("lily/{}/say_msg", &as_string), QoS::AtMostOnce).await?;
+                                uuid.replace(as_string);
+                            }
+                            
+                        }
+                    }
+                    _ if topic.ends_with("/say_msg") => {
                         let msg: MsgAnswerVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload)).unwrap();
                         let audio = Audio::new_encoded(msg.data, sps);
                         {
@@ -168,7 +178,6 @@ async fn receive (rec_dev: Rc<Mutex<RecDevice>>,eloop: &mut EventLoop) -> anyhow
                             play_dev.play_audio(audio)?;
                             rec_mut.start_recording().expect(AUDIO_REC_START_ERR_MSG);
                         }
-                        
                     }
                     _ => {}
                 }
@@ -180,8 +189,7 @@ async fn receive (rec_dev: Rc<Mutex<RecDevice>>,eloop: &mut EventLoop) -> anyhow
     }
 }
 
-async fn user_listen(rec_dev: Rc<Mutex<RecDevice>>,config: &ClientConf, mut client: &mut AsyncClient) -> anyhow::Result<()> {
-    
+async fn user_listen(rec_dev: Rc<AsyncMutex<RecDevice>>,config: &ClientConf, client: Rc<RefCell<AsyncClient>>) -> anyhow::Result<()> {
     // TODO: Send audio sample
     let _env_sample = record_env(rec_dev.lock().await)?;
     
@@ -191,6 +199,7 @@ async fn user_listen(rec_dev: Rc<Mutex<RecDevice>>,config: &ClientConf, mut clie
         let hotword_det = Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res"), config.hotword_sensitivity)?;
         PasiveListener::new(hotword_det)?
     };
+
     let vad = SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve())?;
     let mut act_listener = ActiveListener::new(vad);
     let mut current_state = ProgState::PasiveListening;
@@ -224,10 +233,10 @@ async fn user_listen(rec_dev: Rc<Mutex<RecDevice>>,config: &ClientConf, mut clie
                 match act_listener.process(mic_data)? {
                     ActiveState::NoOneTalking => {}
                     ActiveState::Hearing(data) => {
-                        send_audio(&mut client, data, false).await?
+                        send_audio(client.clone(), data, false).await?
                     }
                     ActiveState::Done(data) => {
-                        send_audio(&mut client, data, true).await?;
+                        send_audio(client.clone(), data, true).await?;
 
                         current_state = ProgState::PasiveListening;
 
@@ -240,13 +249,15 @@ async fn user_listen(rec_dev: Rc<Mutex<RecDevice>>,config: &ClientConf, mut clie
 }
 
 struct ConnectionConf {
-    url_str: String
+    url_str: String,
+    name: String
 }
 
 impl Default for ConnectionConf {
     fn default() -> Self {
         Self {
-            url_str: "127.0.0.1".to_owned()
+            url_str: "127.0.0.1".to_owned(),
+            name: "default".to_owned()
         }
     }
 }
@@ -269,15 +280,15 @@ pub async fn main() {
     let mut mqttoptions = MqttOptions::new("lily-client", host, port);
     mqttoptions.set_keep_alive(5);
 
-    let (mut client, mut eloop) = AsyncClient::new(mqttoptions, 10);
+    let (client, mut eloop) = AsyncClient::new(mqttoptions, 10);
     client.subscribe("lily/say_msg", QoS::AtMostOnce).await.unwrap();
+    let client_share = Rc::new(RefCell::new(client));
 
     let config = ClientConf::default();
     
     init_log();
     // Record environment to get minimal energy threshold
-    let rec_dev = Rc::new(Mutex::new(RecDevice::new().unwrap()));
+    let rec_dev = Rc::new(AsyncMutex::new(RecDevice::new().unwrap()));
 
-
-    try_join!(user_listen(rec_dev.clone(), &config, &mut client),receive(rec_dev, &mut eloop)).unwrap();
+    try_join!(user_listen(rec_dev.clone(), &config, client_share.clone()),receive(rec_dev, &mut eloop, &con_conf.name, client_share)).unwrap();
 }

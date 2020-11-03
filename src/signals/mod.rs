@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::{Arc, Mutex, PoisonError/*To make a sendable error*/};
+use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::actions::{ActionSet, PyActionSet};
@@ -18,32 +18,12 @@ use crate::python::{call_for_pkg, yaml_to_python};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use pyo3::{conversion::IntoPy, types::{PyDict, PyTuple}, Py, Python, PyObject};
+use lily_common::extensions::MakeSendable;
 use log::warn;
-use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 
 pub type SignalEventShared = Arc<Mutex<SignalEvent>>;
 type SignalRegistryShared = Rc<RefCell<SignalRegistry>>;
-
-#[derive(Error, Debug)]
-#[error("Poisoned lock: an error happened inside")]
-struct SendablePoisonError;
-
-impl<A> From<PoisonError<A>> for SendablePoisonError {
-    fn from(_other: PoisonError<A>) -> SendablePoisonError {
-        Self
-    }
-}
-
-trait MakeSendable<A> {
-    fn sendable(self) -> Result<A,SendablePoisonError>;
-}
-
-impl<A,B> MakeSendable<A> for Result<A,PoisonError<B>> {
-    fn sendable(self) -> Result<A,SendablePoisonError> {
-        self.map_err(|e|e.into())
-    }
-}
 
 // A especial signal to be called by the system whenever something happens
 pub struct SignalEvent {

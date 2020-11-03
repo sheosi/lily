@@ -20,6 +20,7 @@ tokio = {version = "^0.3", features = ["rt", "macros"]}
 async-trait = "^0.1"
 rumqttc = "^0.1"
 rmp-serde = "^0.14"
+uuid = {version = "^0.8.1", features=["v4", "serde"]}
 
 #vad = "0.1.5" # Note: Had to be disabled because syntex_syntax was causing problems
 pocketsphinx = "^0.6.0" # Offline Stt

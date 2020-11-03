@@ -2,7 +2,7 @@ use std::cell::{RefCell, Ref};
 use std::rc::Rc;
 use std::path::Path;
 
-use crate::interfaces::MSG_OUTPUT;
+use crate::interfaces::{LAST_SITE, MSG_OUTPUT};
 use crate::vars::{PYDICT_SET_ERR_MSG, NO_YAML_FLOAT_MSG};
 
 use anyhow::{anyhow, Result};
@@ -236,7 +236,8 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
 fn python_say(py: Python, text: &str) -> PyResult<PyObject> {
     match *MSG_OUTPUT.lock().py_excep::<PyAttributeError>()? {
         Some(ref mut output) => {
-            output.answer(text).py_excep::<PyAttributeError>()?;
+            let uuid = LAST_SITE.lock().py_excep::<PyAttributeError>()?;
+            output.answer(text, uuid.unwrap().to_string()).py_excep::<PyAttributeError>()?;
         }
         _=>{}
     }

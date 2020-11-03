@@ -1,10 +1,13 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+
 use crate::interfaces::MqttConfig;
 use crate::stt::IbmSttData;
 use crate::vars::{DEFAULT_HOTWORD_SENSITIVITY, MAIN_CONF_PATH, NO_KEY_MSG};
+
 use anyhow::{anyhow, Result};
+use lily_common::communication::ClientConf;
 use serde::Deserialize;
 use serde_yaml::Value;
 
@@ -121,6 +124,12 @@ impl Config {
         }
         else {
             None
+        }
+    }
+
+    pub fn to_client_conf(&self) -> ClientConf {
+        ClientConf {
+            hotword_sensitivity: self.hotword_sensitivity
         }
     }
 }

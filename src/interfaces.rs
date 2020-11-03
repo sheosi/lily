@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::mem::replace;
 use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
@@ -12,23 +13,29 @@ use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 use anyhow::Result;
 use lazy_static::lazy_static;
 use lily_common::audio::AudioRaw;
-use lily_common::communication::{MsgAnswerVoice, MsgNluVoice};
+use lily_common::communication::*;
 use log::info;
 use pyo3::{types::PyDict, Py};
 use rmp_serde::{decode, encode};
 use rumqttc::{Event, MqttOptions, Client, Packet, QoS};
 use serde::Deserialize;
+use uuid::Uuid;
 use unic_langid::LanguageIdentifier;
 use url::Url;
 
 lazy_static!{
     pub static ref MSG_OUTPUT: Mutex<Option<MqttInterfaceOutput>> = Mutex::new(None);
+    pub static ref LAST_SITE: Mutex<Option<Uuid>> = Mutex::new(None);
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct MqttConfig {
     #[serde(default = "def_broker")]
     broker: String
+}
+
+fn def_broker() -> String {
+    "127.0.0.1".to_owned()
 }
 
 impl Default for MqttConfig {
@@ -39,12 +46,28 @@ impl Default for MqttConfig {
     }
 }
 
-fn def_broker() -> String {
-    "127.0.0.1".to_owned()
+
+struct SiteManager {
+    map: HashMap<String,Uuid>
+}
+
+impl SiteManager {
+    // TODO: What to do on name collisions?
+    fn new() -> Self {
+        Self{
+            map: HashMap::new()
+        }
+    }
+
+    fn new_site(&mut self, name: String) -> Uuid {
+        let uuid = Uuid::new_v4();
+        self.map.insert(name, uuid);
+        uuid
+    }
 }
 
 pub struct MqttInterface {
-    common_out: Arc<Mutex<Vec<String>>>,
+    common_out: Arc<Mutex<Vec<(String, String)>>>,
     curr_lang: LanguageIdentifier,
     ibm_data: Option<IbmSttData>
 }
@@ -63,9 +86,10 @@ impl MqttInterface {
     }
 
     pub async fn interface_loop<M: NluManager + NluManagerConf + NluManagerStatic> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, order: &mut SignalOrder<M>) -> Result<()> {
+        let mut sites = SiteManager::new();
         let mqtt_conf = config.mqtt_conf.clone().unwrap_or(MqttConfig::default());
         let url = Url::parse(
-            &format!("http://{}", mqtt_conf.broker) // WOn't work without protocol
+            &format!("http://{}", mqtt_conf.broker) // Won't work without protocol
         ).unwrap();
         let host = url.host_str().unwrap();
         let port: u16 = url.port().unwrap_or(1883);
@@ -91,8 +115,13 @@ impl MqttInterface {
             match notification.unwrap() {
                 Event::Incoming(Packet::Publish(pub_msg)) => {
                     match pub_msg.topic.as_str() {
+                        "lily/new_satellite" => {
+                            let input :MsgNewSatellite = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
+                            let output = encode::to_vec(&MsgWelcome{conf:config.to_client_conf(), uuid: sites.new_site(input.name.clone()), name: input.name})?;
+                            client.publish("lily/satellite_welcome", QoS::AtMostOnce, false, output)?
+                        }
                         "lily/nlu_process" => {
-                            let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload)).unwrap();
+                            let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
                             let as_raw = AudioRaw::from_ogg_opus(msg_nlu.audio)?;
                             match stt.decode(&as_raw.buffer).await? {
                                 DecodeState::Finished(decode_res) => {
@@ -110,10 +139,10 @@ impl MqttInterface {
 
             {   
                 let msg_vec = replace(self.common_out.lock().unwrap().deref_mut(), Vec::new());
-                for msg in msg_vec {
+                for (msg, uuid_str) in msg_vec {
                     let synth_audio = tts.synth_text(&msg).await?;
                     let msg_pack = encode::to_vec(&MsgAnswerVoice{data: synth_audio.into_encoded()?}).unwrap(); 
-                    client.publish("lily/say_msg", QoS::AtMostOnce, false, msg_pack).unwrap();
+                    client.publish(format!("lily/{}/say_msg", uuid_str), QoS::AtMostOnce, false, msg_pack).unwrap();
                 }
             }
         }
@@ -124,16 +153,16 @@ impl MqttInterface {
 
 #[derive(Clone)]
 pub struct MqttInterfaceOutput {
-    common_out: Arc<Mutex<Vec<String>>>
+    common_out: Arc<Mutex<Vec<(String, String)>>>
 }
 
 impl MqttInterfaceOutput {
-    fn create(common_out: Arc<Mutex<Vec<String>>>) -> Self {
+    fn create(common_out: Arc<Mutex<Vec<(String, String)>>>) -> Self {
         Self{common_out}
     }
 
-    pub fn answer(&mut self, input: &str) -> Result<()> {
-        self.common_out.lock().unwrap().push(input.to_owned());
+    pub fn answer(&mut self, input: &str, to: String) -> Result<()> {
+        self.common_out.lock().unwrap().push((input.to_owned(), to.to_owned()));
         Ok(())
     }
 }
