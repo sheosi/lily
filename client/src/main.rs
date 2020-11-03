@@ -194,16 +194,16 @@ async fn user_listen(rec_dev: Rc<AsyncMutex<RecDevice>>,config: &ClientConf, cli
     let _env_sample = record_env(rec_dev.lock().await)?;
     
     rec_dev.lock().await.start_recording().expect(AUDIO_REC_START_ERR_MSG);
+    let snowboy_path = SNOWBOY_DATA_PATH.resolve();
     let mut pas_listener = {
-        let snowboy_path = SNOWBOY_DATA_PATH.resolve();
         let hotword_det = Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res"), config.hotword_sensitivity)?;
         PasiveListener::new(hotword_det)?
     };
 
-    let vad = SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve())?;
+    let vad = SnowboyVad::new(&snowboy_path.join("common.res"))?;
     let mut act_listener = ActiveListener::new(vad);
     let mut current_state = ProgState::PasiveListening;
-
+    
     loop {
         let interval =
             if current_state == ProgState::PasiveListening {HOTWORD_CHECK_INTERVAL_MS}
@@ -289,6 +289,5 @@ pub async fn main() {
     init_log();
     // Record environment to get minimal energy threshold
     let rec_dev = Rc::new(AsyncMutex::new(RecDevice::new().unwrap()));
-
     try_join!(user_listen(rec_dev.clone(), &config, client_share.clone()),receive(rec_dev, &mut eloop, &con_conf.name, client_share)).unwrap();
 }
