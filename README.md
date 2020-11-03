@@ -4,6 +4,37 @@ A local open-source voice assistant with an NLU
 
 Lily is written in Rust + Python.
 
+## Obtaining Lily
+Lily uses git [LFS](https://git-lfs.github.com/) which means it needs to be
+cloned with that installed and ready beforehand.
+
+First install git LFS, for Debian/Ubuntu it is:
+
+```
+sudo apt install git-lfs
+```
+
+Then, no matter which OS you are under you need to initialize git LFS:
+
+```
+git lfs install
+```
+
+Now, you can clone the repo:
+
+```
+git clone https://github.com/sheosi/lily
+```
+
+Alternatively, if you already have cloned the repository but did not had lfs 
+installed, on the root folder of this folder do:
+
+```
+git checkout .
+```
+
+And you'll be good to go.
+
 ## Building
 
 ### Dependencies
@@ -34,13 +65,19 @@ Optional dependency for feature `extra_langs_tts` (Languages not provided by Pic
 - fluent.runtime
 ```
 
+Recommended way of installing them:
+```
+pip3 install --user snips-nlu
+pip3 install --user fluent.runtime
+```
+
 #### Install english module for NLU:
 
-`sudo snips-nlu download en`
+`snips-nlu download en`
 
 #### Install spanish module for NLU:
 
-`sudo snips-nlu download es`
+`snips-nlu download es`
 
 ### Build process
 Once you have at least the compile time dependencies you can compile lily, you'll
@@ -54,6 +91,7 @@ need [Rust](https://www.rust-lang.org/) and cargo (bundled alongside Rust) for t
 - [x] Overall shell: some user interfaces, stt, tts ...
 - [x] Intent and slot parsing
 - [x] Multilanguage
+- [x] Client/Server architecture
 - [ ] Question answering
 - [ ] Semantic parsing
 - [ ] Interactivity (asking for something after the initial trigger)
