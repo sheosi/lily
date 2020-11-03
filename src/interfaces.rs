@@ -17,7 +17,7 @@ use lily_common::communication::*;
 use log::info;
 use pyo3::{types::PyDict, Py};
 use rmp_serde::{decode, encode};
-use rumqttc::{Event, MqttOptions, Client, Packet, QoS};
+use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
 use serde::Deserialize;
 use uuid::Uuid;
 use unic_langid::LanguageIdentifier;
@@ -103,8 +103,8 @@ impl MqttInterface {
         // TODO: Set username and passwd
         mqttoptions.set_keep_alive(5);
     
-        let (mut client, mut connection) = Client::new(mqttoptions, 10);
-        client.subscribe("lily/nlu_process", QoS::AtMostOnce).unwrap();
+        let (client, mut eloop) = AsyncClient::new(mqttoptions, 10);
+        client.subscribe("lily/nlu_process", QoS::AtMostOnce).await?;
 
         let dummy_sample = AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND);
         let mut stt = SttFactory::load(&self.curr_lang, &dummy_sample,  config.prefer_online_stt, self.ibm_data.clone()).await?;
@@ -115,16 +115,16 @@ impl MqttInterface {
 
         let mut tts = TtsFactory::load_with_prefs(&self.curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS)?;
 
-        for notification in connection.iter() {
-            
+        loop {
+            let notification = eloop.poll().await?;
             println!("Notification = {:?}", notification);
-            match notification.unwrap() {
+            match notification {
                 Event::Incoming(Packet::Publish(pub_msg)) => {
                     match pub_msg.topic.as_str() {
                         "lily/new_satellite" => {
                             let input :MsgNewSatellite = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
                             let output = encode::to_vec(&MsgWelcome{conf:config.to_client_conf(), uuid: sites.new_site(input.name.clone()), name: input.name})?;
-                            client.publish("lily/satellite_welcome", QoS::AtMostOnce, false, output)?
+                            client.publish("lily/satellite_welcome", QoS::AtMostOnce, false, output).await?
                         }
                         "lily/nlu_process" => {
                             let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
@@ -148,12 +148,10 @@ impl MqttInterface {
                 for (msg, uuid_str) in msg_vec {
                     let synth_audio = tts.synth_text(&msg).await?;
                     let msg_pack = encode::to_vec(&MsgAnswerVoice{data: synth_audio.into_encoded()?}).unwrap(); 
-                    client.publish(format!("lily/{}/say_msg", uuid_str), QoS::AtMostOnce, false, msg_pack).unwrap();
+                    client.publish(format!("lily/{}/say_msg", uuid_str), QoS::AtMostOnce, false, msg_pack).await?;
                 }
             }
         }
-
-        Ok(())
     }
 }
 
