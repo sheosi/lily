@@ -151,8 +151,9 @@ async fn receive (rec_dev: Rc<AsyncMutex<RecDevice>>,eloop: &mut EventLoop, my_n
     client.borrow_mut().publish("lily/new_satellite", QoS::AtLeastOnce, false, msg_pack).await?;
     loop {
         let sps =  DEFAULT_SAMPLES_PER_SECOND;
-
-        match eloop.poll().await.unwrap() {
+        let a = eloop.poll().await.unwrap();
+        println!("Cycle");
+        match  a {
             Event::Incoming(Packet::Publish(pub_msg)) => {
                 let topic = pub_msg.topic.as_str();
                 match  topic {
@@ -199,7 +200,7 @@ async fn user_listen(rec_dev: Rc<AsyncMutex<RecDevice>>,config: &ClientConf, cli
         let hotword_det = Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res"), config.hotword_sensitivity)?;
         PasiveListener::new(hotword_det)?
     };
-
+    
     let vad = SnowboyVad::new(&snowboy_path.join("common.res"))?;
     let mut act_listener = ActiveListener::new(vad);
     let mut current_state = ProgState::PasiveListening;
@@ -262,9 +263,10 @@ impl Default for ConnectionConf {
     }
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 pub async fn main() {
 
+    
     let con_conf = ConnectionConf::default();
     let url_str = con_conf.url_str;
     let url = Url::parse(
@@ -287,6 +289,8 @@ pub async fn main() {
     let config = ClientConf::default();
     
     init_log();
+
+    
     // Record environment to get minimal energy threshold
     let rec_dev = Rc::new(AsyncMutex::new(RecDevice::new().unwrap()));
     try_join!(user_listen(rec_dev.clone(), &config, client_share.clone()),receive(rec_dev, &mut eloop, &con_conf.name, client_share)).unwrap();

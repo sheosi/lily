@@ -62,7 +62,6 @@ name = "base_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cpal",
  "lazy_static",
  "lily_common",
  "log",
@@ -71,7 +70,7 @@ dependencies = [
  "rsnowboy",
  "rumqttc",
  "serde",
- "tokio 0.3.2",
+ "tokio",
  "url",
 ]
 
@@ -853,7 +852,7 @@ dependencies = [
  "mqtt4bytes",
  "pollster",
  "thiserror",
- "tokio 0.2.22",
+ "tokio",
  "tokio-rustls",
  "webpki",
 ]
@@ -1083,20 +1082,8 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "slab",
- "tokio-macros 0.2.5",
+ "tokio-macros",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "tokio"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71f1b20504fd0aa9dab3ae17e8c4dd9431e5e08fd6921689f9745a4004883a17"
-dependencies = [
- "fnv",
- "pin-project-lite",
- "slab",
- "tokio-macros 0.3.1",
 ]
 
 [[package]]
@@ -1111,17 +1098,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-macros"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21d30fdbb5dc2d8f91049691aa1a9d4d4ae422a21c334ce8936e5886d30c5c45"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "tokio-rustls"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1129,7 +1105,7 @@ checksum = "e12831b255bcfa39dc0436b01e19fea231a37db570686c06ee72c423479f889a"
 dependencies = [
  "futures-core",
  "rustls",
- "tokio 0.2.22",
+ "tokio",
  "webpki",
 ]
 
