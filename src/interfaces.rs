@@ -48,7 +48,7 @@ impl Default for MqttConfig {
 
 
 struct SiteManager {
-    map: HashMap<String,Uuid>
+    map: HashMap<String,Vec<Uuid>>
 }
 
 impl SiteManager {
@@ -61,7 +61,13 @@ impl SiteManager {
 
     fn new_site(&mut self, name: String) -> Uuid {
         let uuid = Uuid::new_v4();
-        self.map.insert(name, uuid);
+        if !self.map.contains_key(&name) {
+            self.map.insert(name, vec![uuid]);
+        }
+        else {
+           self.map.get_mut(&name).as_deref_mut().unwrap().push(uuid);
+        }
+
         uuid
     }
 }
