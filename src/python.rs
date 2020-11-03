@@ -196,12 +196,14 @@ pub fn add_py_folder(python: Python, actions_path: &Path) -> Result<(Vec<(PyObje
 
     let signal_classes: Vec<(PyObject, PyObject)> = {
         let sgn_cls_obj = python.import("lily_ext")?.get("_signal_classes")?;
-        sgn_cls_obj.extract()?
+        let sgn_dict = sgn_cls_obj.downcast::<PyDict>().map_err(|e|anyhow!("signal_classes is not a dict: {}",e))?;
+        sgn_dict.items().extract()?
     };
 
     let action_classes: Vec<(PyObject, PyObject)> = {
         let act_cls_obj = python.import("lily_ext")?.get("_action_classes")?;
-        act_cls_obj.extract()?
+        let sgn_dict = act_cls_obj.downcast::<PyDict>().map_err(|e|anyhow!("action_classes is not a dict: {}",e))?;
+        sgn_dict.items().extract()?
     };
 
     Ok((signal_classes, action_classes))
