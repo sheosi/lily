@@ -30,7 +30,7 @@ Alternatively, if you already have cloned the repository but did not had lfs
 installed, on the root folder of this folder do:
 
 ```
-git lfs fetch
+git lfs pull
 ```
 
 And you'll be good to go.
