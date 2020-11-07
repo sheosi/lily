@@ -9,13 +9,12 @@ edition = "2018"
 [dependencies]
 #tokio = {version="^0.3", features = ["rt", "macros", "sync"]}
 tokio = {version="^0.2", features = ["rt-core", "macros", "sync"]} # Rumqttc needs tokio 0.2
-rumqttc = "^0.1"
 rmp-serde = "^0.14"
 rsnowboy = {git = "https://github.com/sheosi/rsnowboy"} # Hotword detector
-url = "^2.1"
 rodio = "^0.12" # Playback library
 serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
 lily_common = {path = "../common"}
 anyhow = "^1.0" # For error handling overall in the app
 log = "^0.4" # Common API for logging so we can change backend easilyp
 lazy_static = "^1.4" # 
+rumqttc = "^0.1"

@@ -1,6 +1,11 @@
+use crate::other::ConnectionConf;
 use crate::vars::DEFAULT_HOTWORD_SENSITIVITY;
+
+use rumqttc::{AsyncClient, EventLoop, MqttOptions};
 use serde::{Deserialize, Serialize};
+use url::Url;
 use uuid::Uuid;
+
 #[derive(Deserialize, Serialize)]
 pub struct MsgAnswerVoice {
     pub data: Vec<u8>
@@ -36,4 +41,24 @@ impl Default for ClientConf {
 #[derive(Deserialize, Serialize)]
 pub struct MsgNewSatellite {
     pub name: String
+}
+
+pub fn make_mqtt_conn(name: &str, conf: &ConnectionConf) ->  (AsyncClient, EventLoop) {
+    let url = Url::parse(
+        &format!("http://{}",conf.url_str) // Let's add some protocol
+    ).unwrap();
+    let host = url.host_str().unwrap();
+    let port: u16 = url.port().unwrap_or(1883);
+    
+    // Init MQTT
+    let mut mqttoptions = MqttOptions::new(name, host, port);
+    mqttoptions.set_keep_alive(5);
+    match &conf.user_pass {
+        Some((user, pass)) => {
+            mqttoptions.set_credentials(user, pass);
+        },
+        None => {}
+    }
+    
+    AsyncClient::new(mqttoptions, 10)
 }

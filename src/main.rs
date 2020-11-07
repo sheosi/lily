@@ -1,6 +1,5 @@
 mod actions;
 mod config;
-mod interfaces;
 mod nlu;
 mod path_ext;
 mod python;
@@ -27,7 +26,6 @@ use pyo3::{conversion::IntoPy, Python, types::PyDict};
 use unic_langid::LanguageIdentifier;
 
 
-
 fn get_locale_default() -> String {
     for (tag, val) in locale_config::Locale::user_default().tags() {
         if let None = tag {
@@ -45,7 +43,7 @@ pub async fn main()  -> Result<()> {
         std::process::exit(0);
     }).expect("Error setting Ctrl-C handler");
 
-    init_log();
+    init_log("lily".into());
     python_init()?;
 
     // Set config on global

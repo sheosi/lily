@@ -2,12 +2,12 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::interfaces::MqttConfig;
 use crate::stt::IbmSttData;
 use crate::vars::{DEFAULT_HOTWORD_SENSITIVITY, MAIN_CONF_PATH, NO_KEY_MSG};
 
 use anyhow::{anyhow, Result};
 use lily_common::communication::ClientConf;
+use lily_common::other::ConnectionConf;
 use serde::Deserialize;
 use serde_yaml::Value;
 
@@ -34,8 +34,8 @@ pub struct Config {
     #[serde(default = "false_val")]
     pub debug_record_active_speech: bool,
 
-    #[serde(default = "none_mqtt")]
-    pub mqtt_conf: Option<MqttConfig>,
+    #[serde(default = "none_connection")]
+    pub mqtt: Option<ConnectionConf>,
 
 
     #[serde(flatten)]
@@ -50,10 +50,9 @@ fn none_ibm_stt() -> Option<IbmSttData> {
     None
 }
 
-fn none_mqtt() -> Option<MqttConfig> {
+fn none_connection() -> Option<ConnectionConf> {
     None
 }
-
 
 fn none_str() -> Option<String> {
     None
@@ -91,7 +90,7 @@ impl Config {
             hotword_sensitivity: DEFAULT_HOTWORD_SENSITIVITY,
             debug_record_active_speech: false,
             pkgs_conf: HashMap::new(),
-            mqtt_conf: None
+            mqtt: None,
         }
     }
 

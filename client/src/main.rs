@@ -9,14 +9,13 @@ use lily_common::audio::{Audio, AudioRaw, PlayDevice, RecDevice, Recording};
 use lily_common::communication::*;
 use lily_common::extensions::MakeSendable;
 use lily_common::hotword::{HotwordDetector, Snowboy};
-use lily_common::other::init_log;
+use lily_common::other::{ConnectionConf, init_log};
 use lily_common::vad::{SnowboyVad, Vad, VadError};
 use lily_common::vars::*;
-use log::warn;
+use log::{info, warn};
 use rmp_serde::{decode, encode};
-use rumqttc::{AsyncClient, Event, EventLoop, MqttOptions, Packet, QoS};
+use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
 use tokio::{try_join, sync::{Mutex as AsyncMutex, MutexGuard as AsyncMGuard}};
-use url::Url;
 
 const ENERGY_SAMPLING_TIME_MS: u64 = 500;
 
@@ -158,6 +157,7 @@ async fn receive (rec_dev: Rc<AsyncMutex<RecDevice>>,eloop: &mut EventLoop, my_n
                 let topic = pub_msg.topic.as_str();
                 match  topic {
                     "lily/satellite_welcome" => {
+                        info!("Received config from server");
                         let input :MsgWelcome = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
                         if input.name == my_name {
                             let mut uuid = MY_UUID.lock().sendable()?;
@@ -249,47 +249,23 @@ async fn user_listen(rec_dev: Rc<AsyncMutex<RecDevice>>,config: &ClientConf, cli
     }
 }
 
-struct ConnectionConf {
-    url_str: String,
-    name: String
-}
 
-impl Default for ConnectionConf {
-    fn default() -> Self {
-        Self {
-            url_str: "127.0.0.1".to_owned(),
-            name: "default".to_owned()
-        }
-    }
-}
 
 #[tokio::main]
 pub async fn main() {
 
-    
+    init_log("lily-client".into());
+
     let con_conf = ConnectionConf::default();
-    let url_str = con_conf.url_str;
-    let url = Url::parse(
-        &format!("http://{}",url_str) // Let's add some protocol
-    ).unwrap();
-    let host = url.host_str().unwrap();
-    let port: u16 = url.port().unwrap_or(1883);
+    let (client, mut eloop) = make_mqtt_conn("lily-client", &con_conf);
 
 
-    // TODO: Set username and passwd
-
-    // Init MQTT
-    let mut mqttoptions = MqttOptions::new("lily-client", host, port);
-    mqttoptions.set_keep_alive(5);
-
-    let (client, mut eloop) = AsyncClient::new(mqttoptions, 10);
     client.subscribe("lily/say_msg", QoS::AtMostOnce).await.unwrap();
     let client_share = Rc::new(RefCell::new(client));
 
-    let config = ClientConf::default();
-    
-    init_log();
+    info!("Mqtt connection made");
 
+    let config = ClientConf::default();
     
     // Record environment to get minimal energy threshold
     let rec_dev = Rc::new(AsyncMutex::new(RecDevice::new().unwrap()));

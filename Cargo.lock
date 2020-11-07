@@ -1147,9 +1147,11 @@ dependencies = [
  "ringbuf",
  "rodio",
  "rsnowboy",
+ "rumqttc",
  "serde",
  "syslog",
  "thiserror",
+ "url",
  "uuid",
 ]
 

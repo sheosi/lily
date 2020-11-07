@@ -1,15 +1,17 @@
 use std::cell::{RefCell, Ref};
+use std::fs::{File, self};
+use std::io::Read;
 use std::rc::Rc;
 use std::path::Path;
 
-use crate::interfaces::{LAST_SITE, MSG_OUTPUT};
+use crate::signals::order::server_interface::{LAST_SITE, MSG_OUTPUT};
 use crate::vars::{PYDICT_SET_ERR_MSG, NO_YAML_FLOAT_MSG};
 
 use anyhow::{anyhow, Result};
 use pyo3::{conversion::IntoPy, PyErr, Python, types::{PyBool, PyList, PyDict, PyString}, PyObject, PyResult, prelude::*, wrap_pyfunction, FromPyObject, exceptions::*};
 use pyo3::{type_object::PyTypeObject};
 use fluent_langneg::negotiate::{negotiate_languages, NegotiationStrategy};
-use lily_common::audio::PlayDevice;
+use lily_common::audio::Audio;
 use log::info;
 use serde_yaml::Value;
 use unic_langid::LanguageIdentifier;
@@ -234,13 +236,15 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
 
 #[pyfunction]
 fn python_say(py: Python, text: &str) -> PyResult<PyObject> {
-    match *MSG_OUTPUT.lock().py_excep::<PyAttributeError>()? {
-        Some(ref mut output) => {
-            let uuid = LAST_SITE.lock().py_excep::<PyAttributeError>()?;
-            output.answer(text, uuid.unwrap().to_string()).py_excep::<PyAttributeError>()?;
-        }
-        _=>{}
-    }
+    MSG_OUTPUT. with::<_,PyResult<()>>(|m|{match *m.borrow_mut() {
+            Some(ref mut output) => {
+                let uuid = LAST_SITE.with(|s|s.clone().into_inner());
+                output.answer(text, uuid.unwrap().to_string()).py_excep::<PyAttributeError>()?;
+            }
+            _=>{}
+        };
+        Ok(())
+    })?;
     Ok(py.None())
 }
 
@@ -289,13 +293,31 @@ fn log_error(python: Python, text: &str) -> PyResult<PyObject>  {
 
 #[pyfunction]
 fn play_file(py: Python, input: &str) -> PyResult<PyObject> {
-    let mut play_dev = PlayDevice::new().map_err(|err|PyErr::new::<PyOSError, _>(format!("Couldn't obtain play stream, reason: {:?}", err)))?;
+    MSG_OUTPUT.with::<_, PyResult<()>>(|m|{match *m.borrow_mut() {
+            Some(ref mut output) => {
+                let uuid = LAST_SITE.with(|s|s.clone().into_inner());
+                let mut f = File::open(&input)?;
+                let mut buffer = vec![0; fs::metadata(&input)?.len() as usize];
+                f.read(&mut buffer)?;
+
+                // We don't know the actual sps, so let's just have 0
+                output.send_audio(Audio::new_encoded(buffer, 0), uuid.unwrap().to_string()).py_excep::<PyAttributeError>()?;
+            }
+            _=>{}
+        };
+
+        Ok(())
+    })?;
+    Ok(py.None())
+    /*let mut play_dev = PlayDevice::new().map_err(|err|PyErr::new::<PyOSError, _>(format!("Couldn't obtain play stream, reason: {:?}", err)))?;
     if let Err(err) = play_dev.play_file(input) {
         Err(PyErr::new::<PyOSError, _>(format!("Couldn't play file \"{}\": {}",input, err)))
     }
     else {
         Ok(py.None())
-    }
+    }*/
+
+    // TODO: Send audio
 }
 
 #[pyfunction]

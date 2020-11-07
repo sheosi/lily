@@ -1,3 +1,5 @@
+pub mod server_interface;
+
 // Standard library
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -7,12 +9,12 @@ use std::sync::{Arc, Mutex};
 // This crate
 use crate::actions::ActionSet;
 use crate::config::Config;
-use crate::interfaces::MqttInterface;
 use crate::nlu::{EntityInstance, EntityDef, EntityData, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponseSlot, NluUtterance};
 use crate::python::{try_translate, try_translate_all};
 use crate::stt::DecodeRes;
 use crate::signals::{MakeSendable, OrderMap, Signal, SignalEventShared};
 use crate::vars::MIN_SCORE_FOR_ACTION;
+use self::server_interface::MqttInterface;
 
 // Other crates
 use anyhow::{Result, anyhow};
@@ -144,7 +146,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
         };
 
         info!("Initted Nlu");
-        
+
         Ok(())
     }
 
@@ -152,7 +154,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
         match decode_res {
             None => event_signal.lock().sendable()?.call("empty_reco", base_context),
             Some(decode_res) => {
-                
+
                 if !decode_res.hypothesis.is_empty() {
                     match self.nlu {
                         Some(ref mut nlu) => {
@@ -175,7 +177,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
                             else {
                                 event_signal.lock().sendable()?.call("unrecognized", &base_context);
                             }
-                            
+
                         },
                         None => {
                             panic!("received_order can't be called before end_loading")
@@ -189,9 +191,9 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
         }
     Ok(())
     }
- 
+
     pub async fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()> {
-        let mut interface = MqttInterface::new(curr_lang, config);
+        let mut interface = MqttInterface::new(curr_lang)?;
         interface.interface_loop(config, signal_event, base_context, self).await
     }
 }
