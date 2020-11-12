@@ -252,7 +252,7 @@ async fn user_listen(rec_dev: Rc<AsyncMutex<RecDevice>>,config: &ClientConf, cli
 
 
 #[tokio::main]
-pub async fn main() {
+pub async fn main() -> anyhow::Result<()> {
 
     init_log("lily-client".into());
 
@@ -260,7 +260,8 @@ pub async fn main() {
     let (client, mut eloop) = make_mqtt_conn("lily-client", &con_conf);
 
 
-    client.subscribe("lily/say_msg", QoS::AtMostOnce).await.unwrap();
+    client.subscribe("lily/say_msg", QoS::AtMostOnce).await?;
+    client.subscribe("lily/satellite_welcome", QoS::AtMostOnce).await?;
     let client_share = Rc::new(RefCell::new(client));
 
     info!("Mqtt connection made");
@@ -270,4 +271,6 @@ pub async fn main() {
     // Record environment to get minimal energy threshold
     let rec_dev = Rc::new(AsyncMutex::new(RecDevice::new().unwrap()));
     try_join!(user_listen(rec_dev.clone(), &config, client_share.clone()),receive(rec_dev, &mut eloop, &con_conf.name, client_share)).unwrap();
+
+    Ok(())
 }
