@@ -77,6 +77,7 @@ impl MqttInterface {
         let (client, mut eloop) = make_mqtt_conn("lily-client", mqtt_conf);
         let mut sites = SiteManager::new();
 
+        client.subscribe("lily/new_satellite", QoS::AtMostOnce).await?;
         client.subscribe("lily/nlu_process", QoS::AtMostOnce).await?;
 
         let dummy_sample = AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND);
