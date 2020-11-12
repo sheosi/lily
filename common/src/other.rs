@@ -35,7 +35,7 @@ pub struct ConnectionConf {
 }
 impl ConnectionConf {
     fn def_url_str() -> String {
-        "127.0.0.1:8123".into()
+        "localhost".into()
     }
 
     fn def_name() -> String {

@@ -61,3 +61,6 @@ google_tts = ["google_translate_tts"]
 deepspeech_stt = ["deepspeech"]
 devel_rasa_nlu= []
 unused_stt_batcher= []
+
+[workspace]
+members = ["client", "common"]

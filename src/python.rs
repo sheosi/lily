@@ -332,15 +332,17 @@ fn get_conf_string(py: Python, conf_name: &str) -> PyResult<PyObject> {
     })
 }
 
-pub fn add_to_sys_path(py: Python, path: &Path) -> Result<()> {
+pub fn get_sys_path<'a>(py: Python::<'a>)-> Result<&'a PyList> {
     let sys = py.import("sys").map_err(|py_err|anyhow!("Failed while importing sys package: {:?}", py_err))?;
-    let sys_path = {
-        let obj = sys.get("path").map_err(|py_err|anyhow!("Error while getting path module from sys: {:?}", py_err))?;
-        obj.cast_as::<PyList>().map_err(|py_err|anyhow!("What? Couldn't get path as a List: {:?}", py_err))?
-    };
     
+    let obj = sys.get("path").map_err(|py_err|anyhow!("Error while getting path module from sys: {:?}", py_err))?;
+    obj.cast_as::<PyList>().map_err(|py_err|anyhow!("What? Couldn't get path as a List: {:?}", py_err))
+}
+
+pub fn add_to_sys_path(py: Python, path: &Path) -> Result<()> {
+
     let path_str = path.to_str().ok_or_else(||anyhow!("Couldn't transform given path to add to sys.path into an str"))?;
-    sys_path.insert(1, PyString::new(py, path_str))?;
+    get_sys_path(py)?.insert(1, PyString::new(py, path_str))?;
 
     Ok(())
 }

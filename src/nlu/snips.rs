@@ -2,12 +2,14 @@ use std::collections::HashMap;
 use std::convert::Into;
 use std::path::{Path, PathBuf};
 
+use crate::python::get_sys_path;
 use crate::nlu::compare_sets_and_train;
 use crate::nlu::{EntityDef, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponse, NluResponseSlot, NluUtterance};
 use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH};
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use pyo3::{FromPyObject, Python};
 use regex::Regex;
 use serde::Serialize;
 use snips_nlu_lib::SnipsNluEngine;
@@ -134,21 +136,45 @@ impl SnipsNluManager {
         Ok(serde_json::to_string(&train_set)?)
 
     }
+
+    fn is_lang_installed(lang: &LanguageIdentifier) -> Result<bool> {
+           let gil = Python::acquire_gil();
+           let py = gil.python();
+
+           let sys_path = get_sys_path(py)?;
+           let mut found = false;
+           for path in sys_path.iter() {
+                let path_str: &str = FromPyObject::extract(path)?;
+                let path = Path::new(path_str);
+                let lang_path = path.join("snips_nlu").join("data").join(lang.language.as_str());
+                if lang_path.exists() {
+                    found = true;
+                    break;
+                }
+           }
+
+           Ok(found)
+    }
 }
 
 impl NluManager for SnipsNluManager {
     type NluType = SnipsNlu;
     fn ready_lang(&mut self, lang: &LanguageIdentifier) -> Result<()> {
-        let lang_str = lang.language.as_str();
-        let success = std::process::Command::new("snips-nlu")
-        .args(&["download", lang_str]).status()
-        .expect("Failed to open snips-nlu binary").success();
+        if !Self::is_lang_installed(lang)? {
+            let lang_str = lang.language.as_str();
+            let success = std::process::Command::new("snips-nlu")
+            .args(&["download", lang_str]).status()
+            .expect("Failed to open snips-nlu binary").success();
 
-        if success {
-            Ok(())
+            if success {
+                Ok(())
+            }
+            else {
+                Err(anyhow!("Failed to download NLU's data for language \"{}\"", lang_str))
+            }
         }
         else {
-            Err(anyhow!("Failed to download NLU's data for language \"{}\"", lang_str))
+            Ok(())
         }
     }
 

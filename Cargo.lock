@@ -136,6 +136,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3441f0f7b02788e948e47f457ca01f1d7e6d92c693bc132c22b087d3141c03ff"
 
 [[package]]
+name = "base_client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "lazy_static",
+ "lily_common",
+ "log",
+ "rmp-serde 0.14.4",
+ "rodio 0.12.0",
+ "rsnowboy",
+ "rumqttc",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1117,7 +1133,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rmp-serde 0.14.4",
- "rodio",
+ "rodio 0.11.0",
  "rumqttc",
  "serde",
  "serde_json",
@@ -1145,7 +1161,7 @@ dependencies = [
  "ogg",
  "opus",
  "ringbuf",
- "rodio",
+ "rodio 0.11.0",
  "rsnowboy",
  "rumqttc",
  "serde",
@@ -1282,6 +1298,16 @@ name = "minimp3"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dce0cff6a0bfd3f8b6b2350819bbddd63bc65cc45e53888bdd0ff49dde16d2d5"
+dependencies = [
+ "minimp3-sys",
+ "slice-deque",
+]
+
+[[package]]
+name = "minimp3"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9684a8c55935322fdab159b5d7a6163b33f6e7d32c4a8a54fe53d1bcfad738db"
 dependencies = [
  "minimp3-sys",
  "slice-deque",
@@ -2032,7 +2058,20 @@ dependencies = [
  "cpal",
  "hound",
  "lewton",
- "minimp3",
+ "minimp3 0.3.5",
+]
+
+[[package]]
+name = "rodio"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94b2b7fa7b318a4b22f0ff62bbe1e53403e1eef28ac304a00dfe4f73ab30204c"
+dependencies = [
+ "claxon",
+ "cpal",
+ "hound",
+ "lewton",
+ "minimp3 0.5.0",
 ]
 
 [[package]]
