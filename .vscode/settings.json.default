@@ -13,3 +13,4 @@
         "--rcfile",
         "${workspaceFolder}/.vscode/pylintrc"
     ]
+}
