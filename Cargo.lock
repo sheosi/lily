@@ -148,6 +148,7 @@ dependencies = [
  "rsnowboy",
  "rumqttc",
  "serde",
+ "serde_yaml",
  "tokio",
 ]
 
@@ -1167,6 +1168,7 @@ dependencies = [
  "serde",
  "syslog",
  "thiserror",
+ "tokio",
  "url",
  "uuid",
 ]

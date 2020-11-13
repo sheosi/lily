@@ -41,42 +41,25 @@ And you'll be good to go.
 
 #### Dependencies needed at compile time and runtime:
 
+*On Debian:*
 ```
-- libssl-dev
-- libasound2-dev
-- libpocketsphinx-dev
-- libsphinxbase-dev
-- python3-all-dev
-- libopus-dev
-- clang
-- libgsl-dev
+sudoo apt install libssldev libasound2-dev libpocketsphinx-dev libpshinxbase-dev python3-all-dev libopus-dev clang libgsl-dev
 ```
 
-Optional dependency for feature `extra_langs_tts` (Languages not provided by Pico Tts for local Tts):
+*Optional* dependency for feature `extra_langs_tts` (Languages not provided by Pico Tts for local Tts):
+*Debian*
 ```
-- libespeak-ng-dev
+sudo apt install libespeak-ng-dev
 ```
 
 #### Python dependencies (needed for runtime):
 
 ```
-- snips-nlu
-- fluent.runtime
-```
-
-Recommended way of installing them:
-```
 pip3 install --user snips-nlu
 pip3 install --user fluent.runtime
 ```
 
-#### Install english module for NLU:
-
-`snips-nlu download en`
-
-#### Install spanish module for NLU:
-
-`snips-nlu download es`
+Note: The first time that you use a language it needs to be downloaded by the NLU, so it needs internet at that time. Also, installing them as system would make this download fail, and you would need to install the languages on your own, for english: `snips-nlu download en`
 
 ### Build process
 Once you have at least the compile time dependencies you can compile lily, you'll
@@ -102,3 +85,4 @@ Lily is meant to be run on-device (mostly) even on constrained hardware like a R
 
 The shell (the voice part and interfaces) it's in a pretty decent shape, though needs testing.
 The AI itself however, is pretty rough, it's only capable of basic triggering of actions.
+It now has a kind of client/server architecture, this is pretty new and needs tons of testing but should bring this project pretty far.

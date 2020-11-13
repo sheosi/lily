@@ -6,6 +6,7 @@ use thiserror::Error;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{BufferSize, SampleRate, Stream, StreamConfig};
 use ringbuf::{Consumer, RingBuffer};
+use tokio::time::delay_for;
 use log::error;
 
 #[derive(Error, Debug)]
@@ -23,12 +24,12 @@ pub enum RecordingError {
     PlayStreamError(#[from] cpal::PlayStreamError)
 }
 
-pub trait Recording {
+/*pub trait Recording {
     fn read(&mut self) -> Result<Option<&[i16]>, RecordingError>;
     fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, RecordingError>;
     fn start_recording(&mut self) -> Result<(), RecordingError>;
     fn stop_recording(&mut self) -> Result<(), RecordingError>;
-}
+}*/
 
 // Cpal version
 pub struct RecDevice {
@@ -89,10 +90,8 @@ impl RecDevice {
     fn get_millis() -> u128 {
         SystemTime::now().duration_since(UNIX_EPOCH).expect(CLOCK_TOO_EARLY_MSG).as_millis()
     }
-}
 
-impl Recording for RecDevice {
-    fn read(&mut self) -> Result<Option<&[i16]>, RecordingError> {
+    pub fn read(&mut self) -> Result<Option<&[i16]>, RecordingError> {
         match self.stream_data {
             Some(ref mut str_data) => {
                 str_data.last_read = Self::get_millis();
@@ -111,14 +110,14 @@ impl Recording for RecDevice {
         
         
     }
-    fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, RecordingError> {
+    pub async fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, RecordingError> {
         match self.stream_data {
             Some(ref mut str_data) => {
                 let curr_time = Self::get_millis();
                 let diff_time = (curr_time - str_data.last_read) as u16;
                 if milis > diff_time{
-                    let sleep_time = (milis  - diff_time) as u64 ;
-                    std::thread::sleep(Duration::from_millis(sleep_time));
+                    let sleep_time = (milis  - diff_time) as u64;
+                    delay_for(Duration::from_millis(sleep_time)).await;
                 }
             },
             None => {
@@ -129,7 +128,7 @@ impl Recording for RecDevice {
         self.read()
     }
 
-    fn start_recording(&mut self) -> Result<(), RecordingError> {
+    pub fn start_recording(&mut self) -> Result<(), RecordingError> {
         let (_stream, consumer) = Self::make_stream()?;
         self.stream_data = Some(StreamData {
             internal_buffer_consumer: consumer,
@@ -139,7 +138,7 @@ impl Recording for RecDevice {
 
         Ok(())
     }
-    fn stop_recording(&mut self) -> Result<(), RecordingError> {
+    pub fn stop_recording(&mut self) -> Result<(), RecordingError> {
         self.stream_data = None;
         Ok(())
     }

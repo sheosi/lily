@@ -2,10 +2,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Mutex;
 use std::time::Duration;
-use std::thread::sleep;
+use std::thread::sleep as block_sleep;
 
+use anyhow::anyhow;
 use lazy_static::lazy_static;
-use lily_common::audio::{Audio, AudioRaw, PlayDevice, RecDevice, Recording};
+use lily_common::audio::{Audio, AudioRaw, PlayDevice, RecDevice};
 use lily_common::communication::*;
 use lily_common::extensions::MakeSendable;
 use lily_common::hotword::{HotwordDetector, Snowboy};
@@ -15,6 +16,8 @@ use lily_common::vars::*;
 use log::{info, warn};
 use rmp_serde::{decode, encode};
 use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
+use serde::{Deserialize};
+use serde_yaml::from_reader;
 use tokio::{try_join, sync::{Mutex as AsyncMutex, MutexGuard as AsyncMGuard}};
 
 const ENERGY_SAMPLING_TIME_MS: u64 = 500;
@@ -23,6 +26,7 @@ lazy_static! {
     static ref MY_UUID: Mutex<Option<String>> = Mutex::new(None);
 }
 
+const CONN_CONF_FILE: PathRef = PathRef::new("conn_conf.yaml");
 
 enum ProgState<'a> {
     PasiveListening,
@@ -125,7 +129,7 @@ async fn send_audio<'a>(client: Rc<RefCell<AsyncClient>>,data: AudioRef<'a>, is_
 fn record_env(mut rec_dev: AsyncMGuard<RecDevice>) -> anyhow::Result<AudioRaw> {
     // Record environment to get minimal energy threshold
     rec_dev.start_recording().expect(AUDIO_REC_START_ERR_MSG);
-    sleep(Duration::from_millis(ENERGY_SAMPLING_TIME_MS));
+    block_sleep(Duration::from_millis(ENERGY_SAMPLING_TIME_MS));
     let audio_sample = {
         match rec_dev.read()? {
             Some(buffer) => {
@@ -214,7 +218,7 @@ async fn user_listen(rec_dev: Rc<AsyncMutex<RecDevice>>,config: &ClientConf, cli
             ProgState::PasiveListening => {
                 let mut rec_guard = rec_dev.lock().await;
                 let mic_data = 
-                    match rec_guard.read_for_ms(interval)? {
+                    match rec_guard.read_for_ms(interval).await? {
                         Some(d) => AudioRef::from(d),
                         None => continue
                 };
@@ -226,7 +230,7 @@ async fn user_listen(rec_dev: Rc<AsyncMutex<RecDevice>>,config: &ClientConf, cli
                 }
             }
             ProgState::ActiveListening(ref mut rec_guard) => {
-                let mic_data = match rec_guard.read_for_ms(interval)? {
+                let mic_data = match rec_guard.read_for_ms(interval).await? {
                     Some(d) => AudioRef::from(d),
                     None => continue
                 };
@@ -249,16 +253,39 @@ async fn user_listen(rec_dev: Rc<AsyncMutex<RecDevice>>,config: &ClientConf, cli
     }
 }
 
+#[derive(Clone, Deserialize, Debug)]
+struct ConfFile {
+    #[serde(default)]
+    mqtt: ConnectionConf
+}
 
+impl Default for ConfFile {
+    fn default() -> Self {
+        Self {
+            mqtt: ConnectionConf::default()
+        }
+    }
+}
+
+fn load_conf() -> anyhow::Result<ConfFile>{
+    let conf_path = CONN_CONF_FILE.resolve();
+    if conf_path.is_file()  {
+        let conf_file = std::fs::File::open(conf_path)?;
+        Ok(from_reader(std::io::BufReader::new(conf_file))?)
+    }
+    else {
+        Err(anyhow!("Config file not found"))
+    }
+}
 
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {
 
     init_log("lily-client".into());
 
-    let con_conf = ConnectionConf::default();
-    let (client, mut eloop) = make_mqtt_conn("lily-client", &con_conf);
-
+    let config = load_conf().unwrap_or(ConfFile::default());
+    let (client, mut eloop) = make_mqtt_conn("lily-client", &config.mqtt);
+    println!("Connection: {:?}", client);
 
     client.subscribe("lily/say_msg", QoS::AtMostOnce).await?;
     client.subscribe("lily/satellite_welcome", QoS::AtMostOnce).await?;
@@ -266,11 +293,10 @@ pub async fn main() -> anyhow::Result<()> {
 
     info!("Mqtt connection made");
 
-    let config = ClientConf::default();
-    
+    let client_conf = ClientConf::default();
     // Record environment to get minimal energy threshold
     let rec_dev = Rc::new(AsyncMutex::new(RecDevice::new().unwrap()));
-    try_join!(user_listen(rec_dev.clone(), &config, client_share.clone()),receive(rec_dev, &mut eloop, &con_conf.name, client_share)).unwrap();
+    try_join!(receive(rec_dev.clone(), &mut eloop, &config.mqtt.name, client_share.clone()), user_listen(rec_dev, &client_conf, client_share)).unwrap();
 
     Ok(())
 }

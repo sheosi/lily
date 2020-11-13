@@ -97,6 +97,7 @@ impl MqttInterface {
                 Event::Incoming(Packet::Publish(pub_msg)) => {
                     match pub_msg.topic.as_str() {
                         "lily/new_satellite" => {
+                            info!("New satellite incoming");
                             let input :MsgNewSatellite = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
                             let output = encode::to_vec(&MsgWelcome{conf:config.to_client_conf(), uuid: sites.new_site(input.name.clone()), name: input.name})?;
                             client.publish("lily/satellite_welcome", QoS::AtMostOnce, false, output).await?

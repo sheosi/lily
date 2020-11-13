@@ -28,7 +28,7 @@ pub struct PathRef {
 }
 
 impl PathRef {
-    const fn new(path_ref: &'static str) -> Self {
+    pub const fn new(path_ref: &'static str) -> Self {
         Self{path_ref}
     }
 
