@@ -284,7 +284,7 @@ pub async fn main() -> anyhow::Result<()> {
     init_log("lily-client".into());
 
     let config = load_conf().unwrap_or(ConfFile::default());
-    let (client, mut eloop) = make_mqtt_conn("lily-client", &config.mqtt);
+    let (client, mut eloop) = make_mqtt_conn(&config.mqtt);
     println!("Connection: {:?}", client);
 
     client.subscribe("lily/say_msg", QoS::AtMostOnce).await?;

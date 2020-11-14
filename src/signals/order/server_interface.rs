@@ -74,7 +74,7 @@ impl MqttInterface {
     pub async fn interface_loop<M: NluManager + NluManagerConf + NluManagerStatic> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, order: &mut SignalOrder<M>) -> Result<()> {
         let ibm_data = config.extract_ibm_stt_data();
         let mqtt_conf = &config.mqtt.clone().unwrap_or(ConnectionConf::default());
-        let (client, mut eloop) = make_mqtt_conn("lily-client", mqtt_conf);
+        let (client, mut eloop) = make_mqtt_conn(mqtt_conf);
         let mut sites = SiteManager::new();
 
         client.subscribe("lily/new_satellite", QoS::AtMostOnce).await?;

@@ -43,7 +43,7 @@ pub struct MsgNewSatellite {
     pub name: String
 }
 
-pub fn make_mqtt_conn(name: &str, conf: &ConnectionConf) ->  (AsyncClient, EventLoop) {
+pub fn make_mqtt_conn(conf: &ConnectionConf) ->  (AsyncClient, EventLoop) {
     let url = Url::parse(
         &format!("http://{}",conf.url_str) // Let's add some protocol
     ).unwrap();
@@ -51,7 +51,7 @@ pub fn make_mqtt_conn(name: &str, conf: &ConnectionConf) ->  (AsyncClient, Event
     let port: u16 = url.port().unwrap_or(1883);
     
     // Init MQTT
-    let mut mqttoptions = MqttOptions::new(name, host, port);
+    let mut mqttoptions = MqttOptions::new(&conf.name, host, port);
     mqttoptions.set_keep_alive(5);
     match &conf.user_pass {
         Some((user, pass)) => {
