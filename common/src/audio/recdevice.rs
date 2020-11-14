@@ -6,7 +6,7 @@ use thiserror::Error;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{BufferSize, SampleRate, Stream, StreamConfig};
 use ringbuf::{Consumer, RingBuffer};
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use log::error;
 
 #[derive(Error, Debug)]
@@ -23,13 +23,6 @@ pub enum RecordingError {
     #[error("Failed to play the stream")]
     PlayStreamError(#[from] cpal::PlayStreamError)
 }
-
-/*pub trait Recording {
-    fn read(&mut self) -> Result<Option<&[i16]>, RecordingError>;
-    fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, RecordingError>;
-    fn start_recording(&mut self) -> Result<(), RecordingError>;
-    fn stop_recording(&mut self) -> Result<(), RecordingError>;
-}*/
 
 // Cpal version
 pub struct RecDevice {
@@ -110,6 +103,7 @@ impl RecDevice {
         
         
     }
+
     pub async fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, RecordingError> {
         match self.stream_data {
             Some(ref mut str_data) => {
@@ -117,7 +111,7 @@ impl RecDevice {
                 let diff_time = (curr_time - str_data.last_read) as u16;
                 if milis > diff_time{
                     let sleep_time = (milis  - diff_time) as u64;
-                    delay_for(Duration::from_millis(sleep_time)).await;
+                    sleep(Duration::from_millis(sleep_time)).await;
                 }
             },
             None => {

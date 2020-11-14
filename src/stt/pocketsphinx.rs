@@ -5,7 +5,6 @@ use crate::path_ext::ToStrResult;
 use async_trait::async_trait;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use lily_common::audio::AudioRaw;
-use lily_common::vad::{Vad, VadError};
 use pocketsphinx::{PsDecoder, CmdLn};
 use unic_langid::{LanguageIdentifier, langid, langids};
 pub struct Pocketsphinx {
@@ -71,17 +70,5 @@ impl Stt for Pocketsphinx {
     }
     fn get_info(&self) -> SttInfo {
         SttInfo {name: "Pocketsphinx".to_string(), is_online: false}
-    }
-}
-
-impl Vad for Pocketsphinx {
-    fn reset(&mut self) -> Result<(), VadError> {
-        self.base_begin().map_err(|_|VadError::Unknown)?;
-        Ok(())
-    }
-
-    fn is_someone_talking(&mut self, audio: &[i16]) -> Result<bool, VadError> {
-        self.decoder.process_raw(audio, false, false).map_err(|_|VadError::Unknown)?;
-        Ok(self.decoder.get_in_speech())
     }
 }

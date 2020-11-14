@@ -9,9 +9,6 @@ pub enum SttError {
     #[error("Error while sending to online service")]
     OnlineError(#[from] OnlineSttError),
 
-    #[error("Error from the vad")]
-    Vad(#[from] lily_common::vad::VadError),
-
     #[cfg(feature = "deepspeech_stt")]
     #[error("Deepspeech error")]
     Deepspeech(#[from] deepspeech::errors::DeepspeechError)
@@ -40,10 +37,7 @@ pub enum SttConstructionError {
 
     #[cfg(feature = "deepspeech_stt")]
     #[error("Deepspeech error")]
-    Deepspeech(#[from] deepspeech::errors::DeepspeechError),
-
-    #[error("Vad couldn't be constructed")]
-    CantConstrucVad(#[from] lily_common::vad::VadError)
+    Deepspeech(#[from] deepspeech::errors::DeepspeechError)
 }
 
 #[derive(Error,Debug)]

@@ -278,7 +278,7 @@ fn load_conf() -> anyhow::Result<ConfFile>{
     }
 }
 
-#[tokio::main]
+#[tokio::main(flavor="current_thread")]
 pub async fn main() -> anyhow::Result<()> {
 
     init_log("lily-client".into());

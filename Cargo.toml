@@ -16,16 +16,16 @@ thiserror = "^1.0" # For error handling in parts that can be made their own crat
 regex = "^1.3" # To parse configuration
 ctrlc = "^3.1" # To catch ctrl-c in all platforms and exit the program
 # Some async deps
-tokio = {version="^0.2", features = ["rt-core", "macros", "sync"]}
+tokio = {version="^0.3", features = ["rt", "macros", "sync"]}
 async-trait = "^0.1"
-rumqttc = "^0.1"
+rumqttc = "^0.2"
 rmp-serde = "^0.14"
 uuid = {version = "^0.8.1", features=["v4", "serde"]}
 futures = "^0.3"
 
 #vad = "0.1.5" # Note: Had to be disabled because syntex_syntax was causing problems
 pocketsphinx = "^0.6.0" # Offline Stt
-deepspeech = {version = "^0.8", optional = true} # More correct and better (also slower) Stt
+deepspeech = {version = "^0.9", optional = true} # More correct and better (also slower) Stt
 opus = "^0.2" # Still used to propagate errors
 
 snips-nlu-lib = { git = "https://github.com/snipsco/snips-nlu-rs", branch = "master" } # NLU
@@ -37,19 +37,17 @@ lazy_static = "^1.4" # We use this for the path were the data is stored
 ttspico = "^0.1" # Main Tts (only for some languages)
 espeak-ng-sys = {git = "https://github.com/sheosi/espeak-ng-sys", optional = true} # Auxiliar Tts (speaks any language)
 libc = "^0.2" # Required to interface with espeak-ng-sys
-rodio = {git = "https://github.com/RustAudio/rodio"} # Playback library
-
 log = "^0.4" # Common API for logging so we can change backend easily
 
 #Cloud-based
 google_translate_tts = {version = "0.1.2", optional = true} # Format TTS URLs
 reqwest = {version = "^0.10", features = ["default-tls", "json"]} # HTTP client
 url = "^2.1"
-base64 = "^0.12" # For sending data to the online TTS and STT
-tungstenite = "^0.10" # Web sockets for online STT (0.10 because of compatibility with tokio-tungstenite)
-tokio-tungstenite = "^0.10" # We need this version because it uses tokio 0.2, which is needed because of rumqttc
+base64 = "^0.13" # For sending data to the online TTS and STT
+tungstenite = "^0.11" # Web sockets for online STT (0.10 because of compatibility with tokio-tungstenite)
+tokio-tungstenite = "^0.12" # We need this version because it uses tokio 0.2, which is needed because of rumqttc
 
-lily_common = {path = "common"}
+lily_common = {path = "common", default-features = false,features = ["server"]}
 
 # Localization
 unic-langid = {version="^0.9", features = ["macros"]} # For parsing Unicode Language Identifiers

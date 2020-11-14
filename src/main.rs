@@ -36,7 +36,7 @@ fn get_locale_default() -> String {
     "".to_string()
 }
 
-#[tokio::main]
+#[tokio::main(flavor="current_thread")]
 pub async fn main()  -> Result<()> {
     // Set explicit handle for Ctrl-C signal
     ctrlc::set_handler(move || {

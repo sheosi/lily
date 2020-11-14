@@ -1,7 +1,11 @@
+#[cfg(feature = "client")]
 mod playdevice;
+#[cfg(feature = "client")]
 mod recdevice;
 
+#[cfg(feature = "client")]
 pub use self::playdevice::*;
+#[cfg(feature = "client")]
 pub use self::recdevice::*;
 
 use std::io::{Cursor, Write};
