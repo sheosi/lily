@@ -1,4 +1,4 @@
-use crate::stt::{calc_threshold, DecodeRes, DecodeState, SttConstructionError, SttError, SttStream, SttInfo};
+use crate::stt::{calc_threshold, DecodeRes, Stt, SttConstructionError, SttError, SttInfo};
 use crate::vars::*;
 use crate::path_ext::ToStrResult;
 
@@ -9,8 +9,7 @@ use lily_common::vad::{Vad, VadError};
 use pocketsphinx::{PsDecoder, CmdLn};
 use unic_langid::{LanguageIdentifier, langid, langids};
 pub struct Pocketsphinx {
-    decoder: PsDecoder,
-    is_speech_started: bool,
+    decoder: PsDecoder
 }
 
 impl Pocketsphinx {
@@ -40,8 +39,7 @@ impl Pocketsphinx {
         let decoder = PsDecoder::init(config);
 
         Ok(Pocketsphinx {
-            decoder,
-            is_speech_started: false
+            decoder
         })
     }
 
@@ -57,38 +55,19 @@ impl Pocketsphinx {
         self.decoder.start_utt(None)?;
         Ok(())
     }
-
-    fn base_decode(&mut self, audio:&[i16]) -> Result<DecodeState, SttError> {
-        self.decoder.process_raw(audio, false, false)?;
-        if self.decoder.get_in_speech() {
-            if !self.is_speech_started {
-                //begining of utterance
-                self.is_speech_started = true;
-                Ok(DecodeState::StartListening)
-            } else {
-                Ok(DecodeState::NotFinished)
-            }
-        } else {
-            if self.is_speech_started {
-                self.is_speech_started = false;
-                self.decoder.end_utt()?;
-                let res = self.decoder.get_hyp().map(|(hypothesis, _, _)| DecodeRes{hypothesis});
-                Ok(DecodeState::Finished(res))
-            } else {
-                // TODO: Check this
-                Ok(DecodeState::NotStarted)
-            }
-        }
-    }
 }
 
 #[async_trait(?Send)]
-impl SttStream for Pocketsphinx {
+impl Stt for Pocketsphinx {
     async fn begin_decoding(&mut self) -> Result<(), SttError> {
         self.base_begin()
     }
-    async fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError> {
-        self.base_decode(audio)
+    async fn process(&mut self, audio: &[i16]) -> Result<(), SttError> {
+        self.decoder.process_raw(audio, false, false)?;
+        Ok(())
+    }
+    async fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError> {
+        Ok(self.decoder.get_hyp().map(|(hypothesis, _, _)| DecodeRes{hypothesis}))
     }
     fn get_info(&self) -> SttInfo {
         SttInfo {name: "Pocketsphinx".to_string(), is_online: false}
@@ -102,7 +81,7 @@ impl Vad for Pocketsphinx {
     }
 
     fn is_someone_talking(&mut self, audio: &[i16]) -> Result<bool, VadError> {
-        self.base_decode(audio).map_err(|_|VadError::Unknown)?;
-        Ok(self.is_speech_started)
+        self.decoder.process_raw(audio, false, false).map_err(|_|VadError::Unknown)?;
+        Ok(self.decoder.get_in_speech())
     }
 }

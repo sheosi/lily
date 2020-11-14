@@ -1,14 +1,17 @@
 use std::time::{Duration, Instant};
 
-use crate::stt::{DecodeRes, OnlineSttError, SttInfo, SttConstructionError, SttBatched,SttError, SttVadless};
+use crate::stt::{DecodeRes, OnlineSttError, Stt, SttInfo, SttConstructionError, SttBatched,SttError};
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
 use async_trait::async_trait;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
+use futures::{SinkExt, StreamExt}	;
 use lily_common::audio::AudioRaw;
 use maplit::hashmap;
 use reqwest::{Client, header};
-use tungstenite::{client::AutoStream, connect, Message, WebSocket};
+use tokio_tungstenite::{connect_async, WebSocketStream};
+use tokio::net::TcpStream;
+use tungstenite::Message;
 use serde::{Deserialize, Serialize};
 use url::Url;
 use unic_langid::{LanguageIdentifier, langid, langids};
@@ -60,17 +63,17 @@ impl SttBatched for IbmStt {
 }
 
 #[async_trait(?Send)]
-impl SttVadless for IbmStt {
+impl Stt for IbmStt {
 	async fn begin_decoding(&mut self) -> Result<(), SttError> {
 		self.engine.live_process_begin(&self.model).await?;
 		Ok(())
 	}
-    fn process(&mut self, audio: &[i16]) -> Result<(), SttError> {
-        self.engine.live_process(&AudioRaw::new_raw(audio.to_vec(), 16000))?;
+    async fn process(&mut self, audio: &[i16]) -> Result<(), SttError> {
+        self.engine.live_process(&AudioRaw::new_raw(audio.to_vec(), 16000)).await?;
         Ok(())
     }
-    fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError> {
-        let res = self.engine.live_process_end()?;
+    async fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError> {
+        let res = self.engine.live_process_end().await?;
         Ok(res)
     }
     fn get_info(&self) -> SttInfo {
@@ -104,7 +107,7 @@ pub struct IbmSttEngine {
 }
 
 struct WatsonSocket {
-	socket: WebSocket<AutoStream>
+	socket: WebSocketStream<TcpStream>
 }
 
 enum WatsonOrder {
@@ -114,17 +117,18 @@ enum WatsonOrder {
 
 impl WatsonSocket {
 
-	fn new(model: &str, data: IbmSttData, token: &str) -> Result<Self, OnlineSttError> {
+	async fn new(model: &str, data: IbmSttData, token: &str) -> Result<Self, OnlineSttError> {
 		let url_str = format!("wss://api.{}.speech-to-text.watson.cloud.ibm.com/instances/{}/v1/recognize", data.gateway, data.instance);
 		let (socket, _response) =
-			connect(Url::parse_with_params(&url_str,&[
+			connect_async(Url::parse_with_params(&url_str,&[
 				("access_token", token),
 				("model", model)
-			])?)?;
+			])?).await?;
+		
 		Ok(Self{socket})
 	}
 
-	fn send_order(&mut self, order: WatsonOrder) -> Result<(), OnlineSttError> {
+	async fn send_order(&mut self, order: WatsonOrder) -> Result<(), OnlineSttError> {
 		#[derive(Serialize)]
 		struct WatsonOrderInternal<'a> {
 			action: &'a str,
@@ -139,24 +143,23 @@ impl WatsonSocket {
 			WatsonOrder::Stop => WatsonOrderInternal{action: "stop", content_type: None}
 		};
 		let order_str = serde_json::to_string(&order)?;
-		self.socket
-		.write_message(Message::Text(order_str))?;
+		self.socket.send(Message::Text(order_str)).await?;
 
 		Ok(())
 	}
 
-	fn send_audio(&mut self, audio: &AudioRaw) -> Result<(), OnlineSttError> {
+	async fn send_audio(&mut self, audio: &AudioRaw) -> Result<(), OnlineSttError> {
 		let as_ogg = audio.to_ogg_opus()?;
 		self.socket
-		.write_message(Message::Binary(as_ogg))?;
+		.send(Message::Binary(as_ogg)).await?;
 
 		Ok(())
 	}
 
-	fn get_answer(&mut self) -> Result<Option<DecodeRes>, OnlineSttError> {
+	async fn get_answer(&mut self) -> Result<Option<DecodeRes>, OnlineSttError> {
 		// Ignore {"state": "listening"}
 		loop {
-			if let Message::Text(response_str) = self.socket.read_message().expect("Error reading message") {
+			if let Message::Text(response_str) = self.socket.next().await.unwrap().expect("Error reading message") {
 				let response_res: Result<WatsonResponse,_> = serde_json::from_str(&response_str);
 				if let Ok(response) = response_res {
 					let res = {
@@ -182,8 +185,9 @@ impl WatsonSocket {
 	
 	}
 
-	fn close(mut self) -> Result<(), OnlineSttError> {
-		self.socket.close(None)?;
+	async fn close(mut self) -> Result<(), OnlineSttError> {
+		
+		self.socket.close(None).await?;
 		// TODO: Make sure we get Error::ConnectionClosed
 
 		Ok(())
@@ -269,12 +273,12 @@ impl IbmSttEngine {
 
 	// Send all audio in one big chunk
 	pub async fn decode(&mut self, audio: &AudioRaw, model: &str) -> Result<Option<DecodeRes>, OnlineSttError> {
-		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key).await?)?;
-		socket.send_order(WatsonOrder::Start)?;
-		socket.send_audio(audio)?;
-		socket.send_order(WatsonOrder::Stop)?;
-		let res = socket.get_answer();
-		if let Err(err) =  socket.close() {
+		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key).await?).await?;
+		socket.send_order(WatsonOrder::Start).await?;
+		socket.send_audio(audio).await?;
+		socket.send_order(WatsonOrder::Stop).await?;
+		let res = socket.get_answer().await;
+		if let Err(err) =  socket.close().await {
 			warn!("Error while closing websocket: {:?}", err);
 		}
 
@@ -282,41 +286,26 @@ impl IbmSttEngine {
 	}
 
 	pub async fn live_process_begin(&mut self, model: &str) -> Result<(), OnlineSttError> {
-		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key).await?)?;
-		socket.send_order(WatsonOrder::Start)?;
+		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key).await?).await?;
+		socket.send_order(WatsonOrder::Start).await?;
 		self.curr_socket = Some(socket);
 		
 		Ok(())
 	}
 
-	pub fn live_process(&mut self, audio: &AudioRaw) -> Result<(), OnlineSttError> {
-		let socket = {
-			if let Some(ref mut sck) = self.curr_socket {
-				sck
-			}
-			else {
-				panic!("IbmSttEngine.live_process can't be called before live_proces_begin");
-			}
-		};
-
-		socket.send_audio(audio)?;
+	pub async fn live_process(&mut self, audio: &AudioRaw) -> Result<(), OnlineSttError> {
+		let socket = self.curr_socket.as_mut().expect("IbmSttEngine.live_process can't be called before live_proces_begin");
+		socket.send_audio(audio).await?;
 
 	    Ok(())
 	}
-	pub fn live_process_end(&mut self) -> Result<Option<DecodeRes>, OnlineSttError> {
-		let socket = {
-			if let Some(ref mut sck) = self.curr_socket {
-				sck
-			}
-			else {
-				panic!("live_process_end can't be called twice")
-			}
-		};
+	pub async fn live_process_end(&mut self) -> Result<Option<DecodeRes>, OnlineSttError> {
+		let socket = self.curr_socket.as_mut().expect("live_process_end can't be called twice");
 
-		socket.send_order(WatsonOrder::Stop)?;
-		let res = socket.get_answer();
+		socket.send_order(WatsonOrder::Stop).await?;
+		let res = socket.get_answer().await;
 		if let Some(sock) = std::mem::replace(&mut self.curr_socket, None) {
-			if let Err(err) =  sock.close() {
+			if let Err(err) =  sock.close().await {
 				warn!("Error while closing websocket: {:?}", err);
 			}
 		}

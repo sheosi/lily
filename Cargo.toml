@@ -21,6 +21,7 @@ async-trait = "^0.1"
 rumqttc = "^0.1"
 rmp-serde = "^0.14"
 uuid = {version = "^0.8.1", features=["v4", "serde"]}
+futures = "^0.3"
 
 #vad = "0.1.5" # Note: Had to be disabled because syntex_syntax was causing problems
 pocketsphinx = "^0.6.0" # Offline Stt
@@ -45,7 +46,8 @@ google_translate_tts = {version = "0.1.2", optional = true} # Format TTS URLs
 reqwest = {version = "^0.10", features = ["default-tls", "json"]} # HTTP client
 url = "^2.1"
 base64 = "^0.12" # For sending data to the online TTS and STT
-tungstenite = "^0.11" # Web sockets for online STT
+tungstenite = "^0.10" # Web sockets for online STT (0.10 because of compatibility with tokio-tungstenite)
+tokio-tungstenite = "^0.10" # We need this version because it uses tokio 0.2, which is needed because of rumqttc
 
 lily_common = {path = "common"}
 

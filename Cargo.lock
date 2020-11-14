@@ -131,6 +131,12 @@ dependencies = [
 
 [[package]]
 name = "base64"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b41b7ea54a0c9d92199de89e20e58d49f02f8e699814ef3fdf266f6f748d15c7"
+
+[[package]]
+name = "base64"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3441f0f7b02788e948e47f457ca01f1d7e6d92c693bc132c22b087d3141c03ff"
@@ -702,12 +708,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3dcaa9ae7725d12cdb85b3ad99a434db70b468c09ded17e012d86b5c1010f7a7"
 
 [[package]]
+name = "futures"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e05b85ec287aac0dc34db7d4a569323df697f9c55b99b15d6b4ef8cde49f613"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "futures-executor",
+ "futures-io",
+ "futures-sink",
+ "futures-task",
+ "futures-util",
+]
+
+[[package]]
 name = "futures-channel"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f366ad74c28cca6ba456d95e6422883cfb4b252a83bed929c83abfdbbf2967d5"
 dependencies = [
  "futures-core",
+ "futures-sink",
 ]
 
 [[package]]
@@ -715,6 +737,35 @@ name = "futures-core"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59f5fff90fd5d971f936ad674802482ba441b6f09ba5e15fd8b39145582ca399"
+
+[[package]]
+name = "futures-executor"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10d6bb888be1153d3abeb9006b11b02cf5e9b209fda28693c31ae1e4e012e314"
+dependencies = [
+ "futures-core",
+ "futures-task",
+ "futures-util",
+]
+
+[[package]]
+name = "futures-io"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "611834ce18aaa1bd13c4b374f5d653e1027cf99b6b502584ff8c9a64413b30bb"
+
+[[package]]
+name = "futures-macro"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e36fccf3fc58563b4a14d265027c627c3b665d7fed489427e88e7cc929559efe"
+dependencies = [
+ "proc-macro-hack",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "futures-sink"
@@ -727,6 +778,9 @@ name = "futures-task"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bdb66b5f09e22019b1ab0830f7785bcea8e7a42148683f99214f73f8ec21a626"
+dependencies = [
+ "once_cell",
+]
 
 [[package]]
 name = "futures-util"
@@ -734,10 +788,18 @@ version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8764574ff08b701a084482c3c7031349104b07ac897393010494beaa18ce32c6"
 dependencies = [
+ "futures-channel",
  "futures-core",
+ "futures-io",
+ "futures-macro",
+ "futures-sink",
  "futures-task",
+ "memchr",
  "pin-project",
  "pin-utils",
+ "proc-macro-hack",
+ "proc-macro-nested",
+ "slab",
 ]
 
 [[package]]
@@ -1121,6 +1183,7 @@ dependencies = [
  "deepspeech",
  "espeak-ng-sys",
  "fluent-langneg",
+ "futures",
  "google_translate_tts",
  "lazy_static",
  "libc",
@@ -1143,6 +1206,7 @@ dependencies = [
  "snips-nlu-ontology",
  "thiserror",
  "tokio",
+ "tokio-tungstenite",
  "ttspico",
  "tungstenite",
  "unic-langid",
@@ -1812,10 +1876,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99c605b9a0adc77b7211c6b1f722dcb613d68d66859a44f3d485a6da332b0598"
 
 [[package]]
-name = "proc-macro2"
-version = "1.0.19"
+name = "proc-macro-nested"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04f5f085b5d71e2188cb8271e5da0161ad52c3f227a661a3c135fdf28e258b12"
+checksum = "eba180dafb9038b050a4c280019bbedf9f2467b61e5d892dcad585bb57aadc5a"
+
+[[package]]
+name = "proc-macro2"
+version = "1.0.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e0704ee1a7e00d7bb417d0770ea303c1bccbabf0ef1667dae92b5967f5f8a71"
 dependencies = [
  "unicode-xid",
 ]
@@ -2608,9 +2678,9 @@ checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
 
 [[package]]
 name = "syn"
-version = "1.0.38"
+version = "1.0.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e69abc24912995b3038597a7a593be5053eb0fb44f3cc5beec0deb421790c1f4"
+checksum = "cc371affeffc477f42a221a1e4297aedcea33d47d19b61455588bd9d8f6b19ac"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2782,6 +2852,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-tungstenite"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8b8fe88007ebc363512449868d7da4389c9400072a3f666f212c7280082882a"
+dependencies = [
+ "futures",
+ "log",
+ "pin-project",
+ "tokio",
+ "tungstenite",
+]
+
+[[package]]
 name = "tokio-util"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2849,11 +2932,11 @@ dependencies = [
 
 [[package]]
 name = "tungstenite"
-version = "0.11.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5c7d464221cb0b538a1cd12f6d9127ed1e6bb7f3ffca98fb3cd4c6e3af8175c"
+checksum = "cfea31758bf674f990918962e8e5f07071a3161bd7c4138ed23e416e1ac4264e"
 dependencies = [
- "base64 0.12.3",
+ "base64 0.11.0",
  "byteorder",
  "bytes",
  "http",

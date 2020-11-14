@@ -7,7 +7,7 @@ use std::ops::DerefMut;
 use crate::config::Config;
 use crate::nlu::{NluManager, NluManagerConf, NluManagerStatic};
 use crate::signals::{SignalEventShared, SignalOrder};
-use crate::stt::{DecodeState, SttFactory};
+use crate::stt::SttFactory;
 use crate::tts::{Gender, TtsFactory, VoiceDescr};
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
@@ -105,13 +105,12 @@ impl MqttInterface {
                         "lily/nlu_process" => {
                             let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
                             let as_raw = AudioRaw::from_ogg_opus(msg_nlu.audio)?;
-                            match stt.decode(&as_raw.buffer).await? {
-                                DecodeState::Finished(decode_res) => {
-                                    order.received_order(decode_res, signal_event.clone(), base_context).await?;
-                                }
-
-                                _ => {}
+                            stt.process(&as_raw.buffer).await?;
+                            
+                            if msg_nlu.is_final {
+                                order.received_order(stt.end_decoding().await?, signal_event.clone(), base_context).await?;
                             }
+                            
                         }
                         _ => {}
                     }

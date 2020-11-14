@@ -1,6 +1,6 @@
 use std::mem::replace;
 
-use crate::stt::{DecodeRes, SpecifiesLangs, SttConstructionError, SttError, SttBatched, SttInfo, SttVadless};
+use crate::stt::{DecodeRes, SpecifiesLangs, SttConstructionError, Stt,SttError, SttBatched, SttInfo};
 use crate::vars::{ALPHA_BETA_MSG, DEEPSPEECH_DATA_PATH, DEEPSPEECH_READ_FAIL_MSG, SET_BEAM_MSG};
 
 use async_trait::async_trait;
@@ -67,12 +67,12 @@ impl SttBatched for DeepSpeechStt {
 }
 
 #[async_trait(?Send)]
-impl SttVadless for DeepSpeechStt {
+impl Stt for DeepSpeechStt {
     async fn begin_decoding(&mut self) -> Result<(), SttError> {
         self.current_stream = Some(self.model.create_stream()?);
         Ok(())
     }
-    fn process(&mut self, audio: &[i16]) -> Result<(), SttError> {
+    async fn process(&mut self, audio: &[i16]) -> Result<(), SttError> {
         match self.current_stream {
             Some(ref mut s) => s.feed_audio(audio),
             None => panic!("'process' can't be called before 'begin_decoding'")
@@ -81,7 +81,7 @@ impl SttVadless for DeepSpeechStt {
         Ok(())
     }
 
-    fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError> {
+    async fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError> {
         let stream = replace(&mut self.current_stream, None).ok_or_else(||panic!("end_decoding can't be called before begin decoding")).unwrap();
         let metadata = stream.finish_with_metadata(1)?;
         let transcript = &metadata.transcripts()[0];

@@ -21,8 +21,6 @@ use unic_langid::LanguageIdentifier;
 use log::info;
 
 use lily_common::audio::AudioRaw;
-use lily_common::vad::SnowboyVad;
-use lily_common::vars::SNOWBOY_DATA_PATH;
 
 
 #[derive(Debug, Clone)]
@@ -44,24 +42,8 @@ impl Display for SttInfo {
 }
 
 #[derive(PartialEq, Debug)]
-pub enum DecodeState {
-    NotStarted, 
-    StartListening,
-    NotFinished,
-    Finished(Option<DecodeRes>),
-}
-
-#[derive(PartialEq, Debug)]
 pub struct DecodeRes {
     pub hypothesis: String
-}
-
-#[async_trait(?Send)]
-// An Stt which accepts an Stream
-pub trait SttStream {
-    async fn begin_decoding(&mut self) -> Result<(),SttError>;
-    async fn decode(&mut self, audio: &[i16]) -> Result<DecodeState, SttError>;
-    fn get_info(&self) -> SttInfo;
 }
 
 #[async_trait(?Send)]
@@ -72,10 +54,10 @@ pub trait SttBatched {
 }
 
 #[async_trait(?Send)]
-pub trait SttVadless {
+pub trait Stt {
     async fn begin_decoding(&mut self) -> Result<(), SttError>;
-    fn process(&mut self, audio: &[i16]) -> Result<(), SttError>;
-    fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError>;
+    async fn process(&mut self, audio: &[i16]) -> Result<(), SttError>;
+    async fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError>;
     fn get_info(&self) -> SttInfo;
 }
 
@@ -125,9 +107,9 @@ fn calc_threshold(audio: &AudioRaw) -> f64 {
 
 impl SttFactory {
     #[cfg(feature = "deepspeech_stt")]
-    fn make_local(lang: &LanguageIdentifier, audio_sample: &AudioRaw) -> Result<Box<dyn SttStream>, SttConstructionError> {
+    fn make_local(lang: &LanguageIdentifier, audio_sample: &AudioRaw) -> Result<Box<dyn Stt>, SttConstructionError> {
         if DeepSpeechStt::is_lang_compatible(lang).is_ok() {
-            Ok(Box::new(SttVadlessInterface::new(DeepSpeechStt::new(lang)?, SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res"))?)))
+            Ok(Box::new(DeepSpeechStt::new(lang)?))
         }
         else {
             Ok(Box::new(Pocketsphinx::new(lang, audio_sample)?))
@@ -135,20 +117,19 @@ impl SttFactory {
     }
 
     #[cfg(not(feature = "deepspeech_stt"))]
-    fn make_local(lang: &LanguageIdentifier, audio_sample: &AudioRaw) -> Result<Box<dyn SttStream>, SttConstructionError> {
+    fn make_local(lang: &LanguageIdentifier, audio_sample: &AudioRaw) -> Result<Box<dyn Stt>, SttConstructionError> {
         Ok(Box::new(Pocketsphinx::new(lang, audio_sample)?))
     }
 
 
-	pub async fn load(lang: &LanguageIdentifier, audio_sample: &AudioRaw, prefer_cloud: bool, ibm_data: Option<IbmSttData>) -> Result<Box<dyn SttStream>, SttConstructionError> {
+	pub async fn load(lang: &LanguageIdentifier, audio_sample: &AudioRaw, prefer_cloud: bool, ibm_data: Option<IbmSttData>) -> Result<Box<dyn Stt>, SttConstructionError> {
 
 		let local_stt = Self::make_local(lang, audio_sample)?;
         if prefer_cloud {
             info!("Prefer online Stt");
             if let Some(ibm_data_obj) = ibm_data {
                 info!("Construct online Stt");
-                let vad = SnowboyVad::new(&SNOWBOY_DATA_PATH.resolve().join("common.res"))?;
-                let online = SttVadlessInterface::new(IbmStt::new(lang,ibm_data_obj).await?,vad);
+                let online = IbmStt::new(lang,ibm_data_obj).await?;
                 //let online = SttBatcher::new(IbmStt::new(lang,ibm_data_obj)?,vad);
                 Ok(Box::new(SttFallback::new(online, local_stt)))
             }
