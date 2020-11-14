@@ -23,4 +23,4 @@ uuid = {version = "^0.8.1", features=["v4", "serde"]}
 url = "^2.1"
 rumqttc = "^0.1"
 anyhow = "^1.0" # For error handling overall in the app
-tokio = {version = "^0.2", featurse = ["time"]}
+tokio = {version = "^0.2", features = ["time"]}
