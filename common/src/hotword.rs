@@ -65,6 +65,7 @@ impl std::convert::From<crate::vad::VadError> for HotwordError {
     }
 }
 
+#[cfg(feature="unused")]
 // Wrap a hotword engine with a vad to minimize resource consumption
 struct VadHotword<V: Vad ,H: HotwordDetector> {
     vad: V,
@@ -73,12 +74,14 @@ struct VadHotword<V: Vad ,H: HotwordDetector> {
 
 }
 
+#[cfg(feature="unused")]
 impl<V: Vad, H: HotwordDetector> VadHotword<V, H> {
     fn new(vad: V, hotword_eng: H) -> Self {
         Self {vad, someone_talking: false, hotword_eng}
     }
 }
 
+#[cfg(feature="unused")]
 impl<V: Vad, H: HotwordDetector> HotwordDetector for VadHotword<V, H> {
     fn start_hotword_check(&mut self) -> Result<(), VadError> {
         self.hotword_eng.start_hotword_check()?;

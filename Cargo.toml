@@ -48,7 +48,7 @@ base64 = "^0.13" # For sending data to the online TTS and STT
 tungstenite = "^0.11" # Web sockets for online STT (0.10 because of compatibility with tokio-tungstenite)
 tokio-tungstenite = "^0.12" # We need this version because it uses tokio 0.2, which is needed because of rumqttc
 
-lily_common = {path = "common", default-features = false,features = ["server"]}
+lily_common = {path = "common", default-features = false}
 
 # Localization
 unic-langid = {version="^0.9", features = ["macros"]} # For parsing Unicode Language Identifiers
