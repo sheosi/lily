@@ -1,4 +1,5 @@
 use std::cell::{RefCell, Ref};
+use std::collections::HashMap;
 use std::fs::{File, self};
 use std::io::Read;
 use std::rc::Rc;
@@ -14,6 +15,7 @@ use fluent_langneg::negotiate::{negotiate_languages, NegotiationStrategy};
 use lily_common::audio::Audio;
 use log::info;
 use serde_yaml::Value;
+use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 
 thread_local! {
@@ -204,11 +206,35 @@ pub fn add_py_folder(python: Python, actions_path: &Path) -> Result<(Vec<(PyObje
 
     let action_classes: Vec<(PyObject, PyObject)> = {
         let act_cls_obj = python.import("lily_ext")?.get("_action_classes")?;
-        let sgn_dict = act_cls_obj.downcast::<PyDict>().map_err(|e|anyhow!("action_classes is not a dict: {}",e))?;
-        sgn_dict.items().extract()?
+        let act_dict = act_cls_obj.downcast::<PyDict>().map_err(|e|anyhow!("action_classes is not a dict: {}",e))?;
+        act_dict.items().extract()?
     };
 
     Ok((signal_classes, action_classes))
+}
+
+pub fn remove_from_signals(py: Python, list: &Vec<Py<PyAny>>) -> Result<()> {
+    let sgn_cls_obj = py.import("lily_ext")?.get("_signal_classes")?;
+    let sgn_dict = sgn_cls_obj.downcast::<PyDict>().map_err(|e|anyhow!("signal_classes is not a dict: {}",e))?;
+
+    for sgnl in list {
+        sgn_dict.del_item(sgnl)?;
+    }
+
+    Ok(())   
+}
+
+
+pub fn remove_from_actions(py: Python, list: &Vec<Py<PyAny>>) -> Result<()> {
+    let act_cls_obj = py.import("lily_ext")?.get("_action_classes")?;
+    let act_dict = act_cls_obj.downcast::<PyDict>().map_err(|e|anyhow!("action_classes is not a dict: {}",e))?;
+
+    for act in list {
+        act_dict.del_item(act)?;
+    }
+
+    Ok(())
+    
 }
 
 pub fn get_inst_class_name(py: Python, instance: &PyObject) -> String {
@@ -367,5 +393,33 @@ pub trait PyException<T> {
 impl<T, E: std::fmt::Display> PyException<T> for Result<T,E> {
     fn py_excep<P: PyTypeObject>(self) -> PyResult<T> {
         self.map_err(|e| PyErr::new::<P, _>(format!("{}", e)))
+    }
+}
+
+/** Used by other modules, launched after an error while loading classes, 
+contains the error and the new classes*/
+#[derive(Debug, Error)]
+#[error("{source}")]
+pub struct HalfBakedError {
+    pub cls_names: Vec<Py<PyAny>>,
+
+    pub source: anyhow::Error,
+}
+
+impl HalfBakedError {
+    pub fn from(cls_names: Vec<Py<PyAny>>, source: anyhow::Error) -> Self{
+        Self{cls_names, source}
+    }
+
+    pub fn gen_diff<T>(reg: &HashMap<String, T>, clss: Vec<(PyObject,PyObject)>) -> Vec<Py<PyAny>> {
+        let mut res = vec![];
+        for (key, _) in  &clss {
+            let name = key.to_string();
+            if !reg.contains_key(&name)  {
+                res.push(key.to_owned());
+            }
+        }
+
+        res
     }
 }

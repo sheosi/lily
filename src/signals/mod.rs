@@ -12,12 +12,12 @@ use std::sync::{Arc, Mutex};
 // This crate
 use crate::actions::{ActionSet, PyActionSet};
 use crate::config::Config;
-use crate::python::{call_for_pkg, yaml_to_python};
+use crate::python::{call_for_pkg, HalfBakedError, remove_from_signals, yaml_to_python};
 
 // Other crates
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use pyo3::{conversion::IntoPy, types::{PyDict, PyTuple}, Py, Python, PyObject};
+use pyo3::{conversion::IntoPy, types::{PyDict, PyTuple}, Py, PyAny, Python, PyObject};
 use lily_common::extensions::MakeSendable;
 use log::warn;
 use unic_langid::LanguageIdentifier;
@@ -93,22 +93,45 @@ impl SignalRegistry {
         }
     }
 
-    pub fn extend_and_init_classes_py(&mut self, py: Python, pkg_path: &Path, signal_classes: Vec<(PyObject,PyObject)>) -> Result<HashMap<String, Rc<RefCell<dyn Signal>>>> {
-        let mut res = HashMap::new();
+    pub fn extend_and_init_classes_py(&mut self, py: Python, pkg_path: &Path, signal_classes: Vec<(PyObject,PyObject)>) -> Result<HashMap<String, Rc<RefCell<dyn Signal>>>, HalfBakedError> {
         let pkg_path = Arc::new(pkg_path.to_owned());
 
-        for (key, val) in  &signal_classes {
-            let name = key.to_string();
-            // We'll get old items, let's ignore them
-            if !self.signals.contains_key(&name) {
-                let pyobj = val.call(py, PyTuple::empty(py), None).map_err(|py_err|anyhow!("Python error while instancing action \"{}\": {:?}", name, py_err))?;
-                let sigobj: Rc<RefCell<dyn Signal>> = Rc::new(RefCell::new(PythonSignal::new(pyobj, pkg_path.clone())));
-                res.insert(name.clone(), sigobj.clone());
-                self.signals.insert(name, sigobj);
+        let process_list = || -> Result<_> {
+            let mut sig_to_add = vec![];
+
+            for (key, val) in  &signal_classes {
+                let name = key.to_string();
+                // We'll get old items, let's ignore them
+                if !self.signals.contains_key(&name) {
+                    let pyobj = val.call(py, PyTuple::empty(py), None).map_err(|py_err|
+                        anyhow!("Python error while instancing action \"{}\": {:?}", name, py_err.to_string())
+                    )?;
+                    let sigobj: Rc<RefCell<dyn Signal>> = Rc::new(RefCell::new(PythonSignal::new(key.clone(), pyobj, pkg_path.clone())));
+                    sig_to_add.push((name, sigobj));
+                }
+            }
+            Ok(sig_to_add)
+        };
+
+        match process_list()  {
+            Ok(sig_to_add) => {
+                let mut res = HashMap::new();
+                for (name, sigobj) in sig_to_add {
+                    res.insert(name.clone(), sigobj.clone());
+                    self.signals.insert(name, sigobj);
+                    
+                }
+                Ok(res)
+            }
+            Err(e) => {
+                // Process the rest of the list
+                Err(HalfBakedError::from(
+                    HalfBakedError::gen_diff(&self.signals, signal_classes),
+                    e
+                ))
             }
         }
 
-        Ok(res)
     }
 
     pub fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
@@ -143,12 +166,13 @@ impl SignalRegistry {
 
 struct PythonSignal {
     sig_inst: PyObject,
+    sig_name: Py<PyAny>,
     lily_pkg_path: Arc<PathBuf>
 }
 
 impl PythonSignal {
-    fn new(sig_inst: PyObject, lily_pkg_path: Arc<PathBuf>) -> Self {
-        Self {sig_inst, lily_pkg_path}
+    fn new(sig_name: Py<PyAny>, sig_inst: PyObject, lily_pkg_path: Arc<PathBuf>) -> Self {
+        Self {sig_name, sig_inst, lily_pkg_path}
     }
 
     fn call_py_method<A:IntoPy<Py<PyTuple>>>(&mut self, py: Python, name: &str, args: A, required: bool) -> Result<()> {
@@ -208,6 +232,17 @@ impl Signal for PythonSignal {
     }
 }
 
+impl Drop for PythonSignal {
+    fn drop(&mut self) {
+        println!("Python signal dropped!");
+        let gil= Python::acquire_gil();
+        let py = gil.python();
+        remove_from_signals(py, &vec![self.sig_name.clone()]).expect(
+            &format!("Failed to remove signal: {}", self.sig_name.to_string())
+        );
+    }
+}
+
 // To show each package just those signals available to them
 #[derive(Clone)]
 pub struct LocalSignalRegistry {
@@ -238,8 +273,30 @@ impl LocalSignalRegistry {
         }
     }
 
-    pub fn extend_and_init_classes_py(&mut self, py: Python, pkg_path: &Path, signal_classes: Vec<(PyObject, PyObject)>) -> Result<()> {
+    pub fn extend_and_init_classes_py(&mut self, py: Python, pkg_path: &Path, signal_classes: Vec<(PyObject, PyObject)>) -> Result<(), HalfBakedError> {
         self.signals.extend( (*self.global_reg).borrow_mut().extend_and_init_classes_py(py, pkg_path, signal_classes)?);
         Ok(())
+    }
+
+    pub fn minus(&self, other: &Self) -> Self {
+        let mut res = LocalSignalRegistry{
+            event: self.event.clone(),
+            signals: HashMap::new(),
+            global_reg: self.global_reg.clone()
+        };
+
+        for (k,v) in &self.signals {
+            if !other.signals.contains_key(k) {
+                res.signals.insert(k.clone(), v.clone());
+            }
+        }
+
+        res
+    }
+
+    pub fn remove_from_global(&self) {
+        for (sgnl,_) in &self.signals {
+            self.global_reg.borrow_mut().signals.remove(sgnl);
+        }
     }
 }

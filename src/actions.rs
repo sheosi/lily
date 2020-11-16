@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::python::{call_for_pkg, get_inst_class_name, PyException, yaml_to_python};
+use crate::python::{call_for_pkg, get_inst_class_name, HalfBakedError, PyException, yaml_to_python};
 
 // Other crates
 use anyhow::{anyhow, Result};
@@ -29,20 +29,40 @@ impl ActionRegistry {
     }
 
     // Imports all modules from that module and return the new actions
-    pub fn extend_and_init_classes(&mut self, python: Python, action_classes: Vec<(PyObject, PyObject)>) -> Result<HashMap<String, PyObject>> {
-        let mut res = HashMap::new();
+    pub fn extend_and_init_classes(&mut self, python: Python, action_classes: Vec<(PyObject, PyObject)>) -> Result<HashMap<String, PyObject>, HalfBakedError> {
 
-        for (key, val) in  &action_classes {
-            let name = key.to_string();
-            // We'll get old items, let's ignore them
-            if !self.map.contains_key(&name) {
-                let pyobj = val.call(python, PyTuple::empty(python), None).map_err(|py_err|anyhow!("Python error while instancing action \"{}\": {:?}", name, py_err.to_string()))?;
-                res.insert(name.clone(), pyobj.clone_ref(python));
-                self.map.insert(name, pyobj);
+        let process_list = || -> Result<_> {
+            let mut act_to_add = vec![];
+            for (key, val) in  &action_classes {
+                let name = key.to_string();
+                // We'll get old items, let's ignore them
+                if !self.map.contains_key(&name) {
+                    let pyobj = val.call(python, PyTuple::empty(python), None).map_err(|py_err|anyhow!("Python error while instancing action \"{}\": {:?}", name, py_err.to_string()))?;
+                    act_to_add.push((name,pyobj));
+                }
+            }
+            Ok(act_to_add)
+        };
+
+        match process_list() {
+            Ok(act_to_add) => {
+                let mut res = HashMap::new();
+
+                for (name, pyobj) in act_to_add {
+                    res.insert(name.clone(), pyobj.clone_ref(python));
+                    self.map.insert(name, pyobj);
+                }
+
+                Ok(res)
+            }
+
+            Err(e) => {
+                Err(HalfBakedError::from(
+                    HalfBakedError::gen_diff(&self.map, action_classes),
+                    e
+                ))
             }
         }
-
-        Ok(res)
     }
 }
 
@@ -74,7 +94,7 @@ impl LocalActionRegistry {
         Self {map: HashMap::new(), global_reg}
     }
 
-    pub fn extend_and_init_classes(&mut self, py:Python, action_classes: Vec<(PyObject, PyObject)>) -> Result<()> {
+    pub fn extend_and_init_classes(&mut self, py:Python, action_classes: Vec<(PyObject, PyObject)>) -> Result<(), HalfBakedError> {
         self.map.extend( (*self.global_reg).borrow_mut().extend_and_init_classes(py, action_classes)?);
         Ok(())
     }

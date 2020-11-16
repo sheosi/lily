@@ -5,15 +5,15 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 // This crate
-use crate::vars::{PYTHON_SDK_PATH, PACKAGES_PATH_ERR_MSG, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
-use crate::python::{add_py_folder, call_for_pkg};
 use crate::actions::{ActionSet, ActionRegistry, LocalActionRegistry};
+use crate::python::{add_py_folder, call_for_pkg, remove_from_actions, remove_from_signals};
 use crate::signals::{LocalSignalRegistry, SignalRegistry};
+use crate::vars::{PYTHON_SDK_PATH, PACKAGES_PATH_ERR_MSG, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
 
 // Other crates
 use anyhow::{anyhow, Result};
 use pyo3::Python;
-use log::{info, warn};
+use log::{error, info, warn};
 use unic_langid::LanguageIdentifier;
 
 trait IntoMapping {
@@ -117,10 +117,23 @@ pub fn load_package_python(py: Python, path: &Path,
     ) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
     let (signal_classes, action_classes) = add_py_folder(py, path)?;
     let mut sigreg = base_sigreg.clone();
-    sigreg.extend_and_init_classes_py(py, pkg_path, signal_classes)?;
+    match sigreg.extend_and_init_classes_py(py, pkg_path, signal_classes) {
+        Ok(()) =>{Ok(())}
+        Err(e) => {
+            remove_from_signals(py, &e.cls_names).expect(&format!("Coudln't remove '{:?}' from signals", e.cls_names));
+            Err(e.source)
+        }
+    }?;
 
     let mut actreg = base_actreg.clone();
-    actreg.extend_and_init_classes(py, action_classes)?;
+    match actreg.extend_and_init_classes(py, action_classes) {
+        Ok(()) => {Ok(())}
+        Err(e) => {
+            remove_from_actions(py, &e.cls_names).expect(&format!("Couldn't remove '{:?}' from actions", e.cls_names));
+            sigreg.minus(base_sigreg).remove_from_global();
+            Err(e.source)
+        }
+    }?;
 
     Ok((sigreg, actreg))
 }
@@ -141,13 +154,27 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<Sign
     base_actreg.extend_and_init_classes(py, initial_actions)?;
 
     info!("PACKAGES_PATH:{}", path.to_str().ok_or_else(|| anyhow!("Can't transform the package path {:?}", path))?);
+
+    let mut not_loaded = vec![];
     for entry in std::fs::read_dir(path).expect(PACKAGES_PATH_ERR_MSG) {
         let entry = entry?.path();
         if entry.is_dir() {
-            let (mut local_sigreg, local_actreg) = load_package_python(py, &entry.join("python"), &entry, &base_sigreg, &base_actreg)?;
-            load_trans(py, &entry, curr_lang)?;
-            load_package(&mut local_sigreg, &local_actreg, &entry, curr_lang)?;
+            match load_package_python(py, &entry.join("python"), &entry, &base_sigreg, &base_actreg) {
+                Ok((mut local_sigreg, local_actreg)) => {
+                    load_trans(py, &entry, curr_lang)?;
+                    load_package(&mut local_sigreg, &local_actreg, &entry, curr_lang)?;
+                }
+                Err(e) => {
+                    let pkg_name = entry.file_stem().unwrap().to_string_lossy();
+                    error!("Package {} had a problem, won't be available. {}", pkg_name, e);
+                    not_loaded.push(pkg_name.into_owned());
+                }
+            }
         }
+    }
+
+    if !not_loaded.is_empty() {
+        warn!("Not loaded: {}", not_loaded.join(","));
     }
 
     global_sigreg.borrow_mut().end_load(curr_lang)?;
@@ -157,3 +184,4 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<Sign
     let res = global_sigreg.borrow_mut().clone();
     Ok(res)
 }
+
