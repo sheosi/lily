@@ -11,15 +11,24 @@ use crate::python::{call_for_pkg, get_inst_class_name, HalfBakedError, PyExcepti
 // Other crates
 use anyhow::{anyhow, Result};
 use log::error;
-use pyo3::{types::{PyDict,PyTuple}, PyObject, Python};
+use pyo3::{types::{PyDict,PyTuple}, Py, PyAny, PyObject, Python};
 use pyo3::prelude::{pyclass, pymethods};
 use pyo3::exceptions::PyOSError;
 
 type ActionRegistryShared = Rc<RefCell<ActionRegistry>>;
 
-#[derive(Debug)]
+pub trait ActionInstance {
+    fn call(&self, py: Python, context: &PyDict) -> Result<()>;
+    fn get_name(&self) -> String;
+}
+
+pub trait Action {
+    fn instance(&self, py: Python, yaml: &serde_yaml::Value, lily_pkg_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send>;
+}
+
+
 pub struct ActionRegistry {
-    map: HashMap<String, PyObject>
+    map: HashMap<String, Rc<RefCell<dyn Action + Send>>>
 }
 
 impl ActionRegistry {
@@ -29,7 +38,7 @@ impl ActionRegistry {
     }
 
     // Imports all modules from that module and return the new actions
-    pub fn extend_and_init_classes(&mut self, python: Python, action_classes: Vec<(PyObject, PyObject)>) -> Result<HashMap<String, PyObject>, HalfBakedError> {
+    pub fn extend_and_init_classes(&mut self, python: Python, action_classes: Vec<(PyObject, PyObject)>) -> Result<HashMap<String, Rc<RefCell<dyn Action + Send>>>, HalfBakedError> {
 
         let process_list = || -> Result<_> {
             let mut act_to_add = vec![];
@@ -38,7 +47,8 @@ impl ActionRegistry {
                 // We'll get old items, let's ignore them
                 if !self.map.contains_key(&name) {
                     let pyobj = val.call(python, PyTuple::empty(python), None).map_err(|py_err|anyhow!("Python error while instancing action \"{}\": {:?}", name, py_err.to_string()))?;
-                    act_to_add.push((name,pyobj));
+                    let rc: Rc<RefCell<dyn Action + Send>> = Rc::new(RefCell::new(PythonAction::new(pyobj)));
+                    act_to_add.push((name,rc));
                 }
             }
             Ok(act_to_add)
@@ -48,9 +58,9 @@ impl ActionRegistry {
             Ok(act_to_add) => {
                 let mut res = HashMap::new();
 
-                for (name, pyobj) in act_to_add {
-                    res.insert(name.clone(), pyobj.clone_ref(python));
-                    self.map.insert(name, pyobj);
+                for (name, action) in act_to_add {
+                    res.insert(name.clone(), action.clone());
+                    self.map.insert(name, action);
                 }
 
                 Ok(res)
@@ -66,26 +76,8 @@ impl ActionRegistry {
     }
 }
 
-impl Clone for LocalActionRegistry {
-    fn clone(&self) -> Self {
-        // Get GIL
-        let gil = Python::acquire_gil();
-        let python = gil.python();
-
-        let dup_refs = |pair:(&String, &PyObject)| {
-            let (key, val) = pair;
-            (key.to_owned(), val.clone_ref(python))
-        };
-
-        let new_map: HashMap<String, PyObject> = self.map.iter().map(dup_refs).collect();
-        Self{map: new_map, global_reg: self.global_reg.clone()}
-    }
-}
-
-
-#[derive(Debug)]
 pub struct LocalActionRegistry {
-    map: HashMap<String, PyObject>,
+    map: HashMap<String, Rc<RefCell<dyn Action + Send>>>,
     global_reg: Rc<RefCell<ActionRegistry>>
 }
 
@@ -99,19 +91,75 @@ impl LocalActionRegistry {
         Ok(())
     }
 
-    fn get(&self, action_name: &str) -> Option<&PyObject> {
+    pub fn get(&self, action_name: &str) -> Option<&Rc<RefCell<dyn Action + Send>>> {
         self.map.get(action_name)
     }
 }
 
-struct ActionData {
+impl Clone for LocalActionRegistry {
+    fn clone(&self) -> Self {        
+        let dup_refs = |pair:(&String, &Rc<RefCell<dyn Action + Send>>)| {
+            let (key, val) = pair;
+            (key.to_owned(), val.clone())
+        };
+
+        let new_map: HashMap<String, Rc<RefCell<dyn Action + Send>>> = self.map.iter().map(dup_refs).collect();
+        Self{map: new_map, global_reg: self.global_reg.clone()}
+    }
+}
+
+#[derive(Debug)]
+pub struct PythonAction {
+    obj: PyObject
+}
+
+impl PythonAction {
+    pub fn new(obj: PyObject) -> Self {
+        Self{obj}
+    }
+}
+
+impl Action for PythonAction {
+    fn instance(&self, py: Python, yaml: &serde_yaml::Value, lily_pkg_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send> {
+        Box::new(PythonActionInstance::new(py, self.obj.clone(), yaml, lily_pkg_path))
+    }
+}
+
+pub struct PythonActionInstance {
     obj: PyObject,
     args: PyObject,
     lily_pkg_path: Arc<PathBuf>
 }
 
+impl PythonActionInstance {
+    pub fn new (py: Python, act_obj:Py<PyAny>, yaml: &serde_yaml::Value, lily_pkg_path:Arc<PathBuf>) -> Self {
+        Self{obj: act_obj, args: yaml_to_python(py, &yaml), lily_pkg_path}
+    }
+}
+
+impl ActionInstance for PythonActionInstance {
+    fn call(&self ,py: Python, context: &PyDict) -> Result<()> {
+        let trig_act = self.obj.getattr(py, "trigger_action")?;
+        std::env::set_current_dir(self.lily_pkg_path.as_ref())?;
+        call_for_pkg(self.lily_pkg_path.as_ref(),
+        |_|trig_act.call(
+            py,
+            (self.args.clone_ref(py), context),
+            None)
+        ).py_excep::<PyOSError>()??;
+
+        Ok(())
+    }
+    fn get_name(&self) -> String {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+
+        get_inst_class_name(py, &self.obj)
+    }
+}
+
 pub struct ActionSet {
-    acts: Vec<ActionData>
+    acts: Vec<Box<dyn ActionInstance + Send>>
 }
 
 impl ActionSet {
@@ -119,31 +167,16 @@ impl ActionSet {
         Arc::new(Mutex::new(Self {acts: Vec::new()}))
     }
 
-    pub fn add_action(&mut self, py: Python, act_name: &str, yaml: &serde_yaml::Value, action_registry: &LocalActionRegistry, lily_pkg_path: Arc<PathBuf>) -> Result<()>{
-        let act_obj = action_registry.get(act_name).ok_or_else(||anyhow!("Action {} is not registered",act_name))?.clone_ref(py);
-        self.acts.push(ActionData{obj: act_obj, args: yaml_to_python(py, &yaml), lily_pkg_path});
+    pub fn add_action(&mut self, action: Box<dyn ActionInstance + Send>) -> Result<()>{
+        self.acts.push(action);
 
         Ok(())
     }
 
     pub fn call_all(&mut self, py: Python, context: &PyDict) {
-        fn call_action(py: Python, action: &ActionData, context: &PyDict) -> Result<()> {
-            let trig_act = action.obj.getattr(py, "trigger_action")?;
-            std::env::set_current_dir(action.lily_pkg_path.as_ref())?;
-            call_for_pkg(action.lily_pkg_path.as_ref(),
-            |_|trig_act.call(
-                py,
-                (action.args.clone_ref(py), context),
-                None)
-            ).py_excep::<PyOSError>()??;
-
-            Ok(())
-        }
-
         for action in &self.acts {
-            if let Err(e) = call_action(py, action, context) {
-                let name = get_inst_class_name(py, &action.obj);
-                error!("Action {} failed while being triggered: {}", name, e);
+            if let Err(e) = action.call(py, context) {
+                error!("Action {} failed while being triggered: {}", &action.get_name(), e);
             }
         }
     }

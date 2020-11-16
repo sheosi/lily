@@ -37,7 +37,7 @@ fn load_trans(python: Python, pkg_path: &Path, curr_lang: &LanguageIdentifier) -
     Ok(())
 }
 
-pub fn load_package(sigreg: &mut LocalSignalRegistry, action_registry: &LocalActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) -> Result<()> {
+pub fn load_skills(sigreg: &mut LocalSignalRegistry, action_registry: &LocalActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) -> Result<()> {
     // TODO: Don't load package if skills go wrong
     info!("Loading package: {}", path.to_str().ok_or_else(|| anyhow!("Failed to get the str from path {:?}", path))?);
 
@@ -88,7 +88,9 @@ pub fn load_package(sigreg: &mut LocalSignalRegistry, action_registry: &LocalAct
                     for (act_name, act_arg) in actions.into_iter() {
                         let gil = Python::acquire_gil();
                         let py = gil.python();
-                        act_set.lock().unwrap().add_action(py, &act_name, &act_arg, &action_registry, pkg_path.clone())?;
+                        let act = action_registry.get(&act_name).ok_or_else(||anyhow!("Action {} is not registered",act_name))?;
+                        let act_inst = act.borrow().instance(py, &act_arg, pkg_path.clone());
+                        act_set.lock().unwrap().add_action(act_inst)?;
                     }
 
 
@@ -156,18 +158,42 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<Sign
     info!("PACKAGES_PATH:{}", path.to_str().ok_or_else(|| anyhow!("Can't transform the package path {:?}", path))?);
 
     let mut not_loaded = vec![];
-    for entry in std::fs::read_dir(path).expect(PACKAGES_PATH_ERR_MSG) {
-        let entry = entry?.path();
-        if entry.is_dir() {
-            match load_package_python(py, &entry.join("python"), &entry, &base_sigreg, &base_actreg) {
-                Ok((mut local_sigreg, local_actreg)) => {
-                    load_trans(py, &entry, curr_lang)?;
-                    load_package(&mut local_sigreg, &local_actreg, &entry, curr_lang)?;
+    let loaders = vec![Box::new(PythonLoader::new())];
+
+    let mut process_loaders = |entry: &Path| -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+        let mut pkg_sigreg = base_sigreg.clone();
+        let mut pkg_actreg = base_actreg.clone();
+        for loader in &loaders {
+            match loader.load_code(py, &entry, &pkg_sigreg, &pkg_actreg) {
+                Ok((local_sigreg, local_actreg)) => {
+                    pkg_sigreg = local_sigreg;
+                    pkg_actreg = local_actreg;
                 }
                 Err(e) => {
                     let pkg_name = entry.file_stem().unwrap().to_string_lossy();
                     error!("Package {} had a problem, won't be available. {}", pkg_name, e);
                     not_loaded.push(pkg_name.into_owned());
+                }
+            }
+        }
+        Ok((pkg_sigreg, pkg_actreg))
+    };
+
+    for entry in std::fs::read_dir(path).expect(PACKAGES_PATH_ERR_MSG) {
+        let entry = entry?.path();
+        if entry.is_dir() {
+            match process_loaders(&entry) {
+                Ok((mut pkg_sigreg, pkg_actreg)) => {
+                    load_trans(py, &entry, curr_lang)?;
+                    match load_skills(&mut pkg_sigreg, &pkg_actreg, &entry, curr_lang) {
+                        Err(e) => {
+
+                        }
+                        _ => ()
+                    }
+                }
+                Err(e) => {
+
                 }
             }
         }
@@ -185,3 +211,19 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<Sign
     Ok(res)
 }
 
+trait Loader {
+    fn load_code(&self, py: Python, pkg_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry)> ;
+}
+
+struct PythonLoader {}
+
+impl Loader for PythonLoader {
+    fn load_code(&self, py: Python, pkg_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+        load_package_python(py, &pkg_path.join("python"), &pkg_path, base_sigreg, base_actreg)
+    }
+}
+impl PythonLoader {
+    fn new() -> Self {
+        PythonLoader{}
+    }
+}
