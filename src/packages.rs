@@ -144,7 +144,7 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<Sign
     for entry in std::fs::read_dir(path).expect(PACKAGES_PATH_ERR_MSG) {
         let entry = entry?.path();
         if entry.is_dir() {
-            let (mut local_sigreg, local_actreg) = load_package_python(py, &entry.join("python"), &entry, &base_sigreg, &base_actreg).unwrap();
+            let (mut local_sigreg, local_actreg) = load_package_python(py, &entry.join("python"), &entry, &base_sigreg, &base_actreg)?;
             load_trans(py, &entry, curr_lang)?;
             load_package(&mut local_sigreg, &local_actreg, &entry, curr_lang)?;
         }
