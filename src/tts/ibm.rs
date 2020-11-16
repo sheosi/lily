@@ -7,13 +7,18 @@ use reqwest::Client;
 use unic_langid::{LanguageIdentifier, langid, langids};
 
 pub struct IbmTts {
-    engine: IbmTtsEngine,
+    client: Client,
+	api_gateway: String,
+	api_key: String,
     curr_voice: String
 }
 
 impl IbmTts {
     pub fn new(lang: &LanguageIdentifier, api_gateway: String, api_key: String, prefs: &VoiceDescr) -> Result<Self, TtsConstructionError> {
-        Ok(IbmTts{engine: IbmTtsEngine::new(api_gateway, api_key), curr_voice: Self::make_tts_voice(&Self::lang_neg(lang), prefs)?.to_string()})
+        Ok(IbmTts{
+            client: Client::new(), api_gateway, api_key,
+            curr_voice: Self::make_tts_voice(&Self::lang_neg(lang), prefs)?.to_string()
+        })
     }
 
     // Accept only negotiated LanguageIdentifiers
@@ -97,12 +102,24 @@ impl IbmTts {
         langids!("ar-AR", "de-DE", "en-GB", "en-US", "es-ES", "es-LA", "es-US",
                  "fr-FR", "it-IT", "ja-JP", "ko-KR", "nl-NL", "pt-BR", "zh-CN")
     }
+
+    async fn synth_text_online_err(&self, input: &str) -> Result<Audio, OnlineTtsError> {
+        let url_str = format!("https://{}/text-to-speech/api/v1/synthesize?voice=", self.api_gateway);
+	    let url = reqwest::Url::parse(&format!("{}{}&text={}", url_str, &self.curr_voice, input))?;
+
+		let buf = self.client.post(url).header("accept", "audio/mp3").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send().await?.bytes().await?.to_vec();
+
+		Ok(Audio::new_encoded(buf, DEFAULT_SAMPLES_PER_SECOND))
+    }
 }
+
+
+
 
 #[async_trait(?Send)]
 impl Tts for IbmTts {
     async fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
-        Ok(self.engine.synth(input, &self.curr_voice).await.map(|b|Audio::new_encoded(b, DEFAULT_SAMPLES_PER_SECOND))?)
+        Ok(self.synth_text_online_err(input).await?)
     }
 
     fn get_info(&self) -> TtsInfo {
@@ -125,25 +142,3 @@ impl TtsStatic for IbmTts {
     }
 }
 
-pub struct IbmTtsEngine {
-	client: Client,
-	api_gateway: String,
-	api_key: String
-}
-
-
-impl IbmTtsEngine {
-
-	pub fn new(api_gateway: String, api_key: String) -> Self {
-		IbmTtsEngine{client: Client::new(), api_gateway, api_key}
-	}
-
-	pub async fn synth(&mut self, text: &str, voice: &str) -> Result<Vec<u8>, OnlineTtsError> {
-	    let url_str = format!("https://{}/text-to-speech/api/v1/synthesize?voice=", self.api_gateway);
-	    let url = reqwest::Url::parse(&format!("{}{}&text={}", url_str, voice, text))?;
-
-		let buf = self.client.post(url).header("accept", "audio/mp3").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send().await?.bytes().await?.to_vec();
-
-		Ok(buf)
-	}
-}
