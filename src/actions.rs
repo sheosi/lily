@@ -1,12 +1,13 @@
 // Standard library
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt; // For Debug in LocalActionRegistry
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::python::{call_for_pkg, get_inst_class_name, HalfBakedError, PyException, yaml_to_python};
+use crate::python::{call_for_pkg, get_inst_class_name, HalfBakedError, PyException, remove_from_actions, yaml_to_python};
 
 // Other crates
 use anyhow::{anyhow, Result};
@@ -15,7 +16,7 @@ use pyo3::{types::{PyDict,PyTuple}, Py, PyAny, PyObject, Python};
 use pyo3::prelude::{pyclass, pymethods};
 use pyo3::exceptions::PyOSError;
 
-type ActionRegistryShared = Rc<RefCell<ActionRegistry>>;
+pub type ActionRegistryShared = Rc<RefCell<ActionRegistry>>;
 
 pub trait ActionInstance {
     fn call(&self, py: Python, context: &PyDict) -> Result<()>;
@@ -29,6 +30,14 @@ pub trait Action {
 
 pub struct ActionRegistry {
     map: HashMap<String, Rc<RefCell<dyn Action + Send>>>
+}
+
+impl fmt::Debug for ActionRegistry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ActionRegistry")
+         .field("map", &self.map.keys().collect::<Vec<&String>>())
+         .finish()
+    }
 }
 
 impl ActionRegistry {
@@ -47,7 +56,7 @@ impl ActionRegistry {
                 // We'll get old items, let's ignore them
                 if !self.map.contains_key(&name) {
                     let pyobj = val.call(python, PyTuple::empty(python), None).map_err(|py_err|anyhow!("Python error while instancing action \"{}\": {:?}", name, py_err.to_string()))?;
-                    let rc: Rc<RefCell<dyn Action + Send>> = Rc::new(RefCell::new(PythonAction::new(pyobj)));
+                    let rc: Rc<RefCell<dyn Action + Send>> = Rc::new(RefCell::new(PythonAction::new(key.to_owned(),pyobj)));
                     act_to_add.push((name,rc));
                 }
             }
@@ -78,7 +87,16 @@ impl ActionRegistry {
 
 pub struct LocalActionRegistry {
     map: HashMap<String, Rc<RefCell<dyn Action + Send>>>,
-    global_reg: Rc<RefCell<ActionRegistry>>
+    global_reg: ActionRegistryShared
+}
+
+impl fmt::Debug for LocalActionRegistry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LocalActionRegistry")
+         .field("map", &self.map.keys().collect::<Vec<&String>>())
+         .field("global_reg", &self.global_reg)
+         .finish()
+    }
 }
 
 impl LocalActionRegistry {
@@ -91,9 +109,35 @@ impl LocalActionRegistry {
         Ok(())
     }
 
+    pub fn extend(&mut self, other: Self) {
+        self.map.extend(other.map)
+    }
+
     pub fn get(&self, action_name: &str) -> Option<&Rc<RefCell<dyn Action + Send>>> {
         self.map.get(action_name)
     }
+
+    pub fn minus(&self, other: &Self) -> Self {
+        let mut res = Self{
+            map: HashMap::new(),
+            global_reg: self.global_reg.clone()
+        };
+
+        for (k,v) in &self.map {
+            if !other.map.contains_key(k) {
+                res.map.insert(k.clone(), v.clone());
+            }
+        }
+
+        res
+    }
+
+    pub fn remove_from_global(&self) {
+        for (sgnl,_) in &self.map {
+            self.global_reg.borrow_mut().map.remove(sgnl);
+        }
+    }
+
 }
 
 impl Clone for LocalActionRegistry {
@@ -110,18 +154,31 @@ impl Clone for LocalActionRegistry {
 
 #[derive(Debug)]
 pub struct PythonAction {
+    act_name: Py<PyAny>,
     obj: PyObject
 }
 
 impl PythonAction {
-    pub fn new(obj: PyObject) -> Self {
-        Self{obj}
+    pub fn new(act_name: Py<PyAny>, obj: PyObject) -> Self {
+        Self{act_name, obj}
     }
 }
 
 impl Action for PythonAction {
     fn instance(&self, py: Python, yaml: &serde_yaml::Value, lily_pkg_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send> {
         Box::new(PythonActionInstance::new(py, self.obj.clone(), yaml, lily_pkg_path))
+    }
+}
+
+impl Drop for PythonAction {
+    fn drop(&mut self) {
+        println!("Python action dropped!");
+        let gil= Python::acquire_gil();
+        let py = gil.python(); 
+
+        remove_from_actions(py, &vec![self.act_name.clone()]).expect(
+            &format!("Failed to remove action: {}", self.act_name.to_string())
+        );
     }
 }
 
@@ -158,8 +215,17 @@ impl ActionInstance for PythonActionInstance {
     }
 }
 
+
 pub struct ActionSet {
     acts: Vec<Box<dyn ActionInstance + Send>>
+}
+
+impl fmt::Debug for ActionSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ActionRegistry")
+         .field("acts", &self.acts.iter().fold("".to_string(), |str, a|format!("{}{},",str,a.get_name())))
+         .finish()
+    }
 }
 
 impl ActionSet {

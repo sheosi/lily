@@ -402,7 +402,6 @@ contains the error and the new classes*/
 #[error("{source}")]
 pub struct HalfBakedError {
     pub cls_names: Vec<Py<PyAny>>,
-
     pub source: anyhow::Error,
 }
 

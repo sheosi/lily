@@ -5,14 +5,15 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 // This crate
-use crate::actions::{ActionSet, ActionRegistry, LocalActionRegistry};
+use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry};
 use crate::python::{add_py_folder, call_for_pkg, remove_from_actions, remove_from_signals};
-use crate::signals::{LocalSignalRegistry, SignalRegistry};
+use crate::signals::{LocalSignalRegistry, new_signal_order, SignalRegistry, SignalRegistryShared};
 use crate::vars::{PYTHON_SDK_PATH, PACKAGES_PATH_ERR_MSG, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
 
 // Other crates
 use anyhow::{anyhow, Result};
 use pyo3::Python;
+use thiserror::Error;
 use log::{error, info, warn};
 use unic_langid::LanguageIdentifier;
 
@@ -38,7 +39,6 @@ fn load_trans(python: Python, pkg_path: &Path, curr_lang: &LanguageIdentifier) -
 }
 
 pub fn load_skills(sigreg: &mut LocalSignalRegistry, action_registry: &LocalActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) -> Result<()> {
-    // TODO: Don't load package if skills go wrong
     info!("Loading package: {}", path.to_str().ok_or_else(|| anyhow!("Failed to get the str from path {:?}", path))?);
 
     let pkg_path = Arc::new(path.to_path_buf());
@@ -96,13 +96,13 @@ pub fn load_skills(sigreg: &mut LocalSignalRegistry, action_registry: &LocalActi
 
                     for (sig_name, sig_arg) in signals.into_iter() {
                         if let Err(e) = sigreg.add_sigact_rel(&sig_name, sig_arg, skill_name, &pkg_name, act_set.clone()) {
-                            log::warn!("Package \"{}\" with skill \"{}\" that refers to a signal \"{}\" which is inexistent or not available to the package, skill won't be loaded, error: {}", &pkg_name, skill_name, sig_name, e);
+                            return Err(anyhow!("Skill \"{}\" that refers to a signal \"{}\" which is inexistent or not available to the package. More info: {}", skill_name, sig_name, e))
                         }
                     }
 
                 }
                 else {
-                    warn!("Incorrect Yaml format for skill: \"{}\", won't be loaded", key.clone().as_str().expect(WRONG_YAML_KEY_MSG));
+                    return Err(anyhow!("Incorrect Yaml format for skill: \"{}\", won't be loaded", key.clone().as_str().expect(WRONG_YAML_KEY_MSG)))    
                 }
             }
         }
@@ -140,61 +140,86 @@ pub fn load_package_python(py: Python, path: &Path,
     Ok((sigreg, actreg))
 }
 
+/** Used by other modules, launched after an error while loading classes, 
+contains the error and the new classes*/
+#[derive(Debug, Error)]
+#[error("{source}")]
+pub struct HalfBakedDoubleError {
+    pub act_sig: (LocalSignalRegistry, LocalActionRegistry),
+
+    pub source: anyhow::Error,
+}
+
+impl HalfBakedDoubleError {
+    fn from(act_sig:(LocalSignalRegistry, LocalActionRegistry), source: anyhow::Error ) -> Self {
+        Self {act_sig, source}
+    }
+}
+
+
 pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<SignalRegistry> {
     // Get GIL
     let gil = Python::acquire_gil();
     let py = gil.python();
 
-    let (initial_signals, initial_actions) = add_py_folder(py, &PYTHON_SDK_PATH.resolve())?;
+    let loaders: Vec<Box<dyn Loader>> = vec![
+        Box::new(PythonLoader::new()),
+        Box::new(EmbeddedLoader::new())
+    ];
 
     let global_sigreg = Rc::new(RefCell::new(SignalRegistry::new()));
-    let mut base_sigreg = LocalSignalRegistry::init_from(global_sigreg.clone());
-    base_sigreg.extend_and_init_classes_py(py, path, initial_signals)?;
+    let mut base_sigreg = LocalSignalRegistry::new(global_sigreg.clone());
 
     let global_actreg = Rc::new(RefCell::new(ActionRegistry::new()));
-    let mut base_actreg = LocalActionRegistry::new(global_actreg);
-    base_actreg.extend_and_init_classes(py, initial_actions)?;
+    let mut base_actreg = LocalActionRegistry::new(global_actreg.clone());
+
+    for loader in &loaders {
+        let (ldr_sigreg, ldr_actreg) = 
+            loader.init_base(py,  global_sigreg.clone(), global_actreg.clone())?;
+
+        base_sigreg.extend(ldr_sigreg);
+        base_actreg.extend(ldr_actreg);
+    }
 
     info!("PACKAGES_PATH:{}", path.to_str().ok_or_else(|| anyhow!("Can't transform the package path {:?}", path))?);
 
     let mut not_loaded = vec![];
-    let loaders = vec![Box::new(PythonLoader::new())];
+    
 
-    let mut process_loaders = |entry: &Path| -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+    let process_pkg = |entry: &Path| -> Result<(), HalfBakedDoubleError> {
         let mut pkg_sigreg = base_sigreg.clone();
         let mut pkg_actreg = base_actreg.clone();
         for loader in &loaders {
-            match loader.load_code(py, &entry, &pkg_sigreg, &pkg_actreg) {
-                Ok((local_sigreg, local_actreg)) => {
-                    pkg_sigreg = local_sigreg;
-                    pkg_actreg = local_actreg;
-                }
-                Err(e) => {
-                    let pkg_name = entry.file_stem().unwrap().to_string_lossy();
-                    error!("Package {} had a problem, won't be available. {}", pkg_name, e);
-                    not_loaded.push(pkg_name.into_owned());
-                }
-            }
+            let (local_sigreg, local_actreg)= 
+                loader.load_code(py, &entry, &pkg_sigreg, &pkg_actreg).map_err(|e|{
+                    HalfBakedDoubleError::from((pkg_sigreg, pkg_actreg), e)
+                })?;
+
+                pkg_sigreg = local_sigreg;
+                pkg_actreg = local_actreg;
         }
-        Ok((pkg_sigreg, pkg_actreg))
+        load_trans(py, &entry, curr_lang).map_err(|e|{
+            HalfBakedDoubleError::from((pkg_sigreg.clone(), pkg_actreg.clone()), e)
+        })?;
+        load_skills(&mut pkg_sigreg, &pkg_actreg, &entry, curr_lang).map_err(|e|{
+            HalfBakedDoubleError::from((pkg_sigreg, pkg_actreg), e)
+        })?;
+        Ok(())
     };
 
     for entry in std::fs::read_dir(path).expect(PACKAGES_PATH_ERR_MSG) {
         let entry = entry?.path();
         if entry.is_dir() {
-            match process_loaders(&entry) {
-                Ok((mut pkg_sigreg, pkg_actreg)) => {
-                    load_trans(py, &entry, curr_lang)?;
-                    match load_skills(&mut pkg_sigreg, &pkg_actreg, &entry, curr_lang) {
-                        Err(e) => {
-
-                        }
-                        _ => ()
-                    }
-                }
+            match process_pkg(&entry) {
                 Err(e) => {
-
-                }
+                    let (pkg_sigreg, pkg_actreg) = e.act_sig;
+                    pkg_sigreg.minus(&base_sigreg).remove_from_global();
+                    pkg_actreg.minus(&base_actreg).remove_from_global();
+                    let pkg_name = entry.file_stem().unwrap().to_string_lossy();
+                    error!("Package {} had a problem, won't be available. {}", pkg_name, e.source);
+                    not_loaded.push(pkg_name.into_owned());
+                },
+                _ => ()
             }
         }
     }
@@ -212,18 +237,53 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<Sign
 }
 
 trait Loader {
+    fn init_base(&self, py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared) -> Result<(LocalSignalRegistry, LocalActionRegistry)>;
     fn load_code(&self, py: Python, pkg_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry)> ;
 }
 
 struct PythonLoader {}
 
 impl Loader for PythonLoader {
+    fn init_base(&self, py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+        let path = &PYTHON_SDK_PATH.resolve();
+        let (initial_signals, initial_actions) = add_py_folder(py, &PYTHON_SDK_PATH.resolve())?;
+        let mut sigreg = LocalSignalRegistry::new(glob_sigreg);
+        sigreg.extend_and_init_classes_py(py, path, initial_signals)?;
+
+        let mut actreg =LocalActionRegistry::new(glob_actreg);
+        actreg.extend_and_init_classes(py, initial_actions)?;
+
+        Ok((sigreg, actreg))
+    }
+
     fn load_code(&self, py: Python, pkg_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
         load_package_python(py, &pkg_path.join("python"), &pkg_path, base_sigreg, base_actreg)
     }
 }
 impl PythonLoader {
     fn new() -> Self {
-        PythonLoader{}
+        Self{}
+    }
+}
+
+struct EmbeddedLoader {
+}
+
+impl EmbeddedLoader {
+    fn new() -> Self {
+        Self{}
+    }
+}
+
+impl Loader for EmbeddedLoader {
+    fn init_base(&self, _py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+        let mut sigreg = LocalSignalRegistry::new(glob_sigreg);
+        sigreg.insert("order", Rc::new(RefCell::new(new_signal_order())));
+
+        Ok((sigreg, LocalActionRegistry::new(glob_actreg)))
+    }
+
+    fn load_code(&self, _py: Python, _pkg_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+        Ok((base_sigreg.clone(), base_actreg.clone()))
     }
 }

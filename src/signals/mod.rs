@@ -5,6 +5,7 @@ pub use self::order::*;
 // Standard library
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -23,8 +24,9 @@ use log::warn;
 use unic_langid::LanguageIdentifier;
 
 pub type SignalEventShared = Arc<Mutex<SignalEvent>>;
-type SignalRegistryShared = Rc<RefCell<SignalRegistry>>;
+pub type SignalRegistryShared = Rc<RefCell<SignalRegistry>>;
 
+#[derive(Debug)]
 // A especial signal to be called by the system whenever something happens
 pub struct SignalEvent {
     event_map: OrderMap
@@ -44,6 +46,7 @@ impl SignalEvent {
     }
 }
 
+#[derive(Debug)]
 pub struct OrderMap {
     map: HashMap<String, Arc<Mutex<ActionSet>>>
 }
@@ -81,15 +84,21 @@ pub struct SignalRegistry {
     signals: HashMap<String, Rc<RefCell<dyn Signal>>>
 }
 
+impl fmt::Debug for SignalRegistry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SignalRegistry")
+            .field("event", &self.event)
+            .field("signals", &self.signals.keys().cloned().collect::<Vec<String>>().join(","))
+            .finish()
+    }
+}
+
 impl SignalRegistry {
 
     pub fn new() -> Self {
-        let mut signals: HashMap<String, Rc<RefCell<dyn Signal>>> = HashMap::new();
-        signals.insert("order".to_string(), Rc::new(RefCell::new(new_signal_order())));
-
         Self {
             event: Arc::new(Mutex::new(SignalEvent::new())),
-            signals
+            signals: HashMap::new()
         }
     }
 
@@ -251,11 +260,21 @@ pub struct LocalSignalRegistry {
     global_reg: SignalRegistryShared
 }
 
+impl fmt::Debug for LocalSignalRegistry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LocalSignalRegistry")
+            .field("event", &self.event)
+            .field("signals", &self.signals.keys().cloned().collect::<Vec<String>>().join(","))
+            .field("global_reg", &self.global_reg)
+            .finish()
+    }
+}
+
 impl LocalSignalRegistry {
-    pub fn init_from(global_reg: SignalRegistryShared) -> Self {
+    pub fn new(global_reg: SignalRegistryShared) -> Self {
         Self {
             event: {global_reg.borrow().event.clone()},
-            signals: {global_reg.borrow().signals.clone()},
+            signals: HashMap::new(),
             global_reg: {global_reg.clone()}
         }
     }
@@ -273,13 +292,21 @@ impl LocalSignalRegistry {
         }
     }
 
+    pub fn insert(&mut self, sig_name: &str, signal: Rc<RefCell<dyn Signal>>) {
+        self.signals.insert(sig_name.into(), signal);
+    }
+
     pub fn extend_and_init_classes_py(&mut self, py: Python, pkg_path: &Path, signal_classes: Vec<(PyObject, PyObject)>) -> Result<(), HalfBakedError> {
         self.signals.extend( (*self.global_reg).borrow_mut().extend_and_init_classes_py(py, pkg_path, signal_classes)?);
         Ok(())
     }
 
+    pub fn extend(&mut self, other: Self) {
+        self.signals.extend(other.signals);
+    }
+
     pub fn minus(&self, other: &Self) -> Self {
-        let mut res = LocalSignalRegistry{
+        let mut res = Self{
             event: self.event.clone(),
             signals: HashMap::new(),
             global_reg: self.global_reg.clone()
