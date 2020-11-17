@@ -1,8 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Mutex;
-use std::time::Duration;
-use std::thread::sleep as block_sleep;
 
 use anyhow::anyhow;
 use lazy_static::lazy_static;
@@ -13,14 +11,12 @@ use lily_common::hotword::{HotwordDetector, Snowboy};
 use lily_common::other::{ConnectionConf, init_log};
 use lily_common::vad::{SnowboyVad, Vad, VadError};
 use lily_common::vars::*;
-use log::{info, warn};
+use log::{debug, info};
 use rmp_serde::{decode, encode};
 use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
 use serde::{Deserialize};
 use serde_yaml::from_reader;
 use tokio::{try_join, sync::{Mutex as AsyncMutex, MutexGuard as AsyncMGuard}};
-
-const ENERGY_SAMPLING_TIME_MS: u64 = 500;
 
 lazy_static! {
     static ref MY_UUID: Mutex<Option<String>> = Mutex::new(None);
@@ -126,27 +122,6 @@ async fn send_audio<'a>(client: Rc<RefCell<AsyncClient>>,data: AudioRef<'a>, is_
     Ok(())
 }
 
-fn record_env(mut rec_dev: AsyncMGuard<RecDevice>) -> anyhow::Result<AudioRaw> {
-    // Record environment to get minimal energy threshold
-    rec_dev.start_recording().expect(AUDIO_REC_START_ERR_MSG);
-    block_sleep(Duration::from_millis(ENERGY_SAMPLING_TIME_MS));
-    let audio_sample = {
-        match rec_dev.read()? {
-            Some(buffer) => {
-                AudioRaw::new_raw(buffer.to_owned(), DEFAULT_SAMPLES_PER_SECOND)
-            }
-            None => {
-                warn!("Couldn't obtain mic input data for energy sampling while loading");
-                AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND)
-            }
-        }
-
-    };
-
-    rec_dev.stop_recording()?;
-    Ok(audio_sample)
-}
-
 async fn receive (rec_dev: Rc<AsyncMutex<RecDevice>>,eloop: &mut EventLoop, my_name: &str, client:Rc<RefCell<AsyncClient>>) -> anyhow::Result<()> {
     let mut play_dev = PlayDevice::new().unwrap();
     // We will be listening from now on, say hello
@@ -195,10 +170,6 @@ async fn receive (rec_dev: Rc<AsyncMutex<RecDevice>>,eloop: &mut EventLoop, my_n
 }
 
 async fn user_listen(rec_dev: Rc<AsyncMutex<RecDevice>>,config: &ClientConf, client: Rc<RefCell<AsyncClient>>) -> anyhow::Result<()> {
-    // TODO: Send audio sample
-    let _env_sample = record_env(rec_dev.lock().await)?;
-    
-    rec_dev.lock().await.start_recording().expect(AUDIO_REC_START_ERR_MSG);
     let snowboy_path = SNOWBOY_DATA_PATH.resolve();
     let mut pas_listener = {
         let hotword_det = Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res"), config.hotword_sensitivity)?;
@@ -208,6 +179,8 @@ async fn user_listen(rec_dev: Rc<AsyncMutex<RecDevice>>,config: &ClientConf, cli
     let vad = SnowboyVad::new(&snowboy_path.join("common.res"))?;
     let mut act_listener = ActiveListener::new(vad);
     let mut current_state = ProgState::PasiveListening;
+
+    rec_dev.lock().await.start_recording().expect(AUDIO_REC_START_ERR_MSG);
     
     loop {
         let interval =
@@ -225,6 +198,7 @@ async fn user_listen(rec_dev: Rc<AsyncMutex<RecDevice>>,config: &ClientConf, cli
 
                 if pas_listener.process(mic_data)? {
                     current_state = ProgState::ActiveListening(rec_dev.lock().await);
+                    debug!("I'm listening for your command");
                     // Notify change
 
                 }

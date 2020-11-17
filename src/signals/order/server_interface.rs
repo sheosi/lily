@@ -9,7 +9,6 @@ use crate::nlu::{NluManager, NluManagerConf, NluManagerStatic};
 use crate::signals::{SignalEventShared, SignalOrder};
 use crate::stt::SttFactory;
 use crate::tts::{Gender, TtsFactory, VoiceDescr};
-use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
 use anyhow::Result;
 use lily_common::audio::{Audio, AudioRaw};
@@ -80,8 +79,7 @@ impl MqttInterface {
         client.subscribe("lily/new_satellite", QoS::AtMostOnce).await?;
         client.subscribe("lily/nlu_process", QoS::AtMostOnce).await?;
 
-        let dummy_sample = AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND);
-        let mut stt = SttFactory::load(&self.curr_lang, &dummy_sample,  config.prefer_online_stt, ibm_data).await?;
+        let mut stt = SttFactory::load(&self.curr_lang, config.prefer_online_stt, ibm_data).await?;
         info!("Using stt {}", stt.get_info());
 
         const VOICE_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};

@@ -5,26 +5,26 @@ use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 use async_trait::async_trait;
 use lily_common::audio::AudioRaw;
 
-#[cfg(feature = "unused_stt_batcher")]
+#[cfg(feature = "unused")]
 use crate::stt::SttBatched;
 
 use log::warn;
 
-#[cfg(feature = "unused_stt_batcher")]
+#[cfg(feature = "unused")]
 pub struct SttBatcher<S: SttBatched> {
     batch_stt: S,
     copy_audio: AudioRaw,   
     someone_was_talking: bool
 }
 
-#[cfg(feature = "unused_stt_batcher")]
+#[cfg(feature = "unused")]
 impl<S: SttBatched> SttBatcher<S> {
     pub fn new(batch_stt: S) -> Self {
         Self {copy_audio: AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND), batch_stt, someone_was_talking: false}
     }
 }
 
-#[cfg(feature = "unused_stt_batcher")]
+#[cfg(feature = "unused")]
 #[async_trait(?Send)]
 impl<S: SttBatched> Stt for SttBatcher<S> {
     async fn begin_decoding(&mut self) -> Result<(),SttError> {

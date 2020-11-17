@@ -15,7 +15,6 @@ pub struct SnowboyVad {
 impl SnowboyVad {
 	pub fn new(res_path: &Path) -> Result<Self, VadError> {
 		let vad = rsnowboy::SnowboyVad::new(res_path.to_str().ok_or_else(|| VadError::NotUnicode)?);
-
 		Ok(Self {vad})
 	}
 }

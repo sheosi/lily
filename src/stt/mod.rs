@@ -20,6 +20,7 @@ use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use unic_langid::LanguageIdentifier;
 use log::info;
 
+#[cfg(feature="unused")]
 use lily_common::audio::AudioRaw;
 
 
@@ -91,9 +92,14 @@ fn negotiate_langs_res(
     }
 
 }
+
+#[cfg(feature="unused")]
 const DYNAMIC_ENERGY_ADJUSTMENT_DAMPING: f64 = 0.15;
+#[cfg(feature="unused")]
 const DYNAMIC_ENERGY_RATIO: f64 = 0.00013;
+#[cfg(feature="unused")]
 const MIN_ENERGY: f64 = 3.0;
+#[cfg(feature="unused")]
 fn calc_threshold(audio: &AudioRaw) -> f64 {
     // This is taken from python's speech_recognition package
     let energy = audio.rms();
@@ -107,24 +113,24 @@ fn calc_threshold(audio: &AudioRaw) -> f64 {
 
 impl SttFactory {
     #[cfg(feature = "deepspeech_stt")]
-    fn make_local(lang: &LanguageIdentifier, audio_sample: &AudioRaw) -> Result<Box<dyn Stt>, SttConstructionError> {
+    fn make_local(lang: &LanguageIdentifier) -> Result<Box<dyn Stt>, SttConstructionError> {
         if DeepSpeechStt::is_lang_compatible(lang).is_ok() {
             Ok(Box::new(DeepSpeechStt::new(lang)?))
         }
         else {
-            Ok(Box::new(Pocketsphinx::new(lang, audio_sample)?))
+            Ok(Box::new(Pocketsphinx::new(lang)?))
         }
     }
 
     #[cfg(not(feature = "deepspeech_stt"))]
-    fn make_local(lang: &LanguageIdentifier, audio_sample: &AudioRaw) -> Result<Box<dyn Stt>, SttConstructionError> {
-        Ok(Box::new(Pocketsphinx::new(lang, audio_sample)?))
+    fn make_local(lang: &LanguageIdentifier) -> Result<Box<dyn Stt>, SttConstructionError> {
+        Ok(Box::new(Pocketsphinx::new(lang)?))
     }
 
 
-	pub async fn load(lang: &LanguageIdentifier, audio_sample: &AudioRaw, prefer_cloud: bool, ibm_data: Option<IbmSttData>) -> Result<Box<dyn Stt>, SttConstructionError> {
+	pub async fn load(lang: &LanguageIdentifier, prefer_cloud: bool, ibm_data: Option<IbmSttData>) -> Result<Box<dyn Stt>, SttConstructionError> {
 
-		let local_stt = Self::make_local(lang, audio_sample)?;
+		let local_stt = Self::make_local(lang)?;
         if prefer_cloud {
             info!("Prefer online Stt");
             if let Some(ibm_data_obj) = ibm_data {

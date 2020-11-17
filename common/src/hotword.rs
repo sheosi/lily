@@ -1,8 +1,11 @@
 use std::path::Path;
-use crate::vad::{Vad, VadError};
+use crate::vad::VadError;
 use log::info;
 use anyhow::{anyhow, Result};
 use thiserror::Error;
+
+#[cfg(feature="unused")]
+use crate::vad::Vad;
 
 pub trait HotwordDetector {
     fn start_hotword_check(&mut self) -> Result<(), VadError>;

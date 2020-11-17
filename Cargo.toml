@@ -61,7 +61,7 @@ extra_langs_tts = ["espeak-ng-sys"]
 google_tts = ["google_translate_tts"]
 deepspeech_stt = ["deepspeech"]
 devel_rasa_nlu= []
-unused_stt_batcher= []
+unused = []
 
 [workspace]
 members = ["client", "common"]
