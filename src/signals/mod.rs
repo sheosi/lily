@@ -102,6 +102,14 @@ impl SignalRegistry {
         }
     }
 
+    pub fn insert(&mut self, sig_name: &str, signal: Rc<RefCell<dyn Signal>>) -> Result<()> {
+        match self.signals.contains_key(sig_name) {
+            false => {self.signals.insert(sig_name.into(), signal);Ok(())},
+            true => Err(anyhow!(format!("Signal {} already exists", sig_name)))
+        }
+        
+    }
+
     pub fn extend_and_init_classes_py(&mut self, py: Python, pkg_path: &Path, signal_classes: Vec<(PyObject,PyObject)>) -> Result<HashMap<String, Rc<RefCell<dyn Signal>>>, HalfBakedError> {
         let pkg_path = Arc::new(pkg_path.to_owned());
 
@@ -292,8 +300,11 @@ impl LocalSignalRegistry {
         }
     }
 
-    pub fn insert(&mut self, sig_name: &str, signal: Rc<RefCell<dyn Signal>>) {
+    pub fn insert(&mut self, sig_name: &str, signal: Rc<RefCell<dyn Signal>>) -> Result<()> {
+        (*self.global_reg).borrow_mut().insert(sig_name, signal.clone())?;
         self.signals.insert(sig_name.into(), signal);
+
+        Ok(())
     }
 
     pub fn extend_and_init_classes_py(&mut self, py: Python, pkg_path: &Path, signal_classes: Vec<(PyObject, PyObject)>) -> Result<(), HalfBakedError> {

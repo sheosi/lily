@@ -278,7 +278,7 @@ impl EmbeddedLoader {
 impl Loader for EmbeddedLoader {
     fn init_base(&self, _py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
         let mut sigreg = LocalSignalRegistry::new(glob_sigreg);
-        sigreg.insert("order", Rc::new(RefCell::new(new_signal_order())));
+        sigreg.insert("order", Rc::new(RefCell::new(new_signal_order())))?;
 
         Ok((sigreg, LocalActionRegistry::new(glob_actreg)))
     }
