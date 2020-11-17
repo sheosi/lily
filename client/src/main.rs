@@ -17,9 +17,10 @@ use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
 use serde::{Deserialize};
 use serde_yaml::from_reader;
 use tokio::{try_join, sync::{Mutex as AsyncMutex, MutexGuard as AsyncMGuard}};
+use uuid::Uuid;
 
 lazy_static! {
-    static ref MY_UUID: Mutex<Option<String>> = Mutex::new(None);
+    static ref MY_UUID: Mutex<Option<Uuid>> = Mutex::new(None);
 }
 
 const CONN_CONF_FILE: PathRef = PathRef::new("conn_conf.yaml");
@@ -115,7 +116,8 @@ impl<'a> AudioRef<'a> {
 async fn send_audio<'a>(client: Rc<RefCell<AsyncClient>>,data: AudioRef<'a>, is_final: bool)-> anyhow::Result<()> {
     let msgpack_data = MsgNluVoice{
         audio: data.into_owned().to_ogg_opus()?,
-        is_final
+        is_final,
+        uuid: MY_UUID.lock().unwrap().clone().unwrap()
     };
     let msg_pack = encode::to_vec(&msgpack_data).unwrap();
     client.borrow_mut().publish("lily/nlu_process", QoS::AtMostOnce, false, msg_pack).await?;
@@ -130,7 +132,6 @@ async fn receive (rec_dev: Rc<AsyncMutex<RecDevice>>,eloop: &mut EventLoop, my_n
     loop {
         let sps =  DEFAULT_SAMPLES_PER_SECOND;
         let a = eloop.poll().await.unwrap();
-        println!("Cycle");
         match  a {
             Event::Incoming(Packet::Publish(pub_msg)) => {
                 let topic = pub_msg.topic.as_str();
@@ -143,7 +144,14 @@ async fn receive (rec_dev: Rc<AsyncMutex<RecDevice>>,eloop: &mut EventLoop, my_n
                             if uuid.is_none() {
                                 let as_string = input.uuid.to_string();
                                 client.borrow_mut().subscribe(format!("lily/{}/say_msg", &as_string), QoS::AtMostOnce).await?;
-                                uuid.replace(as_string);
+                                match Uuid::parse_str(&as_string) {
+                                    Ok(new_uuid) => {
+                                        uuid.replace(new_uuid);
+                                    },
+                                    Err(_) => {
+
+                                    }
+                                }
                             }
                             
                         }
@@ -184,7 +192,7 @@ async fn user_listen(rec_dev: Rc<AsyncMutex<RecDevice>>,config: &ClientConf, cli
     
     loop {
         let interval =
-            if current_state == ProgState::PasiveListening {HOTWORD_CHECK_INTERVAL_MS}
+            if current_state == ProgState::PasiveListening {HOTWORD_CHECK_INTERVAL_MS*10}
             else {ACTIVE_LISTENING_INTERVAL_MS};
 
         match current_state {
@@ -198,9 +206,12 @@ async fn user_listen(rec_dev: Rc<AsyncMutex<RecDevice>>,config: &ClientConf, cli
 
                 if pas_listener.process(mic_data)? {
                     current_state = ProgState::ActiveListening(rec_dev.lock().await);
-                    debug!("I'm listening for your command");
-                    // Notify change
 
+                    debug!("I'm listening for your command");
+
+                    let uuid = MY_UUID.lock().unwrap().as_ref().unwrap().to_owned();
+                    let msg_pack = encode::to_vec(&MsgEvent{uuid, event: "init_reco".into()})?;
+                    client.borrow_mut().publish("lily/event", QoS::AtMostOnce, false, msg_pack).await?;
                 }
             }
             ProgState::ActiveListening(ref mut rec_guard) => {

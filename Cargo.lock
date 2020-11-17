@@ -167,6 +167,7 @@ dependencies = [
  "serde",
  "serde_yaml",
  "tokio 0.3.3",
+ "uuid",
 ]
 
 [[package]]

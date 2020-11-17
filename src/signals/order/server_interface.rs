@@ -15,7 +15,7 @@ use lily_common::audio::{Audio, AudioRaw};
 use lily_common::communication::*;
 use lily_common::extensions::MakeSendable;
 use lily_common::other::ConnectionConf;
-use log::info;
+use log::{error, info};
 use pyo3::{types::PyDict, Py};
 use rmp_serde::{decode, encode};
 use rumqttc::{Event, Packet, QoS};
@@ -58,6 +58,7 @@ pub struct MqttInterface {
     curr_lang: LanguageIdentifier
 }
 
+
 impl MqttInterface {
     pub fn new(curr_lang: &LanguageIdentifier) -> Result<Self> {
         let common_out = Arc::new(Mutex::new(vec![]));
@@ -78,6 +79,7 @@ impl MqttInterface {
 
         client.subscribe("lily/new_satellite", QoS::AtMostOnce).await?;
         client.subscribe("lily/nlu_process", QoS::AtMostOnce).await?;
+        client.subscribe("lily/event", QoS::AtMostOnce).await?;
 
         let mut stt = SttFactory::load(&self.curr_lang, config.prefer_online_stt, ibm_data).await?;
         info!("Using stt {}", stt.get_info());
@@ -106,9 +108,23 @@ impl MqttInterface {
                             stt.process(&as_raw.buffer).await?;
                             
                             if msg_nlu.is_final {
-                                order.received_order(stt.end_decoding().await?, signal_event.clone(), base_context).await?;
+                                let uuid = msg_nlu.uuid;
+                                LAST_SITE.with(|s|*s.borrow_mut() = Some(uuid));
+                                if let Err(e) = order.received_order(
+                                    stt.end_decoding().await?, 
+                                    signal_event.clone(),
+                                    base_context).await {
+
+                                    error!("Actions processing had an error: {}", e);
+                                }
+                                
                             }
                             
+                        }
+                        "lily/event" => {
+                            let msg: MsgEvent = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
+                            LAST_SITE.with(|s|*s.borrow_mut() = Some(msg.uuid));
+                            signal_event.lock().unwrap().call(&msg.event, base_context);
                         }
                         _ => {}
                     }

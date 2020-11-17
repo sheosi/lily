@@ -14,7 +14,8 @@ pub struct MsgAnswerVoice {
 #[derive(Deserialize, Serialize)]
 pub struct MsgNluVoice {
     pub audio: Vec<u8>,
-    pub is_final: bool
+    pub is_final: bool,
+    pub uuid: Uuid,
 }
 
 // Message sent when new
@@ -23,6 +24,12 @@ pub struct MsgWelcome {
     pub conf: ClientConf,
     pub uuid: Uuid,
     pub name: String
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct MsgEvent {
+    pub uuid: Uuid,
+    pub event: String
 }
 
 #[derive(Deserialize, Serialize)]
