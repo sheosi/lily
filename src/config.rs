@@ -2,13 +2,13 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::stt::IbmSttData;
-use crate::tts::{IbmTtsData, TtsData};
+use crate::stt::SttData;
+use crate::tts::TtsData;
 use crate::vars::{DEFAULT_HOTWORD_SENSITIVITY, MAIN_CONF_PATH};
 
 use anyhow::{anyhow, Result};
 use lily_common::communication::ClientConf;
-use lily_common::other::ConnectionConf;
+use lily_common::other::{false_val, ConnectionConf, none};
 use serde::Deserialize;
 use serde_yaml::Value;
 
@@ -18,14 +18,6 @@ thread_local! {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
-    #[serde(default = "false_val")]
-    pub prefer_online_tts: bool,
-    #[serde(default = "false_val")]
-    pub prefer_online_stt: bool,
-    #[serde(default = "none::<IbmSttData>")]
-    pub ibm_stt: Option<IbmSttData>,
-    #[serde(default = "none::<IbmTtsData>")]
-    pub ibm_tts: Option<IbmTtsData>,
     #[serde(default = "none::<String>")]
     pub language: Option<String>,
     #[serde(default = "def_hotword_sensitivity")]
@@ -36,19 +28,14 @@ pub struct Config {
     pub tts: TtsData,
 
     #[serde(default)]
+    pub stt: SttData,
+
+    #[serde(default)]
     pub mqtt: ConnectionConf,
 
 
     #[serde(flatten)]
     pub pkgs_conf: HashMap<String, Value>
-}
-
-fn false_val() -> bool {
-    false
-}
-
-fn none<T>()-> Option<T> {
-    None
 }
 
 fn def_hotword_sensitivity() -> f32 {
@@ -58,10 +45,7 @@ fn def_hotword_sensitivity() -> f32 {
 impl Default for Config {
     fn default() -> Self {
         Config{
-            prefer_online_tts: false,
-            prefer_online_stt: false,
-            ibm_stt: None,
-            ibm_tts: None,
+            stt: SttData::default(),
             language: None,
             hotword_sensitivity: DEFAULT_HOTWORD_SENSITIVITY,
             debug_record_active_speech: false,

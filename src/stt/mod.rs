@@ -17,12 +17,29 @@ pub use self::deepspeech::*;
 use async_trait::async_trait;
 use core::fmt::Display;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
-use unic_langid::LanguageIdentifier;
+use lily_common::other::{false_val, none};
 use log::info;
+use serde::Deserialize;
+use unic_langid::LanguageIdentifier;
+
 
 #[cfg(feature="unused")]
 use lily_common::audio::AudioRaw;
 
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct SttData {
+    #[serde(default = "false_val")]
+    pub prefer_online: bool,
+    #[serde(default = "none::<IbmSttData>")]
+    pub ibm: Option<IbmSttData>
+}
+
+impl Default for SttData {
+    fn default() -> Self {
+        Self {prefer_online: false, ibm: None}
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct SttInfo {

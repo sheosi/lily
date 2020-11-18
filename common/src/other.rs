@@ -62,3 +62,11 @@ impl Default for ConnectionConf {
         }
     }
 }
+
+pub fn none<T>()-> Option<T> {
+    None
+}
+
+pub fn false_val() -> bool {
+    false
+}

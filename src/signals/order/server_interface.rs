@@ -43,7 +43,7 @@ impl MqttInterface {
     }
 
     pub async fn interface_loop<M: NluManager + NluManagerConf + NluManagerStatic> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, order: &mut SignalOrder<M>) -> Result<()> {
-        let ibm_data = config.ibm_stt.clone();
+        let ibm_data = config.stt.ibm.clone();
         let mqtt_conf = ConnectionConfResolved::from(
             config.mqtt.clone(),
             || "lily-server".into()
@@ -55,15 +55,15 @@ impl MqttInterface {
         client.subscribe("lily/nlu_process", QoS::AtMostOnce).await?;
         client.subscribe("lily/event", QoS::AtMostOnce).await?;
 
-        let mut stt = SttFactory::load(&self.curr_lang, config.prefer_online_stt, ibm_data).await?;
+        let mut stt = SttFactory::load(&self.curr_lang, config.stt.prefer_online, ibm_data).await?;
         info!("Using stt {}", stt.get_info());
 
         let voice_prefs: VoiceDescr = VoiceDescr {
             gender:if config.tts.prefer_male{Gender::Male}else{Gender::Female}
         };
-        let ibm_tts = config.ibm_tts.clone();
+        let ibm_tts = config.tts.ibm.clone();
 
-        let mut tts = TtsFactory::load_with_prefs(&self.curr_lang, config.prefer_online_tts, ibm_tts, &voice_prefs)?;
+        let mut tts = TtsFactory::load_with_prefs(&self.curr_lang, config.tts.prefer_online, ibm_tts, &voice_prefs)?;
         info!("Using tts {}", tts.get_info());
 
         loop {

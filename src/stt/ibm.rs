@@ -24,7 +24,7 @@ pub struct IbmStt {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct IbmSttData {
-	api_key: String,
+	key: String,
 	instance: String,
 	gateway: String
 }
@@ -199,16 +199,16 @@ struct TokenCache {
 }
 
 impl TokenCache {
-	async fn new(api_key: &str) -> Self {
+	async fn new(key: &str) -> Self {
 		let mut res = TokenCache{data: None};
-		if let Err(err) = res.get(api_key).await {
+		if let Err(err) = res.get(key).await {
 			warn!("Initial IBM API key couldn't be obtained, continuing regardless: {:?}", err);
 		}
 
 		res
 	}
 
-	async fn gen_iam_token(api_key: &str) -> Result<(String, u16), OnlineSttError> {
+	async fn gen_iam_token(key: &str) -> Result<(String, u16), OnlineSttError> {
 		#[derive(Debug, Deserialize)]
 		struct IamResponse {
 			access_token: String,
@@ -218,7 +218,7 @@ impl TokenCache {
 		let clnt = Client::new();
 		let url = Url::parse_with_params("https://iam.cloud.ibm.com/identity/token", &[
 			("grant_type", "urn:ibm:params:oauth:grant-type:apikey"),
-			("apikey", api_key)
+			("apikey", key)
 			])?;
 		let resp = clnt.post(url)
 		.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
@@ -227,7 +227,7 @@ impl TokenCache {
 		Ok((resp.access_token, resp.expires_in))
 	}
 
-	async fn get(&mut self, api_key: &str) -> Result<&str, OnlineSttError> {
+	async fn get(&mut self, key: &str) -> Result<&str, OnlineSttError> {
 		let must_redo = if let Some(ref data) = self.data {
 			Instant::now() > data.1
 		}
@@ -238,7 +238,7 @@ impl TokenCache {
 		if must_redo {
 			// A token is valid for 3600 seconds (60 minutes), but to be on the 
 			// safe side let's give it 3480 seconds (58 minutes).
-			let (token, valid_time) = Self::gen_iam_token(api_key).await?;
+			let (token, valid_time) = Self::gen_iam_token(key).await?;
 			self.data = Some((token, Instant::now() + Duration::new((valid_time - (2 * 60)).into(),0)));
 		}
 
@@ -264,8 +264,8 @@ impl IbmSttEngine {
 			"London".to_owned() => "eu-gb",
 			"Seoul".to_owned() => "kr-seo"
 		};
-		IbmSttEngine{curr_socket: None, token_cache: TokenCache::new(&data.api_key).await, data: IbmSttData {
-			api_key: data.api_key,
+		IbmSttEngine{curr_socket: None, token_cache: TokenCache::new(&data.key).await, data: IbmSttData {
+			key: data.key,
 			instance: data.instance,
 			gateway: location[&data.gateway].to_owned()
 		}}
@@ -273,7 +273,7 @@ impl IbmSttEngine {
 
 	// Send all audio in one big chunk
 	pub async fn decode(&mut self, audio: &AudioRaw, model: &str) -> Result<Option<DecodeRes>, OnlineSttError> {
-		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key).await?).await?;
+		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.key).await?).await?;
 		socket.send_order(WatsonOrder::Start).await?;
 		socket.send_audio(audio).await?;
 		socket.send_order(WatsonOrder::Stop).await?;
@@ -286,7 +286,7 @@ impl IbmSttEngine {
 	}
 
 	pub async fn live_process_begin(&mut self, model: &str) -> Result<(), OnlineSttError> {
-		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.api_key).await?).await?;
+		let mut socket = WatsonSocket::new(model, self.data.clone(), self.token_cache.get(&self.data.key).await?).await?;
 		socket.send_order(WatsonOrder::Start).await?;
 		self.curr_socket = Some(socket);
 		

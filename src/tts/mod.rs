@@ -21,6 +21,7 @@ pub use self::google::*;
 use async_trait::async_trait;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use lily_common::audio::Audio;
+use lily_common::other::{false_val, none};
 use serde::Deserialize;
 use unic_langid::LanguageIdentifier;
 
@@ -113,12 +114,18 @@ fn negotiate_langs_res(
 // Conf ////////////////////////////////////////////////////////////////////////
 #[derive(Clone, Debug, Deserialize)]
 pub struct TtsData {
-    pub prefer_male: bool
+    #[serde(default = "false_val")]
+    pub prefer_male: bool,
+    #[serde(default = "false_val")]
+    pub prefer_online: bool,
+
+    #[serde(default = "none::<IbmTtsData>")]
+    pub ibm: Option<IbmTtsData>
 }
 
 impl Default for TtsData {
     fn default() -> Self {
-        Self  { prefer_male: false }
+        Self  { prefer_male: false, prefer_online: false, ibm: None }
     }
 }
 

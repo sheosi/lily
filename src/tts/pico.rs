@@ -91,13 +91,13 @@ impl Tts for PicoTts {
         // Speech audio is computed in small chunks, one "step" at a time; see `Engine::get_data()` for more details.
         let mut pcm_data = vec![0i16; 0];
         let mut pcm_buf = [0i16; 1024];
-        'tts: loop {
+        loop {
             let (n_written, status) = self.engine
                 .get_data(&mut pcm_buf[..])
                 .expect("pico_getData error");
             pcm_data.extend(&pcm_buf[..n_written]);
             if status == ttspico::EngineStatus::Idle {
-                break 'tts;
+                break;
             }
         }
 
