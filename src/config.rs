@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::stt::IbmSttData;
-use crate::vars::{DEFAULT_HOTWORD_SENSITIVITY, MAIN_CONF_PATH, NO_KEY_MSG};
+use crate::tts::IbmTtsData;
+use crate::vars::{DEFAULT_HOTWORD_SENSITIVITY, MAIN_CONF_PATH};
 
 use anyhow::{anyhow, Result};
 use lily_common::communication::ClientConf;
@@ -15,19 +16,17 @@ thread_local! {
      pub static GLOBAL_CONF: RefCell<Rc<Config>> = RefCell::new(Rc::new(Config::default()));
 }
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(default = "false_val")]
     pub prefer_online_tts: bool,
     #[serde(default = "false_val")]
     pub prefer_online_stt: bool,
-    #[serde(default = "none_str")]
-    pub ibm_tts_key: Option<String>,
-    #[serde(default = "none_ibm_stt")]
+    #[serde(default = "none::<IbmSttData>")]
     pub ibm_stt: Option<IbmSttData>,
-    #[serde(default = "none_str")]
-    pub ibm_gateway: Option<String>,
-    #[serde(default = "none_str")]
+    #[serde(default = "none::<IbmTtsData>")]
+    pub ibm_tts: Option<IbmTtsData>,
+    #[serde(default = "none::<String>")]
     pub language: Option<String>,
     #[serde(default = "def_hotword_sensitivity")]
     pub hotword_sensitivity: f32,
@@ -46,11 +45,7 @@ fn false_val() -> bool {
     false
 }
 
-fn none_ibm_stt() -> Option<IbmSttData> {
-    None
-}
-
-fn none_str() -> Option<String> {
+fn none<T>()-> Option<T> {
     None
 }
 
@@ -58,36 +53,33 @@ fn def_hotword_sensitivity() -> f32 {
     DEFAULT_HOTWORD_SENSITIVITY
 }
 
-pub fn get_conf() -> Config {
-    load_conf().unwrap_or(Config::default())
-}
-
-fn load_conf() -> Result<Config> {
-    let conf_path = MAIN_CONF_PATH.resolve();
-    if conf_path.is_file() {
-        let conf_file = std::fs::File::open(conf_path)?;
-        Ok(serde_yaml::from_reader(std::io::BufReader::new(conf_file))?)
-    }
-    else {
-        Err(anyhow!("Config file not found"))
-    }
-
-}
-
-impl Config {
+impl Default for Config {
     fn default() -> Self {
         Config{
             prefer_online_tts: false,
             prefer_online_stt: false,
-            ibm_tts_key: None,
             ibm_stt: None,
-            ibm_gateway: None,
+            ibm_tts: None,
             language: None,
             hotword_sensitivity: DEFAULT_HOTWORD_SENSITIVITY,
             debug_record_active_speech: false,
             pkgs_conf: HashMap::new(),
             mqtt: ConnectionConf::default(),
         }
+    }
+}
+
+impl Config {
+    pub fn load() -> Result<Self> {
+        let conf_path = MAIN_CONF_PATH.resolve();
+        if conf_path.is_file() {
+            let conf_file = std::fs::File::open(conf_path)?;
+            Ok(serde_yaml::from_reader(std::io::BufReader::new(conf_file))?)
+        }
+        else {
+            Err(anyhow!("Config file not found"))
+        }
+    
     }
 
     pub fn get_package_path(&self, pkg_name: &str, pkg_path: &str) -> Option<&str> {
@@ -102,24 +94,6 @@ impl Config {
 
             curr_map.as_str()
         })
-    }
-
-    pub fn extract_ibm_tts_data(&self) -> Option<(String, String)> {
-        if self.ibm_gateway.is_some() && self.ibm_tts_key.is_some() {
-            Some((self.ibm_gateway.clone().expect(NO_KEY_MSG), self.ibm_tts_key.clone().expect(NO_KEY_MSG)))
-        }
-        else {
-            None
-        }
-    }
-
-    pub fn extract_ibm_stt_data(&self) -> Option<IbmSttData> {
-        if self.ibm_stt.is_some() {
-            self.ibm_stt.clone()
-        }
-        else {
-            None
-        }
     }
 
     pub fn to_client_conf(&self) -> ClientConf {

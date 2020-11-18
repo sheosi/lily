@@ -14,7 +14,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 // This crate
-use crate::config::get_conf;
+use crate::config::Config;
 use crate::packages::load_packages;
 use crate::python::python_init;
 
@@ -47,7 +47,7 @@ pub async fn main()  -> Result<()> {
     python_init()?;
 
     // Set config on global
-    let config = get_conf();
+    let config = Config::load().unwrap_or(Config::default());
     crate::config::GLOBAL_CONF.with(|c|c.replace(Rc::new(config.clone())));
 
     // Show config on debug

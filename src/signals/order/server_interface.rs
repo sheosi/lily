@@ -43,7 +43,7 @@ impl MqttInterface {
     }
 
     pub async fn interface_loop<M: NluManager + NluManagerConf + NluManagerStatic> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, order: &mut SignalOrder<M>) -> Result<()> {
-        let ibm_data = config.extract_ibm_stt_data();
+        let ibm_data = config.ibm_stt.clone();
         let mqtt_conf = ConnectionConfResolved::from(
             config.mqtt.clone(),
             || "lily-server".into()
@@ -59,9 +59,9 @@ impl MqttInterface {
         info!("Using stt {}", stt.get_info());
 
         const VOICE_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};
-        let ibm_tts_gateway_key = config.extract_ibm_tts_data();
+        let ibm_tts = config.ibm_tts.clone();
 
-        let mut tts = TtsFactory::load_with_prefs(&self.curr_lang, config.prefer_online_tts, ibm_tts_gateway_key.clone(), &VOICE_PREFS)?;
+        let mut tts = TtsFactory::load_with_prefs(&self.curr_lang, config.prefer_online_tts, ibm_tts, &VOICE_PREFS)?;
         info!("Using tts {}", tts.get_info());
 
         loop {

@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub fn init_log(name: String) {
     let formatter = syslog::Formatter3164 {
@@ -22,20 +22,26 @@ pub fn init_log(name: String) {
     //simple_logger::init()?;
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ConnectionConf {
     #[serde(default = "ConnectionConf::def_url_str")]
+    #[serde(skip_serializing_if = "ConnectionConf::is_def_url_str")]
     pub url_str: String,
 
     #[serde(default = "ConnectionConf::def_name")]
     pub name: Option<String>,
 
     #[serde(default = "ConnectionConf::def_user_pass")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub user_pass: Option<(String, String)>
 }
 impl ConnectionConf {
     fn def_url_str() -> String {
         "localhost".into()
+    }
+
+    fn is_def_url_str(input: &str) -> bool {
+        input == Self::def_url_str()
     }
 
     fn def_name() -> Option<String> {

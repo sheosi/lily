@@ -4,7 +4,14 @@ use crate::vars::{NO_COMPATIBLE_LANG_MSG, DEFAULT_SAMPLES_PER_SECOND};
 use async_trait::async_trait;
 use lily_common::audio::Audio;
 use reqwest::Client;
+use serde::Deserialize;
 use unic_langid::{LanguageIdentifier, langid, langids};
+
+#[derive(Clone,Debug, Deserialize)]
+pub struct IbmTtsData {
+    pub key: String,
+    pub gateway: String
+}
 
 pub struct IbmTts {
     client: Client,

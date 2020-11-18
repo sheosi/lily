@@ -126,9 +126,9 @@ impl TtsFactory {
     }
 
     #[cfg(not(feature = "google_tts"))]
-    fn make_cloud_tts(lang: &LanguageIdentifier, gateway_key: Option<(String, String)>, prefs: &VoiceDescr, local: Box<dyn Tts>) -> Result<Box<dyn Tts>, TtsConstructionError> {
-        if let Some((api_gateway, api_key)) = gateway_key {
-            Ok(Box::new(TtsOnlineInterface::new(IbmTts::new(lang, api_gateway.to_string(), api_key.to_string(), prefs)?, local)))
+    fn make_cloud_tts(lang: &LanguageIdentifier, gateway_key: Option<IbmTtsData>, prefs: &VoiceDescr, local: Box<dyn Tts>) -> Result<Box<dyn Tts>, TtsConstructionError> {
+        if let Some(ibm_data) = gateway_key {
+            Ok(Box::new(TtsOnlineInterface::new(IbmTts::new(lang, ibm_data.gateway, ibm_data.key, prefs)?, local)))
         }
         else {
             Ok(local)
@@ -145,7 +145,7 @@ impl TtsFactory {
         }
     }
 
-    pub fn load_with_prefs(lang: &LanguageIdentifier, prefer_cloud_tts: bool, gateway_key: Option<(String, String)>, prefs: &VoiceDescr) -> Result<Box<dyn Tts>, TtsConstructionError> {
+    pub fn load_with_prefs(lang: &LanguageIdentifier, prefer_cloud_tts: bool, gateway_key: Option<IbmTtsData>, prefs: &VoiceDescr) -> Result<Box<dyn Tts>, TtsConstructionError> {
         let local_tts = Self::make_local_tts(lang, prefs)?;
 
         match prefer_cloud_tts {

@@ -1,4 +1,6 @@
+use std::fs::File;
 use std::cell::RefCell;
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -12,8 +14,8 @@ use lily_common::vars::*;
 use log::{debug, info};
 use rmp_serde::{decode, encode};
 use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
-use serde::Deserialize;
-use serde_yaml::from_reader;
+use serde::{Deserialize, Serialize};
+use serde_yaml::{from_reader,to_writer};
 use tokio::{try_join, sync::{Mutex as AsyncMutex, MutexGuard as AsyncMGuard}};
 use uuid::Uuid;
 
@@ -119,7 +121,14 @@ async fn send_audio<'a>(mqtt_name: &str, client: Rc<RefCell<AsyncClient>>,data: 
     Ok(())
 }
 
-async fn receive (rec_dev: Rc<AsyncMutex<RecDevice>>,eloop: &mut EventLoop, my_name: &str, client:Rc<RefCell<AsyncClient>>, client_conf: &RefCell<ClientConf>) -> anyhow::Result<()> {
+async fn receive ( 
+    my_name: &str, 
+    rec_dev: Rc<AsyncMutex<RecDevice>>,
+    client_conf: &RefCell<ClientConf>,
+    client:Rc<RefCell<AsyncClient>>,
+    eloop: &mut EventLoop
+) -> anyhow::Result<()> {
+
     let mut play_dev = PlayDevice::new().unwrap();
     // We will be listening from now on, say hello
     let msg_pack = encode::to_vec(&MsgNewSatellite{uuid: my_name.to_string()})?;
@@ -220,7 +229,7 @@ async fn user_listen(mqtt_name: &str ,rec_dev: Rc<AsyncMutex<RecDevice>>,config:
     }
 }
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug, Serialize)]
 struct ConfFile {
     #[serde(default)]
     mqtt: ConnectionConf
@@ -233,30 +242,49 @@ impl Default for ConfFile {
         }
     }
 }
-
-fn load_conf() -> anyhow::Result<ConfFile>{
-    let conf_path = CONN_CONF_FILE.resolve();
-    if conf_path.is_file()  {
-        let conf_file = std::fs::File::open(conf_path)?;
-        Ok(from_reader(std::io::BufReader::new(conf_file))?)
+impl ConfFile {
+    fn load() -> anyhow::Result<ConfFile>{
+        let conf_path = CONN_CONF_FILE.resolve();
+        if conf_path.is_file()  {
+            let conf_file = File::open(conf_path)?;
+            Ok(from_reader(BufReader::new(conf_file))?)
+        }
+        else {
+            Err(anyhow!("Config file not found"))
+        }
     }
-    else {
-        Err(anyhow!("Config file not found"))
+
+    fn save(&mut self) -> anyhow::Result<()> {
+        let conf_path = CONN_CONF_FILE.resolve();
+        let conf_file = File::create(&conf_path)?;
+        let writer = BufWriter::new(&conf_file);
+        Ok(to_writer(writer, &self)?)
     }
 }
+
 
 #[tokio::main(flavor="current_thread")]
 pub async fn main() -> anyhow::Result<()> {
 
     init_log("lily-client".into());
+    
+    let config = ConfFile::load().unwrap_or(ConfFile::default());
+    let mqtt_conn = {
+        let mut old_conf = config.clone();
+        let conn = ConnectionConfResolved::from(
+            config.mqtt, 
+            ||format!("lily-client-{}", Uuid::new_v4().to_string())
+        );
 
-    let config = load_conf().unwrap_or(ConfFile::default());
-    let conn = ConnectionConfResolved::from(
-        config.mqtt, 
-        ||format!("lily-client-{}", Uuid::new_v4().to_string())
-    );
-    let (client, mut eloop) = make_mqtt_conn(&conn);
-    println!("Connection: {:?}", client);
+        if old_conf.mqtt.name.is_none() {
+            old_conf.mqtt.name = Some(conn.name.clone());
+            old_conf.save()?;
+        }
+
+        conn
+    };
+
+    let (client, mut eloop) = make_mqtt_conn(&mqtt_conn);
 
     client.subscribe("lily/say_msg", QoS::AtMostOnce).await?;
     client.subscribe("lily/satellite_welcome", QoS::AtMostOnce).await?;
@@ -264,13 +292,11 @@ pub async fn main() -> anyhow::Result<()> {
 
     info!("Mqtt connection made");
 
-    
     let client_conf = RefCell::new(ClientConf::default());
-    // Record environment to get minimal energy threshold
     let rec_dev = Rc::new(AsyncMutex::new(RecDevice::new().unwrap()));
     try_join!(
-        receive(rec_dev.clone(), &mut eloop, &conn.name, client_share.clone(), &client_conf),
-        user_listen(&conn.name, rec_dev, &client_conf, client_share)
+        receive(&mqtt_conn.name, rec_dev.clone(), &client_conf, client_share.clone(), &mut eloop),
+        user_listen(&mqtt_conn.name, rec_dev, &client_conf, client_share)
     ).unwrap();
 
     Ok(())

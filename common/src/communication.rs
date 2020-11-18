@@ -48,6 +48,7 @@ pub struct MsgNewSatellite {
     pub uuid: String
 }
 
+#[derive(Serialize)]
 pub struct ConnectionConfResolved {
     pub url_str: String,
     pub name: String,
