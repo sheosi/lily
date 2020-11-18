@@ -21,6 +21,7 @@ pub use self::google::*;
 use async_trait::async_trait;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use lily_common::audio::Audio;
+use serde::Deserialize;
 use unic_langid::LanguageIdentifier;
 
 // Traits //////////////////////////////////////////////////////////////////////
@@ -96,7 +97,10 @@ fn negotiate_langs_res(
     available: &Vec<LanguageIdentifier>,
     default: Option<&LanguageIdentifier>
 ) -> Result<LanguageIdentifier, TtsConstructionError> {
-    let langs = negotiate_languages(&[input], available, default, NegotiationStrategy::Filtering);
+    let langs = negotiate_languages(
+        &[input],available,
+        default, NegotiationStrategy::Filtering
+    );
     if !langs.is_empty() {
         Ok(langs[0].clone())
     }
@@ -104,6 +108,18 @@ fn negotiate_langs_res(
         Err(TtsConstructionError::IncompatibleLanguage)
     }
 
+}
+
+// Conf ////////////////////////////////////////////////////////////////////////
+#[derive(Clone, Debug, Deserialize)]
+pub struct TtsData {
+    pub prefer_male: bool
+}
+
+impl Default for TtsData {
+    fn default() -> Self {
+        Self  { prefer_male: false }
+    }
 }
 
 // Factory /////////////////////////////////////////////////////////////////////

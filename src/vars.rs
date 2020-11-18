@@ -40,7 +40,6 @@ pub const WRONG_YAML_ROOT_MSG: &str = "A 'skill_defs.yaml' file must start with 
 pub const WRONG_YAML_SECTION_TYPE_MSG: &str = "A skill section must be a hash";
 pub const PACKAGES_PATH_ERR_MSG: &str = "Packages folder can't be read";
 pub const PYDICT_SET_ERR_MSG :&str = "Failed while assigning an entry in PyDict";
-pub const NO_KEY_MSG: &str = "This shouldn't happen, a key checked beforehand is None";
 pub const NO_YAML_FLOAT_MSG: &str = "This shouldn't happen, a Yaml was checked as a number which is not an u64 was not an f64 either";
 pub const NO_COMPATIBLE_LANG_MSG: &str = "Lang negotiation failed, even though a default lang was provided";
 #[cfg(feature = "deepspeech_stt")]

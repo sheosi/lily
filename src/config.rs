@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::stt::IbmSttData;
-use crate::tts::IbmTtsData;
+use crate::tts::{IbmTtsData, TtsData};
 use crate::vars::{DEFAULT_HOTWORD_SENSITIVITY, MAIN_CONF_PATH};
 
 use anyhow::{anyhow, Result};
@@ -32,6 +32,8 @@ pub struct Config {
     pub hotword_sensitivity: f32,
     #[serde(default = "false_val")]
     pub debug_record_active_speech: bool,
+    #[serde(default)]
+    pub tts: TtsData,
 
     #[serde(default)]
     pub mqtt: ConnectionConf,
@@ -65,6 +67,7 @@ impl Default for Config {
             debug_record_active_speech: false,
             pkgs_conf: HashMap::new(),
             mqtt: ConnectionConf::default(),
+            tts: TtsData::default()
         }
     }
 }

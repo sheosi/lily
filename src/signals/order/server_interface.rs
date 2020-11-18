@@ -58,10 +58,12 @@ impl MqttInterface {
         let mut stt = SttFactory::load(&self.curr_lang, config.prefer_online_stt, ibm_data).await?;
         info!("Using stt {}", stt.get_info());
 
-        const VOICE_PREFS: VoiceDescr = VoiceDescr {gender: Gender::Female};
+        let voice_prefs: VoiceDescr = VoiceDescr {
+            gender:if config.tts.prefer_male{Gender::Male}else{Gender::Female}
+        };
         let ibm_tts = config.ibm_tts.clone();
 
-        let mut tts = TtsFactory::load_with_prefs(&self.curr_lang, config.prefer_online_tts, ibm_tts, &VOICE_PREFS)?;
+        let mut tts = TtsFactory::load_with_prefs(&self.curr_lang, config.prefer_online_tts, ibm_tts, &voice_prefs)?;
         info!("Using tts {}", tts.get_info());
 
         loop {
