@@ -19,7 +19,6 @@ rodio = {version = "^0.13", optional = true} # Playback library
 lazy_static = "^1.4" # We use this for the path were the data is stored
 serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
 syslog = "^5.0" # Linux log interface
-uuid = {version = "^0.8.1", features=["v4", "serde"]}
 url = "^2.1"
 #rumqttc = "^0.2"
 rumqttc = {git="https://github.com/bytebeamio/rumqtt"}

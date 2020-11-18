@@ -34,8 +34,8 @@ pub struct Config {
     #[serde(default = "false_val")]
     pub debug_record_active_speech: bool,
 
-    #[serde(default = "none_connection")]
-    pub mqtt: Option<ConnectionConf>,
+    #[serde(default)]
+    pub mqtt: ConnectionConf,
 
 
     #[serde(flatten)]
@@ -47,10 +47,6 @@ fn false_val() -> bool {
 }
 
 fn none_ibm_stt() -> Option<IbmSttData> {
-    None
-}
-
-fn none_connection() -> Option<ConnectionConf> {
     None
 }
 
@@ -90,7 +86,7 @@ impl Config {
             hotword_sensitivity: DEFAULT_HOTWORD_SENSITIVITY,
             debug_record_active_speech: false,
             pkgs_conf: HashMap::new(),
-            mqtt: None,
+            mqtt: ConnectionConf::default(),
         }
     }
 

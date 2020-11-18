@@ -1405,7 +1405,6 @@ dependencies = [
  "tungstenite",
  "unic-langid",
  "url 2.2.0",
- "uuid",
  "yaml-rust",
 ]
 
@@ -1428,7 +1427,6 @@ dependencies = [
  "thiserror",
  "tokio 0.3.3",
  "url 2.2.0",
- "uuid",
 ]
 
 [[package]]

@@ -26,3 +26,4 @@ last_speech.ogg
 .vscode/settings.json
 resources/stt/pocketsphinx.log
 client/conn_conf.yaml
+client/testout.ogg

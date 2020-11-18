@@ -255,6 +255,13 @@ impl AudioRaw {
         let len = self.buffer.len();
         (len as f32)/(Self::get_samples_per_second() as f32)
     }
+
+    pub fn save_to_disk(&self, path: &Path) -> Result<(), AudioError> {
+        let ogg = self.to_ogg_opus()?;
+        let mut file = std::fs::File::create(path)?;
+        file.write_all(&ogg)?;
+        Ok(())
+    }
 }
 
 #[derive(Error, Debug)]

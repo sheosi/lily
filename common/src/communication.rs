@@ -4,7 +4,6 @@ use crate::vars::DEFAULT_HOTWORD_SENSITIVITY;
 use rumqttc::{AsyncClient, EventLoop, MqttOptions};
 use serde::{Deserialize, Serialize};
 use url::Url;
-use uuid::Uuid;
 
 #[derive(Deserialize, Serialize)]
 pub struct MsgAnswerVoice {
@@ -15,20 +14,19 @@ pub struct MsgAnswerVoice {
 pub struct MsgNluVoice {
     pub audio: Vec<u8>,
     pub is_final: bool,
-    pub uuid: Uuid,
+    pub satellite: String,
 }
 
 // Message sent when new
 #[derive(Deserialize, Serialize)]
 pub struct MsgWelcome {
     pub conf: ClientConf,
-    pub uuid: Uuid,
-    pub name: String
+    pub satellite: String,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct MsgEvent {
-    pub uuid: Uuid,
+    pub satellite: String,
     pub event: String
 }
 
@@ -47,10 +45,26 @@ impl Default for ClientConf {
 
 #[derive(Deserialize, Serialize)]
 pub struct MsgNewSatellite {
-    pub name: String
+    pub uuid: String
 }
 
-pub fn make_mqtt_conn(conf: &ConnectionConf) ->  (AsyncClient, EventLoop) {
+pub struct ConnectionConfResolved {
+    pub url_str: String,
+    pub name: String,
+    pub user_pass: Option<(String, String)>
+}
+
+impl ConnectionConfResolved {
+    pub fn from<F: FnOnce()->String>(conf: ConnectionConf, make_uuid: F) -> Self {
+        Self{
+            url_str: conf.url_str,
+            name: conf.name.unwrap_or_else(make_uuid),
+            user_pass: conf.user_pass,
+        }
+    }
+}
+
+pub fn make_mqtt_conn(conf: &ConnectionConfResolved) ->  (AsyncClient, EventLoop) {
     let url = Url::parse(
         &format!("http://{}",conf.url_str) // Let's add some protocol
     ).unwrap();

@@ -28,7 +28,7 @@ pub struct ConnectionConf {
     pub url_str: String,
 
     #[serde(default = "ConnectionConf::def_name")]
-    pub name: String,
+    pub name: Option<String>,
 
     #[serde(default = "ConnectionConf::def_user_pass")]
     pub user_pass: Option<(String, String)>
@@ -38,8 +38,8 @@ impl ConnectionConf {
         "localhost".into()
     }
 
-    fn def_name() -> String {
-        "default".into()
+    fn def_name() -> Option<String> {
+        None
     }
 
     fn def_user_pass() -> Option<(String, String)> {

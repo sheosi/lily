@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::mem::replace;
 use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
@@ -14,43 +13,15 @@ use anyhow::Result;
 use lily_common::audio::{Audio, AudioRaw};
 use lily_common::communication::*;
 use lily_common::extensions::MakeSendable;
-use lily_common::other::ConnectionConf;
 use log::{error, info};
 use pyo3::{types::PyDict, Py};
 use rmp_serde::{decode, encode};
 use rumqttc::{Event, Packet, QoS};
-use uuid::Uuid;
 use unic_langid::LanguageIdentifier;
 
 thread_local!{
     pub static MSG_OUTPUT: RefCell<Option<MqttInterfaceOutput>> = RefCell::new(None);
-    pub static LAST_SITE: RefCell<Option<Uuid>> = RefCell::new(None);
-}
-
-
-struct SiteManager {
-    map: HashMap<String,Vec<Uuid>>
-}
-
-impl SiteManager {
-    // TODO: What to do on name collisions?
-    fn new() -> Self {
-        Self{
-            map: HashMap::new()
-        }
-    }
-
-    fn new_site(&mut self, name: String) -> Uuid {
-        let uuid = Uuid::new_v4();
-        if !self.map.contains_key(&name) {
-            self.map.insert(name, vec![uuid]);
-        }
-        else {
-            self.map.get_mut(&name).as_deref_mut().unwrap().push(uuid);
-        }
-
-        uuid
-    }
+    pub static LAST_SITE: RefCell<Option<String>> = RefCell::new(None);
 }
 
 pub struct MqttInterface {
@@ -73,9 +44,12 @@ impl MqttInterface {
 
     pub async fn interface_loop<M: NluManager + NluManagerConf + NluManagerStatic> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, order: &mut SignalOrder<M>) -> Result<()> {
         let ibm_data = config.extract_ibm_stt_data();
-        let mqtt_conf = &config.mqtt.clone().unwrap_or(ConnectionConf::default());
-        let (client, mut eloop) = make_mqtt_conn(mqtt_conf);
-        let mut sites = SiteManager::new();
+        let mqtt_conf = ConnectionConfResolved::from(
+            config.mqtt.clone(),
+            || "lily-server".into()
+        );
+        let (client, mut eloop) = make_mqtt_conn(&mqtt_conf);
+        
 
         client.subscribe("lily/new_satellite", QoS::AtMostOnce).await?;
         client.subscribe("lily/nlu_process", QoS::AtMostOnce).await?;
@@ -99,7 +73,7 @@ impl MqttInterface {
                         "lily/new_satellite" => {
                             info!("New satellite incoming");
                             let input :MsgNewSatellite = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
-                            let output = encode::to_vec(&MsgWelcome{conf:config.to_client_conf(), uuid: sites.new_site(input.name.clone()), name: input.name})?;
+                            let output = encode::to_vec(&MsgWelcome{conf:config.to_client_conf(), satellite: input.uuid})?;
                             client.publish("lily/satellite_welcome", QoS::AtMostOnce, false, output).await?
                         }
                         "lily/nlu_process" => {
@@ -108,8 +82,8 @@ impl MqttInterface {
                             stt.process(&as_raw.buffer).await?;
                             
                             if msg_nlu.is_final {
-                                let uuid = msg_nlu.uuid;
-                                LAST_SITE.with(|s|*s.borrow_mut() = Some(uuid));
+                                let satellite = msg_nlu.satellite;
+                                LAST_SITE.with(|s|*s.borrow_mut() = Some(satellite));
                                 if let Err(e) = order.received_order(
                                     stt.end_decoding().await?, 
                                     signal_event.clone(),
@@ -123,7 +97,8 @@ impl MqttInterface {
                         }
                         "lily/event" => {
                             let msg: MsgEvent = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
-                            LAST_SITE.with(|s|*s.borrow_mut() = Some(msg.uuid));
+                            let satellite = msg.satellite;
+                            LAST_SITE.with(|s|*s.borrow_mut() = Some(satellite));
                             signal_event.lock().unwrap().call(&msg.event, base_context);
                         }
                         _ => {}
