@@ -24,7 +24,7 @@ pub trait ActionInstance {
 }
 
 pub trait Action {
-    fn instance(&self, py: Python, yaml: &serde_yaml::Value, lily_pkg_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send>;
+    fn instance(&self, yaml: &serde_yaml::Value, lily_pkg_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send>;
 }
 
 
@@ -165,7 +165,9 @@ impl PythonAction {
 }
 
 impl Action for PythonAction {
-    fn instance(&self, py: Python, yaml: &serde_yaml::Value, lily_pkg_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send> {
+    fn instance(&self, yaml: &serde_yaml::Value, lily_pkg_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
         Box::new(PythonActionInstance::new(py, self.obj.clone(), yaml, lily_pkg_path))
     }
 }

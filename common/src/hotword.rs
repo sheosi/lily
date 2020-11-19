@@ -10,6 +10,7 @@ use crate::vad::Vad;
 pub trait HotwordDetector {
     fn start_hotword_check(&mut self) -> Result<(), VadError>;
     fn check_hotword(&mut self, audio: &[i16]) -> Result<bool>;
+    fn set_sensitivity(&mut self, value: f32);
 }
 
 pub struct Snowboy {
@@ -50,6 +51,10 @@ impl HotwordDetector for Snowboy {
             -1     => Err(HotwordError::Unknown.into()),
             _ => {panic!("Received from snowboy a wrong value")}
         }
+    }
+
+    fn set_sensitivity(&mut self, value: f32) {
+        self.detector.set_sensitivity(value.to_string());
     }
 }
 

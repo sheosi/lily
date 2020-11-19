@@ -17,6 +17,7 @@ use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
 use serde::{Deserialize, Serialize};
 use serde_yaml::{from_reader,to_writer};
 use tokio::{try_join, sync::{Mutex as AsyncMutex, MutexGuard as AsyncMGuard}};
+use tokio::sync::watch;
 use uuid::Uuid;
 
 const CONN_CONF_FILE: PathRef = PathRef::new("conn_conf.yaml");
@@ -124,7 +125,7 @@ async fn send_audio<'a>(mqtt_name: &str, client: Rc<RefCell<AsyncClient>>,data: 
 async fn receive ( 
     my_name: &str, 
     rec_dev: Rc<AsyncMutex<RecDevice>>,
-    client_conf: &RefCell<ClientConf>,
+    conf_change: watch::Sender<ClientConf>,
     client:Rc<RefCell<AsyncClient>>,
     eloop: &mut EventLoop
 ) -> anyhow::Result<()> {
@@ -145,7 +146,7 @@ async fn receive (
                         let msg :MsgWelcome = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
                         if msg.satellite == my_name {
                             let client_conf_srvr = msg.conf;
-                            *client_conf.borrow_mut() = client_conf_srvr;
+                            conf_change.send(client_conf_srvr)?;
                         }
                     }
                     _ if topic.ends_with("/say_msg") => {
@@ -169,7 +170,7 @@ async fn receive (
     }
 }
 
-async fn user_listen(mqtt_name: &str ,rec_dev: Rc<AsyncMutex<RecDevice>>,config: &RefCell<ClientConf>, client: Rc<RefCell<AsyncClient>>) -> anyhow::Result<()> {
+async fn user_listen(mqtt_name: &str ,rec_dev: Rc<AsyncMutex<RecDevice>>, config: watch::Receiver<ClientConf> , client: Rc<RefCell<AsyncClient>>) -> anyhow::Result<()> {
     let snowboy_path = SNOWBOY_DATA_PATH.resolve();
     let mut pas_listener = {
         let hotword_det = Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res"), config.borrow().hotword_sensitivity)?;
@@ -183,6 +184,12 @@ async fn user_listen(mqtt_name: &str ,rec_dev: Rc<AsyncMutex<RecDevice>>,config:
     rec_dev.lock().await.start_recording().expect(AUDIO_REC_START_ERR_MSG);
     
     loop {
+        // TODO: Receive new configs
+        /*if config.changed().await {
+
+        }*/
+
+
         let interval =
             if current_state == ProgState::PasiveListening {HOTWORD_CHECK_INTERVAL_MS*10}
             else {ACTIVE_LISTENING_INTERVAL_MS};
@@ -292,11 +299,11 @@ pub async fn main() -> anyhow::Result<()> {
 
     info!("Mqtt connection made");
 
-    let client_conf = RefCell::new(ClientConf::default());
+    let (conf_change_tx, conf_change_rx) = watch::channel(ClientConf::default());
     let rec_dev = Rc::new(AsyncMutex::new(RecDevice::new().unwrap()));
     try_join!(
-        receive(&mqtt_conn.name, rec_dev.clone(), &client_conf, client_share.clone(), &mut eloop),
-        user_listen(&mqtt_conn.name, rec_dev, &client_conf, client_share)
+        receive(&mqtt_conn.name, rec_dev.clone(), conf_change_tx, client_share.clone(), &mut eloop),
+        user_listen(&mqtt_conn.name, rec_dev, conf_change_rx, client_share, )
     ).unwrap();
 
     Ok(())

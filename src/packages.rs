@@ -7,7 +7,7 @@ use std::sync::Arc;
 // This crate
 use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry};
 use crate::python::{add_py_folder, call_for_pkg, remove_from_actions, remove_from_signals};
-use crate::signals::{LocalSignalRegistry, new_signal_order, SignalRegistry, SignalRegistryShared};
+use crate::signals::{LocalSignalRegistry, new_signal_order, PythonSignal, SignalRegistry, SignalRegistryShared, Timer};
 use crate::vars::{PYTHON_SDK_PATH, PACKAGES_PATH_ERR_MSG, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
 
 // Other crates
@@ -86,10 +86,8 @@ pub fn load_skills(sigreg: &mut LocalSignalRegistry, action_registry: &LocalActi
 
                     let act_set = ActionSet::create();
                     for (act_name, act_arg) in actions.into_iter() {
-                        let gil = Python::acquire_gil();
-                        let py = gil.python();
                         let act = action_registry.get(&act_name).ok_or_else(||anyhow!("Action {} is not registered",act_name))?;
-                        let act_inst = act.borrow().instance(py, &act_arg, pkg_path.clone());
+                        let act_inst = act.borrow().instance(&act_arg, pkg_path.clone());
                         act_set.lock().unwrap().add_action(act_inst)?;
                     }
 
@@ -112,33 +110,6 @@ pub fn load_skills(sigreg: &mut LocalSignalRegistry, action_registry: &LocalActi
     Ok(())
 }
 
-pub fn load_package_python(py: Python, path: &Path,
-        pkg_path: &Path,
-        base_sigreg: &LocalSignalRegistry,
-        base_actreg: &LocalActionRegistry
-    ) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
-    let (signal_classes, action_classes) = add_py_folder(py, path)?;
-    let mut sigreg = base_sigreg.clone();
-    match sigreg.extend_and_init_classes_py(py, pkg_path, signal_classes) {
-        Ok(()) =>{Ok(())}
-        Err(e) => {
-            remove_from_signals(py, &e.cls_names).expect(&format!("Coudln't remove '{:?}' from signals", e.cls_names));
-            Err(e.source)
-        }
-    }?;
-
-    let mut actreg = base_actreg.clone();
-    match actreg.extend_and_init_classes(py, action_classes) {
-        Ok(()) => {Ok(())}
-        Err(e) => {
-            remove_from_actions(py, &e.cls_names).expect(&format!("Couldn't remove '{:?}' from actions", e.cls_names));
-            sigreg.minus(base_sigreg).remove_from_global();
-            Err(e.source)
-        }
-    }?;
-
-    Ok((sigreg, actreg))
-}
 
 /** Used by other modules, launched after an error while loading classes, 
 contains the error and the new classes*/
@@ -243,12 +214,43 @@ trait Loader {
 
 struct PythonLoader {}
 
+impl PythonLoader {
+    pub fn load_package_python(py: Python, path: &Path,
+        pkg_path: &Path,
+        base_sigreg: &LocalSignalRegistry,
+        base_actreg: &LocalActionRegistry
+    ) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+
+        let (signal_classes, action_classes) = add_py_folder(py, path)?;
+        let mut sigreg = base_sigreg.clone();
+        match PythonSignal::extend_and_init_classes_py_local(&mut sigreg, py, pkg_path, signal_classes) {
+            Ok(()) =>{Ok(())}
+            Err(e) => {
+                remove_from_signals(py, &e.cls_names).expect(&format!("Coudln't remove '{:?}' from signals", e.cls_names));
+                Err(e.source)
+            }
+        }?;
+
+        let mut actreg = base_actreg.clone();
+        match actreg.extend_and_init_classes(py, action_classes) {
+            Ok(()) => {Ok(())}
+            Err(e) => {
+                remove_from_actions(py, &e.cls_names).expect(&format!("Couldn't remove '{:?}' from actions", e.cls_names));
+                sigreg.minus(base_sigreg).remove_from_global();
+                Err(e.source)
+            }
+        }?;
+
+        Ok((sigreg, actreg))
+    }
+}
+
 impl Loader for PythonLoader {
     fn init_base(&self, py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
         let path = &PYTHON_SDK_PATH.resolve();
         let (initial_signals, initial_actions) = add_py_folder(py, &PYTHON_SDK_PATH.resolve())?;
         let mut sigreg = LocalSignalRegistry::new(glob_sigreg);
-        sigreg.extend_and_init_classes_py(py, path, initial_signals)?;
+        PythonSignal::extend_and_init_classes_py_local(&mut sigreg, py, path, initial_signals)?;
 
         let mut actreg =LocalActionRegistry::new(glob_actreg);
         actreg.extend_and_init_classes(py, initial_actions)?;
@@ -257,7 +259,7 @@ impl Loader for PythonLoader {
     }
 
     fn load_code(&self, py: Python, pkg_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
-        load_package_python(py, &pkg_path.join("python"), &pkg_path, base_sigreg, base_actreg)
+        Self::load_package_python(py, &pkg_path.join("python"), &pkg_path, base_sigreg, base_actreg)
     }
 }
 impl PythonLoader {
@@ -278,7 +280,8 @@ impl EmbeddedLoader {
 impl Loader for EmbeddedLoader {
     fn init_base(&self, _py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
         let mut sigreg = LocalSignalRegistry::new(glob_sigreg);
-        sigreg.insert("order", Rc::new(RefCell::new(new_signal_order())))?;
+        sigreg.insert("order".into(), Rc::new(RefCell::new(new_signal_order())))?;
+        sigreg.insert("timer".into(), Rc::new(RefCell::new(Timer::new())))?;
 
         Ok((sigreg, LocalActionRegistry::new(glob_actreg)))
     }

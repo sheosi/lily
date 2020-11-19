@@ -30,7 +30,7 @@ pub struct MsgEvent {
     pub event: String
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ClientConf {
     pub hotword_sensitivity: f32
 }
