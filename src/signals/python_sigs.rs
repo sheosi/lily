@@ -82,7 +82,10 @@ impl PythonSignal {
                 let mut res = HashMap::new();
                 for (name, sigobj) in sig_to_add {
                     res.insert(name.clone(), sigobj.clone());
-                    reg.insert(name, sigobj).map_err(|e|HalfBakedError::from(sig_to_add))?;
+                    reg.insert(name, sigobj).map_err(|e|HalfBakedError::from(
+                        HalfBakedError::gen_diff(reg.get_map_ref(), signal_classes),
+                        e
+                    ))?;
                 }
                 Ok(res)
             }

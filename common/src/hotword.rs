@@ -116,4 +116,8 @@ impl<V: Vad, H: HotwordDetector> HotwordDetector for VadHotword<V, H> {
             Ok(false)
         }
     }
+
+    fn set_sensitivity(&mut self, value: f32) {
+        self.hotword_eng.set_sensitivity(value)
+    }
 }
