@@ -80,13 +80,17 @@ impl PythonSignal {
         match process_list()  {
             Ok(sig_to_add) => {
                 let mut res = HashMap::new();
-                for (name, sigobj) in sig_to_add {
-                    res.insert(name.clone(), sigobj.clone());
-                    reg.insert(name, sigobj).map_err(|e|HalfBakedError::from(
-                        HalfBakedError::gen_diff(reg.get_map_ref(), signal_classes),
-                        e
-                    ))?;
-                }
+                let process = || -> Result<()> {
+                    for (name, sigobj) in sig_to_add {
+                        res.insert(name.clone(), sigobj.clone());
+                        reg.insert(name, sigobj)?;
+                    }
+                    Ok(())
+                };
+                process().map_err(|e|HalfBakedError::from(
+                    HalfBakedError::gen_diff(reg.get_map_ref(), signal_classes),
+                    e
+                ))?;
                 Ok(res)
             }
             Err(e) => {

@@ -63,6 +63,10 @@ impl<H: HotwordDetector> PasiveListener<H> {
     fn process(&mut self, audio: AudioRef) -> anyhow::Result<bool> {
         self.hotword_detector.check_hotword(audio.data)
     }
+
+    fn set_from_conf(&mut self, conf: &ClientConf) {
+        self.hotword_detector.set_sensitivity(conf.hotword_sensitivity)
+    }
 }
 
 enum ActiveState<'a> {
@@ -170,7 +174,7 @@ async fn receive (
     }
 }
 
-async fn user_listen(mqtt_name: &str ,rec_dev: Rc<AsyncMutex<RecDevice>>, config: watch::Receiver<ClientConf> , client: Rc<RefCell<AsyncClient>>) -> anyhow::Result<()> {
+async fn user_listen(mqtt_name: &str ,rec_dev: Rc<AsyncMutex<RecDevice>>, mut config: watch::Receiver<ClientConf> , client: Rc<RefCell<AsyncClient>>) -> anyhow::Result<()> {
     let snowboy_path = SNOWBOY_DATA_PATH.resolve();
     let mut pas_listener = {
         let hotword_det = Snowboy::new(&snowboy_path.join("lily.pmdl"), &snowboy_path.join("common.res"), config.borrow().hotword_sensitivity)?;
@@ -185,10 +189,6 @@ async fn user_listen(mqtt_name: &str ,rec_dev: Rc<AsyncMutex<RecDevice>>, config
     
     loop {
         // TODO: Receive new configs
-        /*if config.changed().await {
-
-        }*/
-
 
         let interval =
             if current_state == ProgState::PasiveListening {HOTWORD_CHECK_INTERVAL_MS*10}
@@ -196,22 +196,34 @@ async fn user_listen(mqtt_name: &str ,rec_dev: Rc<AsyncMutex<RecDevice>>, config
 
         match current_state {
             ProgState::PasiveListening => {
+
                 let mut rec_guard = rec_dev.lock().await;
-                let mic_data = 
-                    match rec_guard.read_for_ms(interval).await? {
-                        Some(d) => AudioRef::from(d),
-                        None => continue
-                };
-                mic_data.clone().into_owned().save_to_disk(Path::new("testout.ogg"))?;
-
-                if pas_listener.process(mic_data)? {
-                    current_state = ProgState::ActiveListening(rec_dev.lock().await);
-
-                    debug!("I'm listening for your command");
-
-                    let msg_pack = encode::to_vec(&MsgEvent{satellite: mqtt_name.to_string(), event: "init_reco".into()})?;
-                    client.borrow_mut().publish("lily/event", QoS::AtMostOnce, false, msg_pack).await?;
+                tokio::select! {
+                    conf = config.changed() => {
+                        conf?;
+                        pas_listener.set_from_conf(&config.borrow());
+                    }
+                    r = rec_guard.read_for_ms(interval) => {
+                        match r? {
+                            Some(d) => {
+                                let mic_data = AudioRef::from(d);
+                                mic_data.clone().into_owned().save_to_disk(Path::new("testout.ogg"))?;
+    
+                                if pas_listener.process(mic_data)? {
+                                    current_state = ProgState::ActiveListening(rec_dev.lock().await);
+                
+                                    debug!("I'm listening for your command");
+                
+                                    let msg_pack = encode::to_vec(&MsgEvent{satellite: mqtt_name.to_string(), event: "init_reco".into()})?;
+                                    client.borrow_mut().publish("lily/event", QoS::AtMostOnce, false, msg_pack).await?;
+                                }
+    
+                            }
+                            None => ()
+                        };
+                    }
                 }
+                
             }
             ProgState::ActiveListening(ref mut rec_guard) => {
                 let mic_data = match rec_guard.read_for_ms(interval).await? {
