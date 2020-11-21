@@ -159,10 +159,10 @@ async fn receive (
                         let audio = Audio::new_encoded(msg.data, sps);
                         {
                             // Take unique ownership of the record device while playing something
-                            let mut rec_mut = rec_dev.lock().await;
-                            rec_mut.stop_recording().expect(AUDIO_REC_STOP_ERR_MSG);
+                            //let mut rec_mut = rec_dev.lock().await;
+                            //rec_mut.stop_recording().expect(AUDIO_REC_STOP_ERR_MSG);
                             play_dev.play_audio(audio)?;
-                            rec_mut.start_recording().expect(AUDIO_REC_START_ERR_MSG);
+                            //rec_mut.start_recording().expect(AUDIO_REC_START_ERR_MSG);
                         }
                     }
                     _ => {}
