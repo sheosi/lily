@@ -154,6 +154,7 @@ async fn receive (
                         }
                     }
                     _ if topic.ends_with("/say_msg") => {
+                        debug!("Received msg from server");
                         let msg: MsgAnswerVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload)).unwrap();
                         let audio = Audio::new_encoded(msg.data, sps);
                         {
@@ -330,7 +331,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     let (client, mut eloop) = make_mqtt_conn(&mqtt_conn);
 
-    client.subscribe("lily/say_msg", QoS::AtMostOnce).await?;
+    client.subscribe(&format!("lily/{}/say_msg", mqtt_conn.name), QoS::AtMostOnce).await?;
     client.subscribe("lily/satellite_welcome", QoS::AtMostOnce).await?;
     let client_share = Rc::new(RefCell::new(client));
 

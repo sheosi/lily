@@ -75,6 +75,8 @@ pub fn make_mqtt_conn(conf: &ConnectionConfResolved) ->  (AsyncClient, EventLoop
     // Init MQTT
     let mut mqttoptions = MqttOptions::new(&conf.name, host, port);
     mqttoptions.set_keep_alive(5);
+    const MAX_PACKET_SIZE: usize = 100 * 1024 * 1024*8;
+    mqttoptions.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
     match &conf.user_pass {
         Some((user, pass)) => {
             mqttoptions.set_credentials(user, pass);

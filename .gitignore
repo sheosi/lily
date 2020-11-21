@@ -29,3 +29,5 @@ client/conn_conf.yaml
 client/testout.ogg
 client/debug.ogg
 client/.vscode/launch.json
+conn_conf.yaml
+.vscode/launch.json
