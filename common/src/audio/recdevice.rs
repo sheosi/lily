@@ -105,6 +105,7 @@ impl RecDevice {
     }
 
     pub async fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, RecordingError> {
+        assert!(milis <= ((RECORD_BUFFER_SIZE/2) as u16) );
         match self.stream_data {
             Some(ref mut str_data) => {
                 let curr_time = Self::get_millis();
