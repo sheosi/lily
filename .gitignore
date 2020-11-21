@@ -28,3 +28,4 @@ resources/stt/pocketsphinx.log
 client/conn_conf.yaml
 client/testout.ogg
 client/debug.ogg
+client/.vscode/launch.json
