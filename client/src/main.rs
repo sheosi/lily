@@ -174,6 +174,33 @@ async fn receive (
     }
 }
 
+struct DebugAudio {
+    audio: AudioRaw,
+    save_ms: u16,
+    curr_ms: f32
+}
+
+impl DebugAudio {
+    fn new(save_ms: u16) -> Self {
+        Self{audio: AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND), save_ms, curr_ms:0.0}
+    }
+
+    fn push(&mut self, audio: &AudioRef) {
+        self.curr_ms += (audio.data.len() as f32)/(DEFAULT_SAMPLES_PER_SECOND as f32) * 1000.0;
+        self.audio.append_audio(audio.data, DEFAULT_SAMPLES_PER_SECOND);
+        if (self.curr_ms as u16) >= self.save_ms {
+            println!("Save to file");
+            self.audio.save_to_disk(Path::new("debug.ogg")).expect("Failed to write debug file");
+            self.clear();
+        }
+    }
+
+    fn clear(&mut self) {
+        self.audio.clear();
+        self.curr_ms = 0.0;
+    }
+}
+
 async fn user_listen(mqtt_name: &str ,rec_dev: Rc<AsyncMutex<RecDevice>>, mut config: watch::Receiver<ClientConf> , client: Rc<RefCell<AsyncClient>>) -> anyhow::Result<()> {
     let snowboy_path = SNOWBOY_DATA_PATH.resolve();
     let mut pas_listener = {
@@ -186,12 +213,12 @@ async fn user_listen(mqtt_name: &str ,rec_dev: Rc<AsyncMutex<RecDevice>>, mut co
     let mut current_state = ProgState::PasiveListening;
 
     rec_dev.lock().await.start_recording().expect(AUDIO_REC_START_ERR_MSG);
+    let mut debugaudio = DebugAudio::new(2000);
     
     loop {
-        // TODO: Receive new configs
 
         let interval =
-            if current_state == ProgState::PasiveListening {HOTWORD_CHECK_INTERVAL_MS*10}
+            if current_state == ProgState::PasiveListening {HOTWORD_CHECK_INTERVAL_MS}
             else {ACTIVE_LISTENING_INTERVAL_MS};
 
         match current_state {
@@ -207,7 +234,7 @@ async fn user_listen(mqtt_name: &str ,rec_dev: Rc<AsyncMutex<RecDevice>>, mut co
                         match r? {
                             Some(d) => {
                                 let mic_data = AudioRef::from(d);
-                                mic_data.clone().into_owned().save_to_disk(Path::new("testout.ogg"))?;
+                                debugaudio.push(&mic_data);
     
                                 if pas_listener.process(mic_data)? {
                                     current_state = ProgState::ActiveListening(rec_dev.lock().await);
