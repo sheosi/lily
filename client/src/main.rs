@@ -212,11 +212,9 @@ async fn user_listen(mqtt_name: &str ,rec_dev: Rc<AsyncMutex<RecDevice>>, mut co
     let mut act_listener = ActiveListener::new(vad);
     let mut current_state = ProgState::PasiveListening;
 
-    rec_dev.lock().await.start_recording().expect(AUDIO_REC_START_ERR_MSG);
     let mut debugaudio = DebugAudio::new(2000);
-    
+    rec_dev.lock().await.start_recording().expect(AUDIO_REC_START_ERR_MSG);
     loop {
-
         let interval =
             if current_state == ProgState::PasiveListening {HOTWORD_CHECK_INTERVAL_MS}
             else {ACTIVE_LISTENING_INTERVAL_MS};
@@ -237,7 +235,7 @@ async fn user_listen(mqtt_name: &str ,rec_dev: Rc<AsyncMutex<RecDevice>>, mut co
                                 debugaudio.push(&mic_data);
     
                                 if pas_listener.process(mic_data)? {
-                                    current_state = ProgState::ActiveListening(rec_dev.lock().await);
+                                    current_state = ProgState::ActiveListening(rec_guard);
                 
                                     debug!("I'm listening for your command");
                 
@@ -339,7 +337,7 @@ pub async fn main() -> anyhow::Result<()> {
     info!("Mqtt connection made");
 
     let (conf_change_tx, conf_change_rx) = watch::channel(ClientConf::default());
-    let rec_dev = Rc::new(AsyncMutex::new(RecDevice::new().unwrap()));
+    let rec_dev = Rc::new(AsyncMutex::new(RecDevice::new()));
     try_join!(
         receive(&mqtt_conn.name, rec_dev.clone(), conf_change_tx, client_share.clone(), &mut eloop),
         user_listen(&mqtt_conn.name, rec_dev, conf_change_rx, client_share, )

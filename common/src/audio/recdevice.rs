@@ -37,22 +37,18 @@ struct StreamData {
 }
 
 impl RecDevice {
-    // For now just use that error to original RecDevice
-    pub fn new() -> Result<Self, RecordingError> {
-
-        Ok(RecDevice {
+    pub fn new() -> Self {
+        Self {
             external_buffer: [0i16; RECORD_BUFFER_SIZE],
             stream_data: None
-        })
-
+        }
     }
 
-    fn make_stream() -> Result<(Stream, Consumer<i16>), RecordingError> {
+    fn make_stream() -> Result<StreamData, RecordingError> {
         info!("Using cpal");
         let host = cpal::default_host();
         let device = host.default_input_device().ok_or(RecordingError::NoInputDevice)?;
         // TODO: Make sure audio is compatible with our application and/or negotiate
-        // device.default_input_config()?;
         let config = StreamConfig {
             channels: 1,
             sample_rate: SampleRate(DEFAULT_SAMPLES_PER_SECOND),
@@ -76,8 +72,11 @@ impl RecDevice {
 
         // Do make sure stream is working
         stream.play()?;
-
-        Ok((stream, cons))
+        Ok(StreamData {
+            internal_buffer_consumer: cons,
+            last_read: 0u128,
+            _stream: stream
+        })
     }
 
     fn get_millis() -> u128 {
@@ -110,6 +109,7 @@ impl RecDevice {
             Some(ref mut str_data) => {
                 let curr_time = Self::get_millis();
                 let diff_time = (curr_time - str_data.last_read) as u16;
+                
                 if milis > diff_time{
                     let sleep_time = (milis  - diff_time) as u64;
                     sleep(Duration::from_millis(sleep_time)).await;
@@ -124,13 +124,7 @@ impl RecDevice {
     }
 
     pub fn start_recording(&mut self) -> Result<(), RecordingError> {
-        let (_stream, consumer) = Self::make_stream()?;
-        self.stream_data = Some(StreamData {
-            internal_buffer_consumer: consumer,
-            last_read: 0u128,
-            _stream
-        });
-
+        self.stream_data = Some(Self::make_stream()?);
         Ok(())
     }
     pub fn stop_recording(&mut self) -> Result<(), RecordingError> {
