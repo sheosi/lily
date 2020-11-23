@@ -1,4 +1,5 @@
 use thiserror::Error;
+use lily_common::audio::AudioError;
 use crate::path_ext::NotUnicodeError;
 
 #[derive(Error, Debug)]
@@ -11,7 +12,10 @@ pub enum SttError {
 
     #[cfg(feature = "deepspeech_stt")]
     #[error("Deepspeech error")]
-    Deepspeech(#[from] deepspeech::errors::DeepspeechError)
+    Deepspeech(#[from] deepspeech::errors::DeepspeechError),
+
+    #[error("Failed to append audio")]
+    AudioError(#[from] AudioError)
 }
 
 #[derive(Error, Debug)]

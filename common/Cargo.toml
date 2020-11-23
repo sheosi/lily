@@ -12,6 +12,7 @@ cpal = {version = "^0.13", optional = true} # For recording (future substitute o
 ringbuf = {version = "^0.2", optional = true}# Send what is recorded from the consumer to the producer
 ogg = "^0.7" # Send to web services audio and to save into disk
 opus = "^0.2" # The format we use in ogg
+byteorder = "^1.3" 
 thiserror = "^1.0" # For error handling in parts that can be made their own crate
 
 log = "^0.4" # Common API for logging so we can change backend easily

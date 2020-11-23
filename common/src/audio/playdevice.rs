@@ -1,8 +1,8 @@
 use std::time::Duration;
-use std::thread::sleep;
-use crate::audio::{Audio, Data};
+use crate::audio::{Audio, AudioRaw, Data, decode_ogg_opus};
 use rodio::{source::Source, OutputStream, OutputStreamHandle, StreamError};
 use thiserror::Error;
+use tokio::time::sleep;
 
 pub struct PlayDevice {
     _stream: OutputStream, // We need to preserve this
@@ -37,11 +37,6 @@ impl PlayDevice  {
         let source = rodio::Decoder::new(std::io::BufReader::new(file))?;
 
         self.stream_handle.play_raw(source.convert_samples())?;
-        /*std::process::Command::new("/usr/bin/ogg123").args(&["-q",path])
-            .status()
-            .map_err(
-                |err|PlayAudioError::PlayError(format!("ogg123 failed: {:?}", err))
-            )?;*/
 
         Ok(())
     }
@@ -49,25 +44,29 @@ impl PlayDevice  {
     pub fn play_audio(&mut self, audio: Audio) -> Result<(), PlayAudioError> {
         match audio.buffer {
             Data::Raw(raw_data) => {
-                let source = rodio::buffer::SamplesBuffer::new(1, audio.samples_per_second, raw_data);
+                let source = rodio::buffer::SamplesBuffer::new(1, AudioRaw::get_samples_per_second(), raw_data.buffer);
                 self.stream_handle.play_raw(source.convert_samples())?;
-
-                Ok(())
             },
             Data::Encoded(enc_data) => {
-                let source = rodio::Decoder::new(std::io::Cursor::new(enc_data))?;
-                self.stream_handle.play_raw(source.convert_samples())?;
-
-                Ok(())
+                if enc_data.is_ogg_opus() {
+                    let (audio, play_data) = decode_ogg_opus(enc_data.data).unwrap();
+                    let source = rodio::buffer::SamplesBuffer::new(play_data.channels, play_data.sps, audio);
+                    self.stream_handle.play_raw(source.convert_samples())?;
+                }
+                else {
+                    let source = rodio::Decoder::new(std::io::Cursor::new(enc_data.data))?;
+                    self.stream_handle.play_raw(source.convert_samples())?;
+                }
             }
-        }   
+        }  
+        Ok(()) 
     }
 
-    pub fn wait_audio(&mut self, audio: Audio) -> Result<(), PlayAudioError> {
+    pub async fn wait_audio(&mut self, audio: Audio) -> Result<(), PlayAudioError> {
         let seconds = audio.len_s();
         self.play_audio(audio)?;
         let ms_wait = (seconds * 1000.0).ceil() as u64;
-        sleep(Duration::from_millis(ms_wait));
+        sleep(Duration::from_millis(ms_wait)).await;
 
         Ok(())
     }

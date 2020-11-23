@@ -1413,6 +1413,7 @@ name = "lily_common"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "byteorder",
  "cpal",
  "lazy_static",
  "log",

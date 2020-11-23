@@ -128,7 +128,7 @@ async fn send_audio<'a>(mqtt_name: &str, client: Rc<RefCell<AsyncClient>>,data: 
 
 async fn receive ( 
     my_name: &str, 
-    rec_dev: Rc<AsyncMutex<RecDevice>>,
+    _rec_dev: Rc<AsyncMutex<RecDevice>>,
     conf_change: watch::Sender<ClientConf>,
     client:Rc<RefCell<AsyncClient>>,
     eloop: &mut EventLoop
@@ -139,9 +139,7 @@ async fn receive (
     let msg_pack = encode::to_vec(&MsgNewSatellite{uuid: my_name.to_string()})?;
     client.borrow_mut().publish("lily/new_satellite", QoS::AtLeastOnce, false, msg_pack).await?;
     loop {
-        let sps =  DEFAULT_SAMPLES_PER_SECOND;
-        let a = eloop.poll().await.unwrap();
-        match  a {
+        match eloop.poll().await.unwrap() {
             Event::Incoming(Packet::Publish(pub_msg)) => {
                 let topic = pub_msg.topic.as_str();
                 match  topic {
@@ -156,7 +154,7 @@ async fn receive (
                     _ if topic.ends_with("/say_msg") => {
                         debug!("Received msg from server");
                         let msg: MsgAnswerVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload)).unwrap();
-                        let audio = Audio::new_encoded(msg.data, sps);
+                        let audio = Audio::new_encoded(msg.data);
                         {
                             // Take unique ownership of the record device while playing something
                             //let mut rec_mut = rec_dev.lock().await;
@@ -188,7 +186,7 @@ impl DebugAudio {
 
     fn push(&mut self, audio: &AudioRef) {
         self.curr_ms += (audio.data.len() as f32)/(DEFAULT_SAMPLES_PER_SECOND as f32) * 1000.0;
-        self.audio.append_audio(audio.data, DEFAULT_SAMPLES_PER_SECOND);
+        self.audio.append_audio(audio.data, DEFAULT_SAMPLES_PER_SECOND).unwrap();
         if (self.curr_ms as u16) >= self.save_ms {
             println!("Save to file");
             self.audio.save_to_disk(Path::new("debug.ogg")).expect("Failed to write debug file");
@@ -342,7 +340,7 @@ pub async fn main() -> anyhow::Result<()> {
     try_join!(
         receive(&mqtt_conn.name, rec_dev.clone(), conf_change_tx, client_share.clone(), &mut eloop),
         user_listen(&mqtt_conn.name, rec_dev, conf_change_rx, client_share, )
-    ).unwrap();
+    )?;
 
     Ok(())
 }

@@ -78,13 +78,13 @@ impl<S: Stt> Stt for SttFallback<S> {
         if !self.using_fallback {
             match self.main_stt.process(audio).await {
                 Ok(()) => {
-                    self.copy_audio.append_audio(audio, DEFAULT_SAMPLES_PER_SECOND);
+                    self.copy_audio.append_audio(audio, DEFAULT_SAMPLES_PER_SECOND)?;
                     Ok(())
                 },
                 Err(err) => {
                     warn!("Problem with online STT: {}", err);
                     self.fallback.begin_decoding().await?;
-                    self.copy_audio.append_audio(audio, DEFAULT_SAMPLES_PER_SECOND);
+                    self.copy_audio.append_audio(audio, DEFAULT_SAMPLES_PER_SECOND)?;
                     let inter_res = self.fallback.process(&self.copy_audio.buffer).await;
                     self.copy_audio.clear(); // We don't need the copy audio anymore
                     self.using_fallback = true;

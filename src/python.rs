@@ -327,7 +327,7 @@ fn play_file(py: Python, input: &str) -> PyResult<PyObject> {
                 f.read(&mut buffer)?;
 
                 // We don't know the actual sps, so let's just have 0
-                output.send_audio(Audio::new_encoded(buffer, 0), uuid.unwrap().to_string()).py_excep::<PyAttributeError>()?;
+                output.send_audio(Audio::new_encoded(buffer), uuid.unwrap().to_string()).py_excep::<PyAttributeError>()?;
             }
             _=>{}
         };

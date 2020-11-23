@@ -115,8 +115,8 @@ impl IbmTts {
 	    let url = reqwest::Url::parse(&format!("{}{}&text={}", url_str, &self.curr_voice, input))?;
 
 		let buf = self.client.post(url).header("accept", "audio/mp3").header("Authorization",format!("Basic {}",base64::encode(&format!("apikey:{}", self.api_key)))).send().await?.bytes().await?.to_vec();
-
-		Ok(Audio::new_encoded(buf, DEFAULT_SAMPLES_PER_SECOND))
+        
+		Ok(Audio::new_encoded(buf))
     }
 }
 

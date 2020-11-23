@@ -10,7 +10,7 @@ use crate::stt::SttFactory;
 use crate::tts::{Gender, TtsFactory, VoiceDescr};
 
 use anyhow::Result;
-use lily_common::audio::{Audio, AudioRaw};
+use lily_common::audio::{Audio, decode_ogg_opus};
 use lily_common::communication::*;
 use lily_common::extensions::MakeSendable;
 use log::{error, info};
@@ -80,8 +80,8 @@ impl MqttInterface {
                         }
                         "lily/nlu_process" => {
                             let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
-                            let as_raw = AudioRaw::from_ogg_opus(msg_nlu.audio)?;
-                            stt.process(&as_raw.buffer).await?;
+                            let (as_raw, _) = decode_ogg_opus(msg_nlu.audio)?;
+                            stt.process(&as_raw).await?;
                             
                             if msg_nlu.is_final {
                                 let satellite = msg_nlu.satellite;
