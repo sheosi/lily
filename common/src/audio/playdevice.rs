@@ -1,5 +1,8 @@
 use std::time::Duration;
+
 use crate::audio::{Audio, AudioRaw, Data, decode_ogg_opus};
+use crate::vars::MAX_SAMPLES_PER_SECOND;
+
 use rodio::{source::Source, OutputStream, OutputStreamHandle, StreamError};
 use thiserror::Error;
 use tokio::time::sleep;
@@ -49,8 +52,8 @@ impl PlayDevice  {
             },
             Data::Encoded(enc_data) => {
                 if enc_data.is_ogg_opus() {
-                    let (audio, play_data) = decode_ogg_opus(enc_data.data).unwrap();
-                    let source = rodio::buffer::SamplesBuffer::new(play_data.channels, play_data.sps, audio);
+                    let (audio, play_data) = decode_ogg_opus(enc_data.data, MAX_SAMPLES_PER_SECOND).unwrap();
+                    let source = rodio::buffer::SamplesBuffer::new(play_data.channels, MAX_SAMPLES_PER_SECOND, audio);
                     self.stream_handle.play_raw(source.convert_samples())?;
                 }
                 else {

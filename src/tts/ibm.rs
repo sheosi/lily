@@ -1,5 +1,5 @@
 use crate::tts::{Tts, VoiceDescr, TtsConstructionError, Gender, TtsError, TtsInfo, TtsStatic, OnlineTtsError, negotiate_langs_res};
-use crate::vars::{NO_COMPATIBLE_LANG_MSG, DEFAULT_SAMPLES_PER_SECOND};
+use crate::vars::NO_COMPATIBLE_LANG_MSG;
 
 use async_trait::async_trait;
 use lily_common::audio::Audio;

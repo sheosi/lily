@@ -8,6 +8,7 @@ use crate::nlu::{NluManager, NluManagerConf, NluManagerStatic};
 use crate::signals::{SignalEventShared, SignalOrder};
 use crate::stt::SttFactory;
 use crate::tts::{Gender, TtsFactory, VoiceDescr};
+use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
 use anyhow::Result;
 use lily_common::audio::{Audio, decode_ogg_opus};
@@ -65,7 +66,7 @@ impl MqttInterface {
 
         let mut tts = TtsFactory::load_with_prefs(&self.curr_lang, config.tts.prefer_online, ibm_tts, &voice_prefs)?;
         info!("Using tts {}", tts.get_info());
-
+        let mut stt_needs_start = true;
         loop {
             let notification = eloop.poll().await?;
             println!("Notification = {:?}", notification);
@@ -79,13 +80,21 @@ impl MqttInterface {
                             client.publish("lily/satellite_welcome", QoS::AtMostOnce, false, output).await?
                         }
                         "lily/nlu_process" => {
+                            use std::io::Write;
+                            if stt_needs_start {
+                                stt.begin_decoding().await?;
+                                stt_needs_start = false;
+                            }
+
                             let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
-                            let (as_raw, _) = decode_ogg_opus(msg_nlu.audio)?;
+                            let (as_raw, _) = decode_ogg_opus(msg_nlu.audio, DEFAULT_SAMPLES_PER_SECOND)?;
+
                             stt.process(&as_raw).await?;
                             
                             if msg_nlu.is_final {
                                 let satellite = msg_nlu.satellite;
                                 LAST_SITE.with(|s|*s.borrow_mut() = Some(satellite));
+                                stt_needs_start = true;
                                 if let Err(e) = order.received_order(
                                     stt.end_decoding().await?, 
                                     signal_event.clone(),
@@ -120,7 +129,7 @@ impl MqttInterface {
                             tts.synth_text(&str).await?
                         }
                     };
-                    let msg_pack = encode::to_vec(&MsgAnswerVoice{data: audio_data.into_encoded()?}).unwrap();
+                    let msg_pack = encode::to_vec(&MsgAnswerVoice{data: audio_data.into_encoded()?})?;
                     client.publish(format!("lily/{}/say_msg", uuid_str), QoS::AtMostOnce, false, msg_pack).await?;
                 }
             }

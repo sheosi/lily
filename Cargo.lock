@@ -1419,6 +1419,7 @@ dependencies = [
  "log",
  "ogg",
  "opus",
+ "rand",
  "ringbuf",
  "rodio",
  "rsnowboy",

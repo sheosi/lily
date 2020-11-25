@@ -25,6 +25,7 @@ url = "^2.1"
 rumqttc = {git="https://github.com/bytebeamio/rumqtt"}
 anyhow = "^1.0" # For error handling overall in the app
 tokio = {version = "^0.3", features = ["time"], optional = true}
+rand = "^0.7"
 
 [features]
 default = ["client"]

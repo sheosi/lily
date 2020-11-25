@@ -57,7 +57,9 @@ impl Stt for Pocketsphinx {
         Ok(())
     }
     async fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError> {
-        Ok(self.decoder.get_hyp().map(|(hypothesis, _, _)| DecodeRes{hypothesis}))
+        let res = self.decoder.get_hyp().map(|(hypothesis, _, _)| DecodeRes{hypothesis});
+        self.decoder.end_utt()?;
+        Ok(res)
     }
     fn get_info(&self) -> SttInfo {
         SttInfo {name: "Pocketsphinx".to_string(), is_online: false}
