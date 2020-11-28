@@ -95,7 +95,7 @@ struct WatsonResult {
 
 #[derive(Deserialize)]
 struct WatsonAlternative {
-	//confidence: f32,
+	confidence: f32,
 	transcript: String
 }
 
@@ -168,7 +168,10 @@ impl WatsonSocket {
 
 							if !alternatives.is_empty() {
 								let res_str = &alternatives[0].transcript;
-								Some(DecodeRes{hypothesis: res_str.to_string()})
+								Some(DecodeRes{
+									hypothesis: res_str.to_string(),
+									confidence: alternatives[0].confidence
+								})
 							}
 							else {
 								None

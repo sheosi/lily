@@ -1,6 +1,7 @@
 mod bundles;
 mod error;
 mod ibm;
+mod multilang;
 mod pocketsphinx;
 
 #[cfg(feature = "deepspeech_stt")]
@@ -9,6 +10,7 @@ mod deepspeech;
 pub use self::bundles::*;
 pub use self::error::*;
 pub use self::ibm::*;
+pub use self::multilang::*;
 pub use self::pocketsphinx::*;
 
 #[cfg(feature = "deepspeech_stt")]
@@ -61,7 +63,8 @@ impl Display for SttInfo {
 
 #[derive(PartialEq, Debug)]
 pub struct DecodeRes {
-    pub hypothesis: String
+    pub hypothesis: String,
+    pub confidence: f32
 }
 
 #[async_trait(?Send)]

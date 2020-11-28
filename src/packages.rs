@@ -30,15 +30,16 @@ impl IntoMapping for serde_yaml::Value {
     }
 }
 
-fn load_trans(python: Python, pkg_path: &Path, curr_lang: &LanguageIdentifier) -> Result<()>{
+fn load_trans(python: Python, pkg_path: &Path, curr_langs: &Vec<LanguageIdentifier>) -> Result<()>{
     let lily_py_mod = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
 
-    call_for_pkg(pkg_path, |_| lily_py_mod.call("__set_translations", (curr_lang.to_string(),), None).map_err(|py_err|anyhow!("Python error while calling __set_translations: {:?}", py_err)))??;
+    let as_strs: Vec<String> = curr_langs.into_iter().map(|i|i.to_string()).collect();
+    call_for_pkg(pkg_path, |_| lily_py_mod.call("__set_translations", (as_strs,), None).map_err(|py_err|anyhow!("Python error while calling __set_translations: {:?}", py_err)))??;
 
     Ok(())
 }
 
-pub fn load_skills(sigreg: &mut LocalSignalRegistry, action_registry: &LocalActionRegistry, path: &Path, _curr_lang: &LanguageIdentifier) -> Result<()> {
+pub fn load_skills(sigreg: &mut LocalSignalRegistry, action_registry: &LocalActionRegistry, path: &Path) -> Result<()> {
     info!("Loading package: {}", path.to_str().ok_or_else(|| anyhow!("Failed to get the str from path {:?}", path))?);
 
     let pkg_path = Arc::new(path.to_path_buf());
@@ -128,7 +129,7 @@ impl HalfBakedDoubleError {
 }
 
 
-pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<SignalRegistry> {
+pub fn load_packages(path: &Path, curr_lang: &Vec<LanguageIdentifier>) -> Result<SignalRegistry> {
     // Get GIL
     let gil = Python::acquire_gil();
     let py = gil.python();
@@ -146,7 +147,7 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<Sign
 
     for loader in &loaders {
         let (ldr_sigreg, ldr_actreg) = 
-            loader.init_base(py,  global_sigreg.clone(), global_actreg.clone())?;
+            loader.init_base(py,  global_sigreg.clone(), global_actreg.clone(), curr_lang.to_owned())?;
 
         base_sigreg.extend(ldr_sigreg);
         base_actreg.extend(ldr_actreg);
@@ -172,7 +173,7 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<Sign
         load_trans(py, &entry, curr_lang).map_err(|e|{
             HalfBakedDoubleError::from((pkg_sigreg.clone(), pkg_actreg.clone()), e)
         })?;
-        load_skills(&mut pkg_sigreg, &pkg_actreg, &entry, curr_lang).map_err(|e|{
+        load_skills(&mut pkg_sigreg, &pkg_actreg, &entry).map_err(|e|{
             HalfBakedDoubleError::from((pkg_sigreg, pkg_actreg), e)
         })?;
         Ok(())
@@ -208,7 +209,7 @@ pub fn load_packages(path: &Path, curr_lang: &LanguageIdentifier) -> Result<Sign
 }
 
 trait Loader {
-    fn init_base(&self, py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared) -> Result<(LocalSignalRegistry, LocalActionRegistry)>;
+    fn init_base(&self, py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<(LocalSignalRegistry, LocalActionRegistry)>;
     fn load_code(&self, py: Python, pkg_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry)> ;
 }
 
@@ -246,7 +247,7 @@ impl PythonLoader {
 }
 
 impl Loader for PythonLoader {
-    fn init_base(&self, py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+    fn init_base(&self, py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared, _lang: Vec<LanguageIdentifier>) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
         let path = &PYTHON_SDK_PATH.resolve();
         let (initial_signals, initial_actions) = add_py_folder(py, &PYTHON_SDK_PATH.resolve())?;
         let mut sigreg = LocalSignalRegistry::new(glob_sigreg);
@@ -278,9 +279,9 @@ impl EmbeddedLoader {
 }
 
 impl Loader for EmbeddedLoader {
-    fn init_base(&self, _py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+    fn init_base(&self, _py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
         let mut sigreg = LocalSignalRegistry::new(glob_sigreg);
-        sigreg.insert("order".into(), Rc::new(RefCell::new(new_signal_order())))?;
+        sigreg.insert("order".into(), Rc::new(RefCell::new(new_signal_order(lang))))?;
         sigreg.insert("timer".into(), Rc::new(RefCell::new(Timer::new())))?;
 
         Ok((sigreg, LocalActionRegistry::new(glob_actreg)))

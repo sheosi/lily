@@ -46,6 +46,8 @@ impl Pocketsphinx {
     }
 }
 
+const LOG_BASE: f32 = 1.0001;
+
 #[async_trait(?Send)]
 impl Stt for Pocketsphinx {
     async fn begin_decoding(&mut self) -> Result<(), SttError> {
@@ -57,7 +59,11 @@ impl Stt for Pocketsphinx {
         Ok(())
     }
     async fn end_decoding(&mut self) -> Result<Option<DecodeRes>, SttError> {
-        let res = self.decoder.get_hyp().map(|(hypothesis, _, _)| DecodeRes{hypothesis});
+        let res = self.decoder.get_hyp().map(|(hypothesis, _, ps_confidence)| DecodeRes{
+            hypothesis,
+            confidence: LOG_BASE.powf(ps_confidence as f32 * 100.0)
+
+        });
         self.decoder.end_utt()?;
         Ok(res)
     }

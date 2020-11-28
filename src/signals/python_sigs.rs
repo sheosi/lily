@@ -131,20 +131,22 @@ impl Signal for PythonSignal {
 
         self.call_py_method(py, "add_sig_receptor", (py_arg, skill_name, pkg_name, actset), true)
     }
-    fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
+    fn end_load(&mut self, curr_langs: &Vec<LanguageIdentifier>) -> Result<()> {
         let gil= Python::acquire_gil();
         let py = gil.python();
 
-        self.call_py_method(py, "end_load", (curr_lang.to_string(),), false)
+        let curr_langs: Vec<String> = curr_langs.into_iter().map(|i|i.to_string()).collect();
+        self.call_py_method(py, "end_load", (curr_langs,), false)
     }
     async fn event_loop(&mut self, _signal_event: SignalEventShared,
         _config: &Config, base_context: &Py<PyDict>,
-        curr_lang: &LanguageIdentifier) -> Result<()> {
+        curr_langs: &Vec<LanguageIdentifier>) -> Result<()> {
 
         let gil= Python::acquire_gil();
         let py = gil.python();
 
-        self.call_py_method(py, "event_loop", (base_context, curr_lang.to_string()), true)
+        let curr_langs: Vec<String> = curr_langs.into_iter().map(|i|i.to_string()).collect();
+        self.call_py_method(py, "event_loop", (base_context, curr_langs), true)
     }
 }
 

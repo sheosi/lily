@@ -76,6 +76,6 @@ impl OrderMap {
 #[async_trait(?Send)]
 pub trait Signal {
     fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()>;
-    fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()>;
-    async fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &LanguageIdentifier) -> Result<()>;
+    fn end_load(&mut self, curr_lang: &Vec<LanguageIdentifier>) -> Result<()>;
+    async fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &Vec<LanguageIdentifier>) -> Result<()>;
 }

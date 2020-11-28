@@ -9,6 +9,7 @@ import random
 import inspect
 from sys import version_info
 from typing import Any, Dict, get_type_hints, Mapping, List, Optional, Tuple
+from functools import reduce
 
 from fluent.runtime import FluentBundle, FluentResource
 
@@ -133,8 +134,7 @@ class SignalProtocol:
         """Called by the app to add  saet of actions that should be executed in
         relation to some event"""
 
-    # TODO: Make this one optional
-    #def end_load(self):
+    #def end_load(self, curr_langs: List[str]):
     #    """Called when load has been finished, use this to do any kind of
     #    finalization, optimization or resource liberation needed. *Optional*"""
 
@@ -177,38 +177,54 @@ class TransPack:
     """Just a small class containing a set of translations, both in current
     language and in the default one, this way we can fallback to the default one
     if something ever happens"""
-    def __init__(self, current, default):
+    def __init__(self, current_langs: Dict[str, FluentBundle], default: FluentBundle):
+        self.current_langs = current_langs
         self.default = default
-        self.current = current
 
-def __set_translations(curr_lang_str: str):
+def __set_translations(curr_langs_str: List[str]):
     trans_path = Path('translations')
     DEFAULT_LANG = "en-US"
+    
     if trans_path.is_dir():
-
         lang_list = []
         for lang in trans_path.iterdir():
             if lang.is_dir():
                 lang_list.append(lang.name)
 
-        neg_lang = _lily_impl._negotiate_lang(curr_lang_str, DEFAULT_LANG, lang_list)
-        if neg_lang != DEFAULT_LANG:
+        neg_langs: List[str] = _lily_impl._negotiate_lang(curr_langs_str, DEFAULT_LANG, lang_list)
+        if DEFAULT_LANG not in neg_langs:
             default_lang = __gen_bundle(DEFAULT_LANG, trans_path/DEFAULT_LANG)
         else:
             default_lang = None
 
-        packages_translations[_lily_impl._get_curr_lily_package()] = TransPack(__gen_bundle(neg_lang, trans_path/neg_lang), default_lang)
+        def add_to_dict(d: Dict[str, FluentBundle],l: str) -> Dict[str, FluentBundle]:
+            d[l] = __gen_bundle(l, trans_path/l)
+            return d
+
+        bundles: Dict[str, FluentBundle] = reduce( add_to_dict, neg_langs, {})
+
+        packages_translations[_lily_impl._get_curr_lily_package()] = TransPack(bundles, default_lang)
 
     else:
         _lily_impl.log_warn("Translations not present in " + os.getcwd())
 
 
-def _gen_trans_list(trans_name: str) -> Tuple[FluentBundle, List[Any]]:
+def _gen_trans_list(trans_name: str, lang: str) -> Tuple[FluentBundle, List[Any]]:
     translations = packages_translations[_lily_impl._get_curr_lily_package()]
-    try:
-        trans = translations.current.get_message(trans_name)
-        translator = translations.current
-    except LookupError as _e:
+    if lang in translations.current_langs:
+        try:
+            trans = translations.current_langs[lang].get_message(trans_name)
+            translator = translations.current_langs[lang]
+        except LookupError as _e:
+            log_str = f"Translation '{trans_name}'  not present in selected lang"
+            if translations.default:
+                _lily_impl.log_warn(log_str + ", using default translation")
+                trans = translations.default.get_message(trans_name)
+                translator = translations.default
+            else:
+                _lily_impl.log_warn(log_str)
+                raise
+    else:
         log_str = f"Translation '{trans_name}'  not present in selected lang"
         if translations.default:
             _lily_impl.log_warn(log_str + ", using default translation")
@@ -216,15 +232,15 @@ def _gen_trans_list(trans_name: str) -> Tuple[FluentBundle, List[Any]]:
             translator = translations.default
         else:
             _lily_impl.log_warn(log_str)
-            raise
+            raise KeyError(log_str)
 
     all_trans = list(trans.attributes.values())
     all_trans.insert(0, trans.value)
 
     return (translator, all_trans)
 
-def _translate_all_impl(trans_name, dict_args):
-    translations, all_trans = _gen_trans_list(trans_name)
+def _translate_all_impl(trans_name: str, dict_args: Dict[str, Any], lang: str):
+    translations, all_trans = _gen_trans_list(trans_name, lang)
     
 
     def extract_trans(element):
@@ -236,8 +252,8 @@ def _translate_all_impl(trans_name, dict_args):
     res = list(map(extract_trans, all_trans))
     return res
 
-def _translate_impl(trans_name, dict_args):
-    translations, all_trans = _gen_trans_list(trans_name)
+def _translate_impl(trans_name: str, dict_args: Dict[str, Any], lang: str):
+    translations, all_trans = _gen_trans_list(trans_name, lang)
     sel_trans = random.choice(all_trans)
     trans, err = translations.format_pattern(sel_trans, dict_args)
     if err: # Note: this will only show the error for the one picked
@@ -246,41 +262,41 @@ def _translate_impl(trans_name, dict_args):
     return trans
 
 
-def translate_all(trans_name, dict_args):
+def translate_all(trans_name: str, dict_args: Dict[str, Any]):
     """If 'trans_name' starts with a '$' then it will translated using
     'dict_args' as context variables for them to be used inside Fluent.
     Returns a list with all possible alternatives for this translation"""
 
     if trans_name[0] == '$':
-        what_to_say = _translate_all_impl(trans_name[1:], dict_args)
+        what_to_say = _translate_all_impl(trans_name[1:], dict_args, dict_args["lang"])
     else:
         what_to_say = [trans_name]
 
     return what_to_say
 
-def translate(trans_name, dict_args):
+def translate(trans_name: str, dict_args: Dict[str, Any]):
     """If 'trans_name' starts with a '$' then it will translated using
     'dict_args' as context variables for them to be used inside Fluent.
     If multiple alternatives exist returns one at random."""
     if trans_name[0] == '$':
-        what_to_say = _translate_impl(trans_name[1:], dict_args)
+        what_to_say = _translate_impl(trans_name[1:], dict_args, dict_args["lang"])
     else:
         what_to_say = trans_name
 
     return what_to_say
 
-def answer(output):
+def answer(output: str, context: Dict[str, str]):
     """'output' will be returned for it to be shown directly to the user or
     voiced by the TTS engine according to what was originally used"""
-    _lily_impl._say(output)
+    _lily_impl._say(output, context["lang"])
 
 
 @action(name="say")
 class Say():
-    def trigger_action(self, args: Dict[str, str], context: Dict[str, str]):
-        answer(translate(args, context))
+    def trigger_action(self, args: str, context: Dict[str, str]):
+        answer(translate(args, context), context)
 
 @action(name="play_file")
 class PlayFile():
-    def trigger_action(self, args, _context):
+    def trigger_action(self, args: str, _context):
         _lily_impl._play_file(args)

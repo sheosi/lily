@@ -54,25 +54,25 @@ pub async fn main()  -> Result<()> {
     log::debug!("{:?}", config);
 
     // 
-    let curr_lang : LanguageIdentifier = {
+    let curr_langs : Vec<LanguageIdentifier> = {
         let as_str =
             if let Some(ref lang) =  config.language {
                 lang.clone()
             }
             else {
-                get_locale_default()
+                vec![get_locale_default()]
             };
 
-        as_str.parse().expect("Locale parsing failed")
+        as_str.into_iter().map(|i|i.parse().expect("Locale parsing failed")).collect()
     };
     {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        crate::python::set_python_locale(py, &curr_lang)?;
+        crate::python::set_python_locale(py, &curr_langs[0])?;
     }
 
-    let mut sigreg = load_packages(&Path::new(&PACKAGES_PATH.resolve()), &curr_lang)?;
+    let mut sigreg = load_packages(&Path::new(&PACKAGES_PATH.resolve()), &curr_langs)?;
 
     let base_context = {
         let gil = Python::acquire_gil();
@@ -81,7 +81,7 @@ pub async fn main()  -> Result<()> {
         PyDict::new(py).into_py(py)
     };
 
-    sigreg.call_loop("order", &config, &base_context, &curr_lang).await?;
+    sigreg.call_loop("order", &config, &base_context, &curr_langs).await?;
 
     Ok(())
 }

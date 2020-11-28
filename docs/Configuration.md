@@ -20,7 +20,7 @@ Legend:  `name_of_key: type (default)`
     - `key: string (empty)`: STT's api key
     - `instance: string (empty)`: STT's instance ID ()
     - `gateway: string (empty)`: where is the STT instance located (London, Seoul, ...), not it's URL
-- `language: string (empty)`: Which language lily will use, if left empty will use the received from the use
+- `languages: list of strings (empty)`: A list of languages (in ICU form) that Lily will process and understand, if left empty the current one that the OS uses will be used.Note that the first one will be treated as default in cases that there's no input.
 - `hotword_sensitivity: float (0.45)`: The senstivity for the hotword (by default: "Lily") as defined by Snowboy (Bigger value==more easily triggered).
 - `debug_record_active_speech: bool (false)`: `true` here makes Lily save an audio file of what was send last time to Speech Recognition (for Speech Recognition debugging purposes).
 

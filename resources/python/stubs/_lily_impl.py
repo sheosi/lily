@@ -9,17 +9,17 @@ and other utilities)"""
 
 from typing import Dict, List
 
-def _say(text: str):
+def _say(text: str, lang: str):
     "Sends the text to be said or shown (depending on the circumstances)"
 
 def conf(conf_name: str) -> str:
     "Gets some conf value"
     ...
 
-def _negotiate_lang(input_lang: str, default: str, available: List[str]) -> str:
+def _negotiate_lang(input_lang: str, default: str, available: List[str]) -> List[str]:
     """Given a lang id tries to get the one from list
     that is compatible otherwise it will return the default one"""
-    return ""
+    return [""]
 
 def log_info(text: str):
     """Writes into the log as info"""

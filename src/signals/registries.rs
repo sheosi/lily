@@ -51,12 +51,12 @@ impl SignalRegistry {
         
     }
 
-    pub fn end_load(&mut self, curr_lang: &LanguageIdentifier) -> Result<()> {
+    pub fn end_load(&mut self, curr_langs: &Vec<LanguageIdentifier>) -> Result<()> {
 
         let mut to_remove = Vec::new();
 
         for (sig_name, signal) in self.signals.iter_mut() {
-            if let Err(e) = signal.borrow_mut().end_load(curr_lang) {
+            if let Err(e) = signal.borrow_mut().end_load(curr_langs) {
                 warn!("Signal \"{}\" had trouble in \"end_load\", will be disabled, error: {}", &sig_name, e);
 
                 to_remove.push(sig_name.to_owned());
@@ -75,7 +75,7 @@ impl SignalRegistry {
         sig_name: &str,
         config: &Config,
         base_context: &Py<PyDict>,
-        curr_lang: &LanguageIdentifier
+        curr_lang: &Vec<LanguageIdentifier>
     ) -> Result<()> {
         self.signals[sig_name].borrow_mut().event_loop(self.event.clone(), config, base_context, curr_lang).await
     }

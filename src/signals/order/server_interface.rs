@@ -1,16 +1,18 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::mem::replace;
 use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
 
 use crate::config::Config;
 use crate::nlu::{NluManager, NluManagerConf, NluManagerStatic};
+use crate::python::add_lang;
 use crate::signals::{SignalEventShared, SignalOrder};
-use crate::stt::SttFactory;
+use crate::stt::{SttPool, SttPoolItem, SttSet};
 use crate::tts::{Gender, TtsFactory, VoiceDescr};
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use lily_common::audio::{Audio, decode_ogg_opus};
 use lily_common::communication::*;
 use lily_common::extensions::MakeSendable;
@@ -25,23 +27,58 @@ thread_local!{
     pub static LAST_SITE: RefCell<Option<String>> = RefCell::new(None);
 }
 
+
+struct SessionManager {
+    sessions: HashMap<String, SttPoolItem>,
+    sttset: SttSet
+}
+
+impl SessionManager {
+    fn new(sttset: SttSet) -> Self {
+        Self {
+            sessions: HashMap::new(),
+            sttset
+        }
+    }
+
+    async fn get_stt(&mut self, uuid: &str, audio:&[i16]) -> Result<&mut SttPoolItem> {
+        if !self.sessions.contains_key(uuid) {
+            self.sessions.insert(uuid.to_owned(),self.sttset.get_session_for(audio).await?);
+        }
+
+        Ok(self.sessions.get_mut(uuid).unwrap())
+    }
+
+    fn end_session(&mut self, uuid: &str) -> Result<()> {
+        if self.sessions.remove(uuid).is_some() {
+            Ok(())
+        }
+        else {
+            Err(anyhow!(format!("Tried to end session of client '{}' which doesn't exists", uuid)))
+        }
+    }
+}
+
 pub struct MqttInterface {
     common_out: Arc<Mutex<Vec<(SendData, String)>>>,
-    curr_lang: LanguageIdentifier
+    curr_langs: Vec<LanguageIdentifier>
 }
 
 
+
+
 impl MqttInterface {
-    pub fn new(curr_lang: &LanguageIdentifier) -> Result<Self> {
+    pub fn new(curr_langs: &Vec<LanguageIdentifier>) -> Result<Self> {
         let common_out = Arc::new(Mutex::new(vec![]));
         let output = MqttInterfaceOutput::create(common_out.clone())?;
         MSG_OUTPUT.with(|a|a.replace(Some(output)));
 
         Ok(Self {
             common_out,
-            curr_lang: curr_lang.to_owned(),
+            curr_langs: curr_langs.to_owned(),
         })
     }
+
 
     pub async fn interface_loop<M: NluManager + NluManagerConf + NluManagerStatic> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, order: &mut SignalOrder<M>) -> Result<()> {
         let ibm_data = config.stt.ibm.clone();
@@ -50,23 +87,31 @@ impl MqttInterface {
             || "lily-server".into()
         );
         let (client, mut eloop) = make_mqtt_conn(&mqtt_conf);
-        
+       
 
         client.subscribe("lily/new_satellite", QoS::AtMostOnce).await?;
         client.subscribe("lily/nlu_process", QoS::AtMostOnce).await?;
         client.subscribe("lily/event", QoS::AtMostOnce).await?;
 
-        let mut stt = SttFactory::load(&self.curr_lang, config.stt.prefer_online, ibm_data).await?;
-        info!("Using stt {}", stt.get_info());
+        let mut stt_set = SttSet::new();
+        for lang in &self.curr_langs {
+            let pool= SttPool::new(1, 1,lang, config.stt.prefer_online, &ibm_data).await?;
+            stt_set.add_lang(lang, pool).await?;
+        }
+        let mut sessions = SessionManager::new(stt_set);
+        
 
         let voice_prefs: VoiceDescr = VoiceDescr {
             gender:if config.tts.prefer_male{Gender::Male}else{Gender::Female}
         };
-        let ibm_tts = config.tts.ibm.clone();
-
-        let mut tts = TtsFactory::load_with_prefs(&self.curr_lang, config.tts.prefer_online, ibm_tts, &voice_prefs)?;
-        info!("Using tts {}", tts.get_info());
-        let mut stt_needs_start = true;
+        
+        let mut tts_set = HashMap::new();
+        for lang in &self.curr_langs {
+            let tts = TtsFactory::load_with_prefs(lang, config.tts.prefer_online, config.tts.ibm.clone(), &voice_prefs)?;
+            info!("Using tts {}", tts.get_info());
+            tts_set.insert(lang, tts);
+        }
+        
         loop {
             let notification = eloop.poll().await?;
             println!("Notification = {:?}", notification);
@@ -80,29 +125,31 @@ impl MqttInterface {
                             client.publish("lily/satellite_welcome", QoS::AtMostOnce, false, output).await?
                         }
                         "lily/nlu_process" => {
-                            use std::io::Write;
-                            if stt_needs_start {
-                                stt.begin_decoding().await?;
-                                stt_needs_start = false;
-                            }
-
                             let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
                             let (as_raw, _) = decode_ogg_opus(msg_nlu.audio, DEFAULT_SAMPLES_PER_SECOND)?;
+                            {
+                                let stt = sessions.get_stt(&msg_nlu.satellite, &as_raw).await?;
 
-                            stt.process(&as_raw).await?;
-                            
-                            if msg_nlu.is_final {
-                                let satellite = msg_nlu.satellite;
-                                LAST_SITE.with(|s|*s.borrow_mut() = Some(satellite));
-                                stt_needs_start = true;
-                                if let Err(e) = order.received_order(
-                                    stt.end_decoding().await?, 
-                                    signal_event.clone(),
-                                    base_context).await {
+                                stt.process(&as_raw).await?;
+                                if msg_nlu.is_final {
+                                    let satellite = msg_nlu.satellite.clone();
+                                    LAST_SITE.with(|s|*s.borrow_mut() = Some(satellite));
+                                    
+                                    let context = add_lang(&base_context, stt.lang())?;
+                                    if let Err(e) = order.received_order(
+                                        stt.end_decoding().await?, 
+                                        signal_event.clone(),
+                                        &context,
+                                        stt.lang()
+                                    ).await {
 
-                                    error!("Actions processing had an error: {}", e);
+                                        error!("Actions processing had an error: {}", e);
+                                    }
+                                    
                                 }
-                                
+                            }
+                            if msg_nlu.is_final {
+                                sessions.end_session(&msg_nlu.satellite)?;
                             }
                             
                         }
@@ -125,7 +172,8 @@ impl MqttInterface {
                         SendData::Audio(audio) => {
                             audio
                         }
-                        SendData::String(str) => {
+                        SendData::String((str, lang)) => {
+                            let tts = tts_set.get_mut(&lang).unwrap();
                             tts.synth_text(&str).await?
                         }
                     };
@@ -138,7 +186,7 @@ impl MqttInterface {
 }
 
 enum SendData {
-    String(String),
+    String((String, LanguageIdentifier)),
     Audio(Audio)
 }
 pub struct MqttInterfaceOutput {
@@ -150,8 +198,8 @@ impl MqttInterfaceOutput {
         Ok(Self{client})
     }
 
-    pub fn answer(&mut self, input: &str, to: String) -> Result<()> {
-        self.client.lock().sendable()?.push((SendData::String(input.into()), to));
+    pub fn answer(&mut self, input: &str, lang: &LanguageIdentifier, to: String) -> Result<()> {
+        self.client.lock().sendable()?.push((SendData::String((input.into(), lang.to_owned())), to));
         Ok(())
     }
 

@@ -18,8 +18,8 @@ thread_local! {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
-    #[serde(default = "none::<String>")]
-    pub language: Option<String>,
+    #[serde(default = "none::<Vec<String>>")]
+    pub language: Option<Vec<String>>,
     #[serde(default = "def_hotword_sensitivity")]
     pub hotword_sensitivity: f32,
     #[serde(default = "false_val")]

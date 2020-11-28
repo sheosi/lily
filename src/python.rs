@@ -123,7 +123,7 @@ pub fn python_init() -> Result<()> {
 //Have to repeat implementation because can't be genericiced on FromPyObject because
 //it requires a lifetime (because of some implementations) which means we can't drop
 //the reference to call_res
-pub fn try_translate(input: &str) -> Result<String> {
+pub fn try_translate(input: &str, lang: &str) -> Result<String> {
     if let Some(first_letter) = input.chars().nth(0) {
         if first_letter == '$' {
 
@@ -134,7 +134,7 @@ pub fn try_translate(input: &str) -> Result<String> {
             let lily_ext = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
 
             // Remove initial $ from translation
-            let call_res_result = lily_ext.call("_translate_impl", (&input[1..], PyDict::new(python)), None);
+            let call_res_result = lily_ext.call("_translate_impl", (&input[1..], PyDict::new(python), lang), None);
             let call_res = call_res_result.map_err(|py_err|{py_err.clone_ref(python).print(python);anyhow!("lily_ext's \"__translate_impl\" failed, most probably you tried to load an inexistent translation, {:?}", py_err)})?;
 
             let trans_lst: String = FromPyObject::extract(&call_res).map_err(|py_err|anyhow!("_translate_impl() didn't return a string: {:?}", py_err))?;
@@ -150,7 +150,7 @@ pub fn try_translate(input: &str) -> Result<String> {
     }
 }
 
-pub fn try_translate_all(input: &str) -> Result<Vec<String>> {
+pub fn try_translate_all(input: &str, lang: &str) -> Result<Vec<String>> {
     if let Some(first_letter) = input.chars().nth(0) {
         if first_letter == '$' {
                 // Get GIL
@@ -160,7 +160,7 @@ pub fn try_translate_all(input: &str) -> Result<Vec<String>> {
             let lily_ext = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
 
             // Remove initial $ from translation
-            let call_res_result = lily_ext.call("_translate_all_impl", (&input[1..], PyDict::new(python)), None);
+            let call_res_result = lily_ext.call("_translate_all_impl", (&input[1..], PyDict::new(python), lang), None);
             let call_res = call_res_result.map_err(|py_err|{py_err.clone_ref(python).print(python);anyhow!("lily_ext's \"__translate_all_impl\" failed, most probably you tried to load an inexistent translation, {:?}", py_err)})?;
 
             let trans_lst: Vec<String> = FromPyObject::extract(&call_res).map_err(|py_err|anyhow!("_translate_all_impl() didn't return a list: {:?}", py_err))?;
@@ -261,11 +261,12 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
 }
 
 #[pyfunction]
-fn python_say(py: Python, text: &str) -> PyResult<PyObject> {
+fn python_say(py: Python, text: &str, lang: &str) -> PyResult<PyObject> {
     MSG_OUTPUT. with::<_,PyResult<()>>(|m|{match *m.borrow_mut() {
             Some(ref mut output) => {
                 let uuid = LAST_SITE.with(|s|s.clone().into_inner());
-                output.answer(text, uuid.unwrap().to_string()).py_excep::<PyAttributeError>()?;
+                let lang_id = lang.parse().unwrap();
+                output.answer(text, &lang_id, uuid.unwrap().to_string()).py_excep::<PyAttributeError>()?;
             }
             _=>{}
         };
@@ -282,8 +283,8 @@ fn get_current_package( ) -> PyResult<String> {
 }
 
 #[pyfunction]
-fn negotiate_lang(input_lang: &str, default: &str, available: Vec<String>) -> PyResult<String> {
-    let in_lang: LanguageIdentifier = input_lang.parse().py_excep::<PyAttributeError>()?;
+fn negotiate_lang(input_lang: Vec<String>, default: &str, available: Vec<String>) -> PyResult<Vec<String>> {
+    let in_langs: Vec<LanguageIdentifier> = input_lang.into_iter().map(|i|i.parse()).collect::<Result<Vec<_>,_>>().py_excep::<PyAttributeError>()?;
     let def_lang: LanguageIdentifier = default.parse().py_excep::<PyAttributeError>()?;
 
     // This is done with a for to have control over the return, so that an exception is thrown if
@@ -293,7 +294,8 @@ fn negotiate_lang(input_lang: &str, default: &str, available: Vec<String>) -> Py
          available_langs.push(lang_str.parse().py_excep::<PyAttributeError>()?);
     }
     
-    Ok(negotiate_languages(&[in_lang],&available_langs, Some(&def_lang), NegotiationStrategy::Filtering)[0].to_string())
+    let res = negotiate_languages(&in_langs,&available_langs, Some(&def_lang), NegotiationStrategy::Filtering);
+    Ok(res.into_iter().map(|i|i.to_string()).collect())
 }
 
 #[pyfunction]
@@ -382,6 +384,16 @@ pub fn set_python_locale(py: Python, lang_id: &LanguageIdentifier) -> Result<()>
     Ok(())
 }
 
+pub fn add_lang(dict: &Py<PyDict>, lang: &LanguageIdentifier) -> Result<Py<PyDict>> {
+    let gil = Python::acquire_gil();
+    let py = gil.python();
+
+    let dict = dict.as_ref(py);
+    let new = dict.copy()?;
+    new.set_item("lang", lang.to_string())?;
+
+    Ok(new.into_py(py))
+}
 
 /**  Utilities ****************************************************************/
 
