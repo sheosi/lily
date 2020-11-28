@@ -1,7 +1,7 @@
 use crate::other::ConnectionConf;
 use crate::vars::DEFAULT_HOTWORD_SENSITIVITY;
 
-use rumqttc::{AsyncClient, EventLoop, MqttOptions};
+use rumqttc::{AsyncClient, EventLoop, LastWill, MqttOptions};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -45,7 +45,14 @@ impl Default for ClientConf {
 
 #[derive(Deserialize, Serialize)]
 pub struct MsgNewSatellite {
-    pub uuid: String
+    pub uuid: String,
+    pub caps: Vec<String>
+}
+
+
+#[derive(Deserialize, Serialize)]
+pub struct MsgGoodbye {
+    pub satellite: String
 }
 
 #[derive(Serialize)]
@@ -65,7 +72,7 @@ impl ConnectionConfResolved {
     }
 }
 
-pub fn make_mqtt_conn(conf: &ConnectionConfResolved) ->  (AsyncClient, EventLoop) {
+pub fn make_mqtt_conn(conf: &ConnectionConfResolved, last_will: Option<LastWill>) ->  (AsyncClient, EventLoop) {
     let url = Url::parse(
         &format!("http://{}",conf.url_str) // Let's add some protocol
     ).unwrap();
@@ -74,6 +81,9 @@ pub fn make_mqtt_conn(conf: &ConnectionConfResolved) ->  (AsyncClient, EventLoop
     
     // Init MQTT
     let mut mqttoptions = MqttOptions::new(&conf.name, host, port);
+    if let Some(will) = last_will {
+        mqttoptions.set_last_will(will);
+    }
     mqttoptions.set_keep_alive(5);
     const MAX_PACKET_SIZE: usize = 100 * 1024 * 1024*8;
     mqttoptions.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);

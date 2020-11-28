@@ -6,7 +6,7 @@ use std::ops::DerefMut;
 
 use crate::config::Config;
 use crate::nlu::{NluManager, NluManagerConf, NluManagerStatic};
-use crate::python::add_lang;
+use crate::python::add_context_data;
 use crate::signals::{SignalEventShared, SignalOrder};
 use crate::stt::{SttPool, SttPoolItem, SttSet};
 use crate::tts::{Gender, TtsFactory, VoiceDescr};
@@ -16,7 +16,7 @@ use anyhow::{anyhow, Result};
 use lily_common::audio::{Audio, decode_ogg_opus};
 use lily_common::communication::*;
 use lily_common::extensions::MakeSendable;
-use log::{error, info};
+use log::{error, info, warn};
 use pyo3::{types::PyDict, Py};
 use rmp_serde::{decode, encode};
 use rumqttc::{Event, Packet, QoS};
@@ -24,7 +24,7 @@ use unic_langid::LanguageIdentifier;
 
 thread_local!{
     pub static MSG_OUTPUT: RefCell<Option<MqttInterfaceOutput>> = RefCell::new(None);
-    pub static LAST_SITE: RefCell<Option<String>> = RefCell::new(None);
+    pub static CAPS_MANAGER: RefCell<CapsManager> = RefCell::new(CapsManager::new());
 }
 
 
@@ -59,6 +59,45 @@ impl SessionManager {
     }
 }
 
+pub struct CapsManager {
+    // For now just a map of capabilities, which is a map in which if exists is true
+    clients_caps: HashMap<String, HashMap<String,()>>
+}
+
+impl CapsManager {
+    fn new() -> Self {
+        Self {
+            clients_caps: HashMap::new(),
+        }
+    }
+
+    fn add_client(&mut self, uuid: &str, caps: Vec<String>) {
+        let mut caps_map = HashMap::new();
+        for cap in caps {
+            caps_map.insert(cap, ());
+        }
+        
+        self.clients_caps.insert(uuid.to_owned(), caps_map);
+    }
+
+    pub fn has_cap(&self, uuid: &str, cap_name: &str) -> bool {
+        match self.clients_caps.get(uuid) {
+            Some(client) => client.get(cap_name).map(|_|true).unwrap_or(false),
+            None => false
+        }
+        
+    }
+
+    fn disconnected(&mut self, uuid: &str) -> Result<()> {
+        match self.clients_caps.remove(uuid) {
+            Some(_) => Ok(()),
+            None => Err(anyhow!(format!("Satellite {} asked for a disconnect but was not connected", uuid)))
+        }
+
+    }
+
+}
+
 pub struct MqttInterface {
     common_out: Arc<Mutex<Vec<(SendData, String)>>>,
     curr_langs: Vec<LanguageIdentifier>
@@ -86,12 +125,13 @@ impl MqttInterface {
             config.mqtt.clone(),
             || "lily-server".into()
         );
-        let (client, mut eloop) = make_mqtt_conn(&mqtt_conf);
+        let (client, mut eloop) = make_mqtt_conn(&mqtt_conf, None);
        
 
         client.subscribe("lily/new_satellite", QoS::AtMostOnce).await?;
         client.subscribe("lily/nlu_process", QoS::AtMostOnce).await?;
         client.subscribe("lily/event", QoS::AtMostOnce).await?;
+        client.subscribe("lily/disconnected", QoS::ExactlyOnce).await?;
 
         let mut stt_set = SttSet::new();
         for lang in &self.curr_langs {
@@ -111,7 +151,7 @@ impl MqttInterface {
             info!("Using tts {}", tts.get_info());
             tts_set.insert(lang, tts);
         }
-        
+
         loop {
             let notification = eloop.poll().await?;
             println!("Notification = {:?}", notification);
@@ -121,6 +161,9 @@ impl MqttInterface {
                         "lily/new_satellite" => {
                             info!("New satellite incoming");
                             let input :MsgNewSatellite = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
+                            let uuid2 = &input.uuid;
+                            let caps = input.caps;
+                            CAPS_MANAGER.with(|c| c.borrow_mut().add_client(&uuid2, caps));
                             let output = encode::to_vec(&MsgWelcome{conf:config.to_client_conf(), satellite: input.uuid})?;
                             client.publish("lily/satellite_welcome", QoS::AtMostOnce, false, output).await?
                         }
@@ -133,9 +176,7 @@ impl MqttInterface {
                                 stt.process(&as_raw).await?;
                                 if msg_nlu.is_final {
                                     let satellite = msg_nlu.satellite.clone();
-                                    LAST_SITE.with(|s|*s.borrow_mut() = Some(satellite));
-                                    
-                                    let context = add_lang(&base_context, stt.lang())?;
+                                    let context = add_context_data(&base_context, stt.lang(), &satellite)?;
                                     if let Err(e) = order.received_order(
                                         stt.end_decoding().await?, 
                                         signal_event.clone(),
@@ -155,9 +196,14 @@ impl MqttInterface {
                         }
                         "lily/event" => {
                             let msg: MsgEvent = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
-                            let satellite = msg.satellite;
-                            LAST_SITE.with(|s|*s.borrow_mut() = Some(satellite));
-                            signal_event.lock().unwrap().call(&msg.event, base_context);
+                            let context = add_context_data(base_context,&self.curr_langs[0], &msg.satellite)?;
+                            signal_event.lock().unwrap().call(&msg.event, &context);
+                        }
+                        "lily/disconnected" => {
+                            let msg: MsgGoodbye = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
+                            if let Err(e) = CAPS_MANAGER.with(|c|c.borrow_mut().disconnected(&msg.satellite)) {
+                                warn!("{}",&e.to_string())
+                            }
                         }
                         _ => {}
                     }

@@ -268,7 +268,7 @@ def translate_all(trans_name: str, dict_args: Dict[str, Any]):
     Returns a list with all possible alternatives for this translation"""
 
     if trans_name[0] == '$':
-        what_to_say = _translate_all_impl(trans_name[1:], dict_args, dict_args["lang"])
+        what_to_say = _translate_all_impl(trans_name[1:], dict_args, dict_args["__lily_data_lang"])
     else:
         what_to_say = [trans_name]
 
@@ -279,7 +279,7 @@ def translate(trans_name: str, dict_args: Dict[str, Any]):
     'dict_args' as context variables for them to be used inside Fluent.
     If multiple alternatives exist returns one at random."""
     if trans_name[0] == '$':
-        what_to_say = _translate_impl(trans_name[1:], dict_args, dict_args["lang"])
+        what_to_say = _translate_impl(trans_name[1:], dict_args, dict_args["__lily_data_lang"])
     else:
         what_to_say = trans_name
 
@@ -288,15 +288,23 @@ def translate(trans_name: str, dict_args: Dict[str, Any]):
 def answer(output: str, context: Dict[str, str]):
     """'output' will be returned for it to be shown directly to the user or
     voiced by the TTS engine according to what was originally used"""
-    _lily_impl._say(output, context["lang"])
+    uuid = context["__lily_data_satellite"]
+    if _lily_impl.has_cap(uuid, 'voice'):
+        _lily_impl._say(uuid, output, context["__lily_data_lang"])
+    else:
+        _lily_impl.log_error(f"Satellite '{uuid}' doesn't implement 'voice' capapbility, answer can't be sent")
 
 
 @action(name="say")
 class Say():
-    def trigger_action(self, args: str, context: Dict[str, str]):
+    def trigger_action(self, args: str, context: Dict[str, Any]):
         answer(translate(args, context), context)
 
 @action(name="play_file")
 class PlayFile():
-    def trigger_action(self, args: str, _context):
-        _lily_impl._play_file(args)
+    def trigger_action(self, args: str, context: Dict[str, Any]):
+        uuid = context["__lily_data_satellite"]
+        if _lily_impl.has_cap(uuid, 'voice'):
+            _lily_impl._play_file(uuid ,args)
+        else:
+            _lily_impl.log_error(f"Satellite '{uuid}' doesn't implement 'voice', audio can't be sent")

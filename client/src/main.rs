@@ -13,7 +13,7 @@ use lily_common::vad::{SnowboyVad, Vad, VadError};
 use lily_common::vars::*;
 use log::{debug, info};
 use rmp_serde::{decode, encode};
-use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
+use rumqttc::{AsyncClient, Event, EventLoop, LastWill, Packet, QoS};
 use serde::{Deserialize, Serialize};
 use serde_yaml::{from_reader,to_writer};
 use tokio::{try_join, sync::{Mutex as AsyncMutex, MutexGuard as AsyncMGuard}};
@@ -136,7 +136,10 @@ async fn receive (
 
     let mut play_dev = PlayDevice::new().unwrap();
     // We will be listening from now on, say hello
-    let msg_pack = encode::to_vec(&MsgNewSatellite{uuid: my_name.to_string()})?;
+    let msg_pack = encode::to_vec(&MsgNewSatellite{
+        uuid: my_name.to_string(),
+        caps: vec!["voice".into()]
+    })?;
     client.borrow_mut().publish("lily/new_satellite", QoS::AtLeastOnce, false, msg_pack).await?;
     loop {
         match eloop.poll().await.unwrap() {
@@ -327,7 +330,9 @@ pub async fn main() -> anyhow::Result<()> {
         conn
     };
 
-    let (client, mut eloop) = make_mqtt_conn(&mqtt_conn);
+    let msg = MsgGoodbye{satellite: mqtt_conn.name.clone()};
+    let last_will = LastWill::new("lily/disconnected", QoS::ExactlyOnce, encode::to_vec(&msg)?);
+    let (client, mut eloop) = make_mqtt_conn(&mqtt_conn, Some(last_will));
 
     client.subscribe(&format!("lily/{}/say_msg", mqtt_conn.name), QoS::AtMostOnce).await?;
     client.subscribe("lily/satellite_welcome", QoS::AtMostOnce).await?;

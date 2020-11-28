@@ -20,11 +20,15 @@ using voice commands).
 
 It is planned that the client will announce what it can and can't do
 through the 'capabilities' system, and the server and it's plugins might exploit
-those to perform actions and interact with the user. Those 'capabilities' will be
-optional protocols and will be independent from each other, this way a client
-won't be restrained on form, functionalities or complexity. Other than the basic
+those to perform actions and interact with the user. Those 'capabilities' are be
+optional protocols and are be independent from each other, this way a client
+is not restrained on form, functionalities or complexity. Other than the basic
 communication with the server everything will be considered a capability: Voice
 interaction, text interaction, showing images, etc.
+
+### Capabilities
+*voice*: A client with this capbility can send voice audio to be detected by 
+Speech Recognition, and can receive voice. It also can receive other audio.
 
 ### Reasoning behind the current architecture
 
@@ -75,8 +79,3 @@ of the signals are activated.
 Actions are anything that react to some signal being sent. A skill hacing multiple
 actions will make all of them to activate whenver any signal is activated.
 
-## Interface
-
-The 'order' signal, can change it interacts with the users and uses something
-I call an interface (the trait name is 'UserInterface'), again this interface
-is intended to be anything from a voice interface directly to an API interface.

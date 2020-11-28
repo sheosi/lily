@@ -5,7 +5,7 @@ use std::io::Read;
 use std::rc::Rc;
 use std::path::Path;
 
-use crate::signals::order::server_interface::{LAST_SITE, MSG_OUTPUT};
+use crate::signals::order::server_interface::{CAPS_MANAGER, MSG_OUTPUT};
 use crate::vars::{PYDICT_SET_ERR_MSG, NO_YAML_FLOAT_MSG};
 
 use anyhow::{anyhow, Result};
@@ -255,18 +255,18 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add("_get_curr_lily_package", wrap_pyfunction!(get_current_package, m)?)?;
     m.add("_play_file", wrap_pyfunction!(play_file, m)?)?;
     m.add("conf", wrap_pyfunction!(get_conf_string, m)?)?;
+    m.add("has_cap", wrap_pyfunction!(client_has_cap,m)?)?;
     m.add_class::<crate::actions::PyActionSet>()?;
 
     Ok(())
 }
 
 #[pyfunction]
-fn python_say(py: Python, text: &str, lang: &str) -> PyResult<PyObject> {
+fn python_say(py: Python, uuid: &str, text: &str, lang: &str) -> PyResult<PyObject> {
     MSG_OUTPUT. with::<_,PyResult<()>>(|m|{match *m.borrow_mut() {
             Some(ref mut output) => {
-                let uuid = LAST_SITE.with(|s|s.clone().into_inner());
                 let lang_id = lang.parse().unwrap();
-                output.answer(text, &lang_id, uuid.unwrap().to_string()).py_excep::<PyAttributeError>()?;
+                output.answer(text, &lang_id, uuid.to_string()).py_excep::<PyAttributeError>()?;
             }
             _=>{}
         };
@@ -320,16 +320,15 @@ fn log_error(python: Python, text: &str) -> PyResult<PyObject>  {
 }
 
 #[pyfunction]
-fn play_file(py: Python, input: &str) -> PyResult<PyObject> {
+fn play_file(py: Python, uuid: &str, input: &str) -> PyResult<PyObject> {
     MSG_OUTPUT.with::<_, PyResult<()>>(|m|{match *m.borrow_mut() {
             Some(ref mut output) => {
-                let uuid = LAST_SITE.with(|s|s.clone().into_inner());
                 let mut f = File::open(&input)?;
                 let mut buffer = vec![0; fs::metadata(&input)?.len() as usize];
                 f.read(&mut buffer)?;
 
                 // We don't know the actual sps, so let's just have 0
-                output.send_audio(Audio::new_encoded(buffer), uuid.unwrap().to_string()).py_excep::<PyAttributeError>()?;
+                output.send_audio(Audio::new_encoded(buffer), uuid.to_string()).py_excep::<PyAttributeError>()?;
             }
             _=>{}
         };
@@ -360,6 +359,12 @@ fn get_conf_string(py: Python, conf_name: &str) -> PyResult<PyObject> {
     })
 }
 
+#[pyfunction]
+fn client_has_cap(_py: Python, client: &str, cap: &str) -> PyResult<bool> {
+    CAPS_MANAGER.with(|c| c.borrow().has_cap(client, cap));
+    Ok(true)
+}
+
 pub fn get_sys_path<'a>(py: Python::<'a>)-> Result<&'a PyList> {
     let sys = py.import("sys").map_err(|py_err|anyhow!("Failed while importing sys package: {:?}", py_err))?;
     
@@ -384,13 +389,14 @@ pub fn set_python_locale(py: Python, lang_id: &LanguageIdentifier) -> Result<()>
     Ok(())
 }
 
-pub fn add_lang(dict: &Py<PyDict>, lang: &LanguageIdentifier) -> Result<Py<PyDict>> {
+pub fn add_context_data(dict: &Py<PyDict>, lang: &LanguageIdentifier, client: &str) -> Result<Py<PyDict>> {
     let gil = Python::acquire_gil();
     let py = gil.python();
 
     let dict = dict.as_ref(py);
     let new = dict.copy()?;
-    new.set_item("lang", lang.to_string())?;
+    new.set_item("__lily_data_lang", lang.to_string())?;
+    new.set_item("__lily_data_satellite", lang.to_string())?;
 
     Ok(new.into_py(py))
 }

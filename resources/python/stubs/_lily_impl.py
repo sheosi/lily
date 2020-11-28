@@ -9,7 +9,7 @@ and other utilities)"""
 
 from typing import Dict, List
 
-def _say(text: str, lang: str):
+def _say(client:str, text: str, lang: str):
     "Sends the text to be said or shown (depending on the circumstances)"
 
 def conf(conf_name: str) -> str:
@@ -37,9 +37,13 @@ def _get_curr_lily_package() -> str:
     """Returns the name of the package being executed right now"""
     return ""
 
-def _play_file(file_name: str):
+def _play_file(client:str, file_name: str):
     """Plays a music file"""
     ...
+
+def has_cap(client: str, cap: str) -> bool:
+    """Returns True if the 'client' has declared that supports 'cap'"""
+    return False
 
 class PyActionSet:
     """Represents an set of actions related to a signal"""
