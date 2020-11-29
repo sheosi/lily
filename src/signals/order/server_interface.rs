@@ -43,7 +43,9 @@ impl SessionManager {
 
     async fn get_stt(&mut self, uuid: &str, audio:&[i16]) -> Result<&mut SttPoolItem> {
         if !self.sessions.contains_key(uuid) {
-            self.sessions.insert(uuid.to_owned(),self.sttset.get_session_for(audio).await?);
+            let mut stt = self.sttset.get_session_for(audio).await?;
+            stt.begin_decoding().await?;
+            self.sessions.insert(uuid.to_owned(),stt);
         }
 
         Ok(self.sessions.get_mut(uuid).unwrap())

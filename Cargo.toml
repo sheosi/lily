@@ -63,4 +63,4 @@ devel_rasa_nlu= []
 unused = []
 
 [workspace]
-members = ["client", "common"]
+members = ["client", "common", "pkg_util"]
