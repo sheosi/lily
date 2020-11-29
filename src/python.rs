@@ -396,7 +396,7 @@ pub fn add_context_data(dict: &Py<PyDict>, lang: &LanguageIdentifier, client: &s
     let dict = dict.as_ref(py);
     let new = dict.copy()?;
     new.set_item("__lily_data_lang", lang.to_string())?;
-    new.set_item("__lily_data_satellite", lang.to_string())?;
+    new.set_item("__lily_data_satellite", client.to_string())?;
 
     Ok(new.into_py(py))
 }

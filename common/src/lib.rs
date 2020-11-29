@@ -38,6 +38,7 @@ mod tests {
             rec_dev.stop_recording()?;
             let opus = audio.to_ogg_opus()?;
             let audio2 = decode_ogg_opus(opus, DEFAULT_SAMPLES_PER_SECOND)?;
+            assert_eq!(audio.len(), audio2.0.len());
             Ok(())
         }
 
@@ -52,7 +53,7 @@ mod tests {
             rec_dev.stop_recording()?;
             let opus = audio.to_ogg_opus()?;
             let audio2 = decode_ogg_opus(opus, DEFAULT_SAMPLES_PER_SECOND)?;
-            
+            assert_eq!(audio.len(), audio2.0.len());
             Ok(())
         }
     }
