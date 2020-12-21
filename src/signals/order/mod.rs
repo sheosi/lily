@@ -69,7 +69,7 @@ fn add_order<N: NluManager + NluManagerStatic + NluManagerConf>(
                     .into_iter()
                     .map(|utt| NluUtterance::Direct(utt))
                     .collect();
-                nlu_man.get_mut(lang).unwrap().get_mut_nlu_man()
+                nlu_man.get_mut(lang).expect("Nlu already trained").get_mut_nlu_man()
                 .add_intent(skill_name, utts);
             }
             
@@ -82,7 +82,7 @@ fn add_order<N: NluManager + NluManagerStatic + NluManagerConf>(
                         OrderKind::Ref(name) => name,
                         OrderKind::Def(def) => {
                             let name = format!("_{}__{}_", pkg_name, ent_name);
-                            nlu_man.get_mut(lang).unwrap().get_mut_nlu_man()
+                            nlu_man.get_mut(lang).expect("Nlu already trained").get_mut_nlu_man()
                             .add_entity(&name, def.try_into_with_trans(lang)?);
                             name
                         }
@@ -103,14 +103,15 @@ fn add_order<N: NluManager + NluManagerStatic + NluManagerConf>(
                         },
                     );
                 }
-                let utts = try_translate_all(&text, &lang.to_string())?
+                let lang_str = lang.to_string();
+                let utts = try_translate_all(&text, &lang_str)?
                     .into_iter()
                     .map(|utt| NluUtterance::WithEntities {
                         text: utt,
                         entities: entities_res.clone(),
                     })
                     .collect();
-                nlu_man.get_mut(lang).unwrap().get_mut_nlu_man()
+                nlu_man.get_mut(lang).expect(format!("lang {} no provided before", &lang_str)).get_mut_nlu_man()
                 .add_intent(skill_name, utts);
             }
         }

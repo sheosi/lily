@@ -23,6 +23,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use pyo3::{types::PyDict, Py, Python};
 use lily_common::extensions::MakeSendable;
+use log::warn;
 use unic_langid::LanguageIdentifier;
 
 pub type SignalEventShared = Arc<Mutex<SignalEvent>>;
@@ -68,7 +69,14 @@ impl OrderMap {
             let gil = Python::acquire_gil();
             let python = gil.python();
 
-            action_set.lock().unwrap().call_all(python, context.as_ref(python));
+            match action_set.lock() {
+                Ok(m) => {
+                    m.call_all(python, context.as_ref(python));
+                }
+                Err(_) => {
+                    warn!("ActionSet \"{}\" had an error before and can't be used anymore", act_name);
+                }
+            }
         }
     }
 }

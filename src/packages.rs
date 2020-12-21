@@ -89,7 +89,7 @@ pub fn load_skills(sigreg: &mut LocalSignalRegistry, action_registry: &LocalActi
                     for (act_name, act_arg) in actions.into_iter() {
                         let act = action_registry.get(&act_name).ok_or_else(||anyhow!("Action {} is not registered",act_name))?;
                         let act_inst = act.borrow().instance(&act_arg, pkg_path.clone());
-                        act_set.lock().unwrap().add_action(act_inst)?;
+                        act_set.lock()?.add_action(act_inst)?;
                     }
 
 
@@ -187,7 +187,7 @@ pub fn load_packages(path: &Path, curr_lang: &Vec<LanguageIdentifier>) -> Result
                     let (pkg_sigreg, pkg_actreg) = e.act_sig;
                     pkg_sigreg.minus(&base_sigreg).remove_from_global();
                     pkg_actreg.minus(&base_actreg).remove_from_global();
-                    let pkg_name = entry.file_stem().unwrap().to_string_lossy();
+                    let pkg_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy();
                     error!("Package {} had a problem, won't be available. {}", pkg_name, e.source);
                     not_loaded.push(pkg_name.into_owned());
                 },

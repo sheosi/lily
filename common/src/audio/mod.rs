@@ -57,7 +57,7 @@ impl Data {
 
     fn append_raw(&mut self, b: &[i16]) {
         match self {
-            Data::Raw(data_self) => data_self.append_audio(b, DEFAULT_SAMPLES_PER_SECOND).unwrap(),
+            Data::Raw(data_self) => data_self.append_audio(b, DEFAULT_SAMPLES_PER_SECOND).expect("Tried to append but one of the raw data wasn't using default sps"),
             Data::Encoded(_) => std::panic!("Tried to append a raw audio to an encoded audio")
         }
     }

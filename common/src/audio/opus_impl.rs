@@ -101,8 +101,7 @@ pub fn encode_ogg_opus(audio: &Vec<i16>) -> Result<Vec<u8>, AudioError> {
     const NUM_CHANNELS: u8 = 1;
     const FRAME_SAMPLES: usize = to_samples(FRAME_TIME_MS, NUM_CHANNELS, DEFAULT_SAMPLES_PER_SECOND);
     const OPUS_CHANNELS: opus::Channels = opus::Channels::Mono;
-
-    let SPS = DEFAULT_SAMPLES_PER_SECOND;
+    const S_PS: u32 = DEFAULT_SAMPLES_PER_SECOND;
 
     // Generate the serial which is nothing but a value to identify a stream, we
     // will also use the process id so that two lily implementations don't use 
@@ -112,7 +111,7 @@ pub fn encode_ogg_opus(audio: &Vec<i16>) -> Result<Vec<u8>, AudioError> {
     let mut buffer: Vec<u8> = Vec::new();
     {
         let mut packet_writer = PacketWriter::new(&mut buffer);
-        let mut opus_encoder = OpusEnc::new(SPS, OPUS_CHANNELS, opus::Application::Audio)?;
+        let mut opus_encoder = OpusEnc::new(S_PS, OPUS_CHANNELS, opus::Application::Audio)?;
 
 
         let max = match audio.len() {
@@ -136,7 +135,7 @@ pub fn encode_ogg_opus(audio: &Vec<i16>) -> Result<Vec<u8>, AudioError> {
         ];
         let mut head = OPUS_HEAD;
         LittleEndian::write_u16(&mut head[10..12], 0); // Write pre-skip
-        LittleEndian::write_u32(&mut head[12..16], SPS); // Write Samples per second
+        LittleEndian::write_u32(&mut head[12..16], S_PS); // Write Samples per second
 
         let mut opus_tags : Vec<u8> = Vec::with_capacity(60);
         let vendor_str = format!("{}, lily {}", opus::version(), LILY_VER);
@@ -187,10 +186,10 @@ pub fn encode_ogg_opus(audio: &Vec<i16>) -> Result<Vec<u8>, AudioError> {
         let mut last_sample = calc(max);
         if last_sample < audio.len() {
             let frames_sizes = [
-                    calc_samples(2.5, NUM_CHANNELS, SPS),
-                    calc_samples(5.0, NUM_CHANNELS, SPS),
-                    calc_samples(10.0, NUM_CHANNELS, SPS),
-                    calc_samples(20.0, NUM_CHANNELS, SPS)
+                    calc_samples(2.5, NUM_CHANNELS, S_PS),
+                    calc_samples(5.0, NUM_CHANNELS, S_PS),
+                    calc_samples(10.0, NUM_CHANNELS, S_PS),
+                    calc_samples(20.0, NUM_CHANNELS, S_PS)
             ];
 
             while last_sample < audio.len() {

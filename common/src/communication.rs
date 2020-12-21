@@ -1,6 +1,7 @@
 use crate::other::ConnectionConf;
 use crate::vars::DEFAULT_HOTWORD_SENSITIVITY;
 
+use anyhow::{anyhow, Result};
 use rumqttc::{AsyncClient, EventLoop, LastWill, MqttOptions};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -72,11 +73,11 @@ impl ConnectionConfResolved {
     }
 }
 
-pub fn make_mqtt_conn(conf: &ConnectionConfResolved, last_will: Option<LastWill>) ->  (AsyncClient, EventLoop) {
+pub fn make_mqtt_conn(conf: &ConnectionConfResolved, last_will: Option<LastWill>) ->  Result<(AsyncClient, EventLoop)> {
     let url = Url::parse(
         &format!("http://{}",conf.url_str) // Let's add some protocol
-    ).unwrap();
-    let host = url.host_str().unwrap();
+    )?;
+    let host = url.host_str().ok_or(anyhow!("Coudln't get host from URL"))?;
     let port: u16 = url.port().unwrap_or(1883);
     
     // Init MQTT
@@ -94,5 +95,5 @@ pub fn make_mqtt_conn(conf: &ConnectionConfResolved, last_will: Option<LastWill>
         None => {}
     }
     
-    AsyncClient::new(mqttoptions, 10)
+    Ok(AsyncClient::new(mqttoptions, 10))
 }

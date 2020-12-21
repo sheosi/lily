@@ -121,7 +121,7 @@ async fn send_audio<'a>(mqtt_name: &str, client: Rc<RefCell<AsyncClient>>,data: 
         is_final,
         satellite: mqtt_name.to_owned()
     };
-    let msg_pack = encode::to_vec(&msgpack_data).unwrap();
+    let msg_pack = encode::to_vec(&msgpack_data)?;
     client.borrow_mut().publish("lily/nlu_process", QoS::AtMostOnce, false, msg_pack).await?;
     Ok(())
 }
@@ -134,7 +134,7 @@ async fn receive (
     eloop: &mut EventLoop
 ) -> anyhow::Result<()> {
 
-    let mut play_dev = PlayDevice::new().unwrap();
+    let mut play_dev = PlayDevice::new()?;
     // We will be listening from now on, say hello
     let msg_pack = encode::to_vec(&MsgNewSatellite{
         uuid: my_name.to_string(),
@@ -142,7 +142,7 @@ async fn receive (
     })?;
     client.borrow_mut().publish("lily/new_satellite", QoS::AtLeastOnce, false, msg_pack).await?;
     loop {
-        match eloop.poll().await.unwrap() {
+        match eloop.poll().await? {
             Event::Incoming(Packet::Publish(pub_msg)) => {
                 let topic = pub_msg.topic.as_str();
                 match  topic {
@@ -156,7 +156,7 @@ async fn receive (
                     }
                     _ if topic.ends_with("/say_msg") => {
                         debug!("Received msg from server");
-                        let msg: MsgAnswerVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload)).unwrap();
+                        let msg: MsgAnswerVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
                         let audio = Audio::new_encoded(msg.data);
                         {
                             // Take unique ownership of the record device while playing something
@@ -187,9 +187,9 @@ impl DebugAudio {
         Self{audio: AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND), save_ms, curr_ms:0.0}
     }
 
-    fn push(&mut self, audio: &AudioRef) {
+    fn push(&mut self, audio: &AudioRef)  {
         self.curr_ms += (audio.data.len() as f32)/(DEFAULT_SAMPLES_PER_SECOND as f32) * 1000.0;
-        self.audio.append_audio(audio.data, DEFAULT_SAMPLES_PER_SECOND).unwrap();
+        self.audio.append_audio(audio.data, DEFAULT_SAMPLES_PER_SECOND).expect("Wrong SPSs");
         if (self.curr_ms as u16) >= self.save_ms {
             println!("Save to file");
             self.audio.save_to_disk(Path::new("debug.ogg")).expect("Failed to write debug file");

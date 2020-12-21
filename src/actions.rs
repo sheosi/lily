@@ -11,7 +11,7 @@ use crate::python::{call_for_pkg, get_inst_class_name, HalfBakedError, PyExcepti
 
 // Other crates
 use anyhow::{anyhow, Result};
-use log::error;
+use log::{error, warn};
 use pyo3::{types::{PyDict,PyTuple}, Py, PyAny, PyObject, Python};
 use pyo3::prelude::{pyclass, pymethods};
 use pyo3::exceptions::PyOSError;
@@ -264,6 +264,10 @@ impl PyActionSet {
 #[pymethods]
 impl PyActionSet {
     fn call(&mut self, py: Python, context: &PyDict) {
-        self.act_set.lock().unwrap().call_all(py, context)
+        
+        match self.act_set.lock() {
+            Ok(m) => m.call_all(py, context),
+            Err(_) => warn!("A PyActionSet had an error before and can't be used anymore")
+        }
     }
 }
