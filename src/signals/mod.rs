@@ -70,7 +70,7 @@ impl OrderMap {
             let python = gil.python();
 
             match action_set.lock() {
-                Ok(m) => {
+                Ok(ref mut m) => {
                     m.call_all(python, context.as_ref(python));
                 }
                 Err(_) => {

@@ -89,7 +89,7 @@ pub fn load_skills(sigreg: &mut LocalSignalRegistry, action_registry: &LocalActi
                     for (act_name, act_arg) in actions.into_iter() {
                         let act = action_registry.get(&act_name).ok_or_else(||anyhow!("Action {} is not registered",act_name))?;
                         let act_inst = act.borrow().instance(&act_arg, pkg_path.clone());
-                        act_set.lock()?.add_action(act_inst)?;
+                        act_set.lock().unwrap().add_action(act_inst)?;
                     }
 
 

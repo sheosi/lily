@@ -8,4 +8,10 @@ edition = "2018"
 
 [dependencies]
 anyhow = "^1"
+bytes = "0.5"
 clap = "^2.3"
+reqwest = {version = "^0.10", features = ["default-tls", "json"]}
+serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
+thiserror = "^1.0" # For error handling in parts that can be made their own crate
+tokio = {version="^0.3", features = ["macros", "rt", "sync", "time"]}
+zip = "0.5"

@@ -125,7 +125,7 @@ impl SttSet {
 
     pub async fn get_session_for(&mut self, audio: &[i16]) -> Result<SttPoolItem> {
         let lang = self.detector.detect_lang(audio).await?;
-        Ok(self.map.get_mut(&lang)?.take().await?)
+        Ok(self.map.get_mut(&lang).unwrap().take().await?)
     }
 }
 

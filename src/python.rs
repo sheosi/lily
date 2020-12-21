@@ -239,8 +239,8 @@ pub fn remove_from_actions(py: Python, list: &Vec<Py<PyAny>>) -> Result<()> {
 
 pub fn get_inst_class_name(py: Python, instance: &PyObject) -> Option<String> {
     let type_obj = instance.getattr(py, "__class__").ok();
-    let type_name = type_obj.map(|p|p.getattr(py, "__name__"));
-    type_name.map(|p|p.extract(py))
+    let type_name = type_obj.and_then(|p|p.getattr(py, "__name__").ok());
+    type_name.and_then(|p|p.extract(py).ok())
 }
 
 // Define executable module
@@ -265,7 +265,7 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
 fn python_say(py: Python, uuid: &str, text: &str, lang: &str) -> PyResult<PyObject> {
     MSG_OUTPUT. with::<_,PyResult<()>>(|m|{match *m.borrow_mut() {
             Some(ref mut output) => {
-                let lang_id = lang.parse()?;
+                let lang_id = lang.parse().py_excep::<PyAttributeError>()?;
                 output.answer(text, &lang_id, uuid.to_string()).py_excep::<PyAttributeError>()?;
             }
             _=>{}

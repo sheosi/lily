@@ -127,7 +127,7 @@ impl MqttInterface {
             config.mqtt.clone(),
             || "lily-server".into()
         );
-        let (client, mut eloop) = make_mqtt_conn(&mqtt_conf, None);
+        let (client, mut eloop) = make_mqtt_conn(&mqtt_conf, None)?;
        
 
         client.subscribe("lily/new_satellite", QoS::AtMostOnce).await?;

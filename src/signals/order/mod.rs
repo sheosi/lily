@@ -111,7 +111,7 @@ fn add_order<N: NluManager + NluManagerStatic + NluManagerConf>(
                         entities: entities_res.clone(),
                     })
                     .collect();
-                nlu_man.get_mut(lang).expect(format!("lang {} no provided before", &lang_str)).get_mut_nlu_man()
+                nlu_man.get_mut(lang).expect(&format!("lang {} wasn't provided before", &lang_str)).get_mut_nlu_man()
                 .add_intent(skill_name, utts);
             }
         }

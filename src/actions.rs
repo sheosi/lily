@@ -213,7 +213,7 @@ impl ActionInstance for PythonActionInstance {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        get_inst_class_name(py, &self.obj)
+        get_inst_class_name(py, &self.obj).unwrap()
     }
 }
 
@@ -266,7 +266,7 @@ impl PyActionSet {
     fn call(&mut self, py: Python, context: &PyDict) {
         
         match self.act_set.lock() {
-            Ok(m) => m.call_all(py, context),
+            Ok(ref mut m) => m.call_all(py, context),
             Err(_) => warn!("A PyActionSet had an error before and can't be used anymore")
         }
     }

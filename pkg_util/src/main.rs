@@ -1,16 +1,23 @@
 use std::collections::HashMap;
 use std::env::current_dir;
 use std::fs;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
+use bytes::Bytes;
 use clap::{Arg, App, AppSettings, SubCommand};
 use reqwest::Client;
 use serde::Deserialize;
+use thiserror::Error;
+use zip::ZipArchive;
+
+const DEF_REPO_URL: &str = "";
+const PKG_PATH: &str = "../packages";
 
 
-fn main() -> Result<()> {
+#[tokio::main(flavor="current_thread")]
+async fn main() -> anyhow::Result<()> {
     let matches = App::new("Package utility")
                   .version("0.3")
                   .setting(AppSettings::SubcommandRequiredElseHelp)
@@ -19,10 +26,40 @@ fn main() -> Result<()> {
                                   Arg::with_name("pkg_name").required(true)
                                 )
                             )
+                   .subcommand(SubCommand::with_name("install")
+                              .arg(
+                                  Arg::with_name("pkg_name").required(true)
+                                )
+                            )
+                    .subcommand(SubCommand::with_name("remove")
+                               .arg(
+                                    Arg::with_name("pkg_name").required(true)
+                               )
+                            )
                   .get_matches();
 
     if let Some(init_data) = matches.subcommand_matches("init") {
         do_init(init_data.value_of("pkg_name").expect("Couldn't get pkg_name but is required... Wut?"))?;
+    }
+    else if let Some(install_data) = matches.subcommand_matches("install") {
+        let repo = RepoData::get_from(DEF_REPO_URL).await?;
+        if let Err(e) = repo.install(Path::new(PKG_PATH),install_data.value_of("pkg_name").expect("Couldn't get pkg_name but is required... Wut?")).await {
+            match e.downcast::<RepoError>() {
+                Ok(e) => {eprintln!("{}", e)},
+                Err(e) => {Err(e)?}
+            }
+        }
+    }
+    else if let Some(remove_data) = matches.subcommand_matches("remove") {
+        let path = Path::new(PKG_PATH);
+        let pkg_name = remove_data.value_of("pkg_name").expect("Couldn't get pkg_name but is required... Wut?");
+        let pkg_path = path.join(pkg_name);
+        if let Err(e) = fs::remove_dir_all(pkg_path) {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                eprintln!("Package \"{}\" does not exist", pkg_name);
+            }
+            else {Err(e)?}
+        }
     }
 
     Ok(())
@@ -142,4 +179,47 @@ impl RepoData {
         let a: RepoData = http.get(json_url).send().await?.json().await?;
         Ok(a)
     }
+
+    async fn install(&self, pkg_path: &Path, pkg_name: &str) -> Result<()> {
+        let http = Client::new();
+        let pkg_url = self.packages.get(pkg_name).ok_or(RepoError::NotFound(pkg_name.into()))?;
+        let zip_data = http.get(pkg_url).send().await?.bytes().await?;
+        extract_zip(zip_data, &pkg_path.join(pkg_name))
+    }
+}
+
+fn extract_zip(zip: Bytes, out_path: &Path) -> Result<()> {
+    let mut archive = ZipArchive::new(std::io::Cursor::new(zip))?;
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).unwrap();
+        let file_path = out_path.join(file.name());
+        if file.name().ends_with("/") {
+            fs::create_dir_all(file.name())?;
+        }
+        else {
+            if let Some(p) = file_path.parent() {
+                if !p.exists() {
+                    fs::create_dir_all(p)?;
+                }
+            }
+        }
+        let mut outfile = fs::File::create(&file_path)?;
+        io::copy(&mut file, &mut outfile )?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Some(mode) = file.unix_mode() {
+                fs::set_permissions(&file_path, fs::Permissions::from_mode(mode))?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum RepoError {
+    #[error("Package \"{}\" not found on repository",.0)]
+    NotFound(String)
 }
