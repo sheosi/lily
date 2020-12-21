@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env::current_dir;
 use std::fs;
 use std::io::Write;
@@ -5,6 +6,8 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 use clap::{Arg, App, AppSettings, SubCommand};
+use reqwest::Client;
+use serde::Deserialize;
 
 
 fn main() -> Result<()> {
@@ -96,13 +99,13 @@ class {}:
         say: $example_translation_say
 ")?;
 
-    print_path_cute(pkg_name,&pkg_path);
+    print_path_cute(pkg_name,&pkg_path)?;
 
     Ok(())
 }
 
-fn print_path_cute(pkg_name: &str, pkg_path: &Path) {
-    let current_dir = current_dir().unwrap();
+fn print_path_cute(pkg_name: &str, pkg_path: &Path) -> Result<()> {
+    let current_dir = current_dir()?;
     if let Some(parent_path) = pkg_path.parent() {
 
         // Make sure parent path is absolute so that canonicalize 
@@ -116,7 +119,7 @@ fn print_path_cute(pkg_name: &str, pkg_path: &Path) {
                 absolute_path.push(parent_path);
                 absolute_path
             };
-            println!("\tCreated package \"{}\" at \"{}\"", pkg_name, parent_path.canonicalize().unwrap().to_string_lossy());
+            println!("\tCreated package \"{}\" at \"{}\"", pkg_name, parent_path.canonicalize()?.to_string_lossy());
         }
         else {
             println!("\tCreated package \"{}\"", pkg_name);
@@ -124,5 +127,19 @@ fn print_path_cute(pkg_name: &str, pkg_path: &Path) {
     }
     else {
         println!("\tCreated package \"{}\"", pkg_name);
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+struct RepoData {
+    packages: HashMap<String, String>
+}
+impl RepoData {
+    async fn get_from(json_url: &str) -> Result<RepoData> {
+        let http = Client::new();
+        let a: RepoData = http.get(json_url).send().await?.json().await?;
+        Ok(a)
     }
 }
