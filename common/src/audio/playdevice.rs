@@ -19,7 +19,9 @@ pub enum PlayAudioError {
     #[error("Failed while decoding")]
     DecoderError(#[from] rodio::decoder::DecoderError),
     #[error("Couldn't play audio, reason: {}", .0)]
-    PlayError(String)
+    PlayError(String),
+    #[error("Coudln't transform audio")]
+    AudioError(#[from]crate::audio::AudioError)
 }
 
 impl From<rodio::PlayError> for PlayAudioError {
