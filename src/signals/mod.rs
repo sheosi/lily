@@ -15,13 +15,13 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::ActionSet;
+use crate::actions::{ActionSet, ActionContext};
 use crate::config::Config;
 
 // Other crates
 use anyhow::Result;
 use async_trait::async_trait;
-use pyo3::{types::PyDict, Py, Python};
+use pyo3::Python;
 use lily_common::extensions::MakeSendable;
 use log::warn;
 use unic_langid::LanguageIdentifier;
@@ -44,7 +44,7 @@ impl SignalEvent {
         self.event_map.add_order(event_name, act_set)
     }
 
-    pub fn call(&mut self, event_name: &str, context: &Py<PyDict>) {
+    pub fn call(&mut self, event_name: &str, context: &ActionContext) {
         self.event_map.call_order(event_name, context)
     }
 }
@@ -64,14 +64,14 @@ impl OrderMap {
         *action_entry = act_set;
     }
 
-    pub fn call_order(&mut self, act_name: &str, context: &Py<PyDict>) {
+    pub fn call_order(&mut self, act_name: &str, context: &ActionContext) {
         if let Some(action_set) = self.map.get_mut(act_name) {
             let gil = Python::acquire_gil();
             let python = gil.python();
 
             match action_set.lock() {
                 Ok(ref mut m) => {
-                    m.call_all(python, context.as_ref(python));
+                    m.call_all(python, context);
                 }
                 Err(_) => {
                     warn!("ActionSet \"{}\" had an error before and can't be used anymore", act_name);
@@ -85,5 +85,7 @@ impl OrderMap {
 pub trait Signal {
     fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()>;
     fn end_load(&mut self, curr_lang: &Vec<LanguageIdentifier>) -> Result<()>;
-    async fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &Vec<LanguageIdentifier>) -> Result<()>;
+    async fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &ActionContext, curr_lang: &Vec<LanguageIdentifier>) -> Result<()>;
 }
+
+

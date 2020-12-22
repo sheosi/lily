@@ -1,3 +1,7 @@
+mod action_context;
+
+pub use self::action_context::*;
+
 // Standard library
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -12,14 +16,14 @@ use crate::python::{call_for_pkg, get_inst_class_name, HalfBakedError, PyExcepti
 // Other crates
 use anyhow::{anyhow, Result};
 use log::{error, warn};
-use pyo3::{types::{PyDict,PyTuple}, Py, PyAny, PyObject, Python};
+use pyo3::{Py, PyAny, PyObject, Python, types::PyTuple};
 use pyo3::prelude::{pyclass, pymethods};
 use pyo3::exceptions::PyOSError;
 
 pub type ActionRegistryShared = Rc<RefCell<ActionRegistry>>;
 
 pub trait ActionInstance {
-    fn call(&self, py: Python, context: &PyDict) -> Result<()>;
+    fn call(&self, py: Python, context: &ActionContext) -> Result<()>;
     fn get_name(&self) -> String;
 }
 
@@ -197,13 +201,13 @@ impl PythonActionInstance {
 }
 
 impl ActionInstance for PythonActionInstance {
-    fn call(&self ,py: Python, context: &PyDict) -> Result<()> {
+    fn call(&self ,py: Python, context: &ActionContext) -> Result<()> {
         let trig_act = self.obj.getattr(py, "trigger_action")?;
         std::env::set_current_dir(self.lily_pkg_path.as_ref())?;
         call_for_pkg(self.lily_pkg_path.as_ref(),
         |_|trig_act.call(
             py,
-            (self.args.clone_ref(py), context),
+            (self.args.clone_ref(py), context.clone()),
             None)
         ).py_excep::<PyOSError>()??;
 
@@ -241,7 +245,7 @@ impl ActionSet {
         Ok(())
     }
 
-    pub fn call_all(&mut self, py: Python, context: &PyDict) {
+    pub fn call_all(&mut self, py: Python, context: &ActionContext) {
         for action in &self.acts {
             if let Err(e) = action.call(py, context) {
                 error!("Action {} failed while being triggered: {}", &action.get_name(), e);
@@ -263,7 +267,7 @@ impl PyActionSet {
 
 #[pymethods]
 impl PyActionSet {
-    fn call(&mut self, py: Python, context: &PyDict) {
+    fn call(&mut self, py: Python, context: &ActionContext) {
         
         match self.act_set.lock() {
             Ok(ref mut m) => m.call_all(py, context),

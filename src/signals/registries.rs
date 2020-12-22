@@ -5,12 +5,11 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use crate::actions::ActionSet;
+use crate::actions::{ActionContext, ActionSet};
 use crate::config::Config;
 use crate::signals::{Signal, SignalEvent, SignalEventShared, SignalRegistryShared};
 
 use anyhow::{anyhow, Result};
-use pyo3::{types::PyDict, Py};
 use lily_common::extensions::MakeSendable;
 use log::warn;
 use unic_langid::LanguageIdentifier;
@@ -74,7 +73,7 @@ impl SignalRegistry {
     pub async fn call_loop(&mut self,
         sig_name: &str,
         config: &Config,
-        base_context: &Py<PyDict>,
+        base_context: &ActionContext,
         curr_lang: &Vec<LanguageIdentifier>
     ) -> Result<()> {
         self.signals[sig_name].borrow_mut().event_loop(self.event.clone(), config, base_context, curr_lang).await

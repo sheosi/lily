@@ -5,6 +5,7 @@ use std::io::Read;
 use std::rc::Rc;
 use std::path::Path;
 
+use crate::actions::ActionContext;
 use crate::signals::order::server_interface::{CAPS_MANAGER, MSG_OUTPUT};
 use crate::vars::{PYDICT_SET_ERR_MSG, NO_YAML_FLOAT_MSG};
 
@@ -389,16 +390,13 @@ pub fn set_python_locale(py: Python, lang_id: &LanguageIdentifier) -> Result<()>
     Ok(())
 }
 
-pub fn add_context_data(dict: &Py<PyDict>, lang: &LanguageIdentifier, client: &str) -> Result<Py<PyDict>> {
-    let gil = Python::acquire_gil();
-    let py = gil.python();
+pub fn add_context_data(dict: &ActionContext, lang: &LanguageIdentifier, client: &str) -> ActionContext {
+    
+    let mut new = dict.copy();
+    new.set("__lily_data_lang".into(), lang.to_string());
+    new.set("__lily_data_satellite".into(), client.to_string());
 
-    let dict = dict.as_ref(py);
-    let new = dict.copy()?;
-    new.set_item("__lily_data_lang", lang.to_string())?;
-    new.set_item("__lily_data_satellite", client.to_string())?;
-
-    Ok(new.into_py(py))
+    new
 }
 
 /**  Utilities ****************************************************************/

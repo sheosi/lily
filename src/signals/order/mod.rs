@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::ActionSet;
+use crate::actions::{ActionContext, ActionSet};
 use crate::config::Config;
 use crate::nlu::{EntityInstance, EntityDef, EntityData, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponseSlot, NluUtterance};
 use crate::python::{try_translate, try_translate_all};
@@ -17,7 +17,6 @@ use self::server_interface::MqttInterface;
 // Other crates
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
-use pyo3::{Py, conversion::IntoPy, types::PyDict, Python};
 use log::{info, warn};
 use serde::Deserialize;
 use unic_langid::LanguageIdentifier;
@@ -176,7 +175,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
         Ok(())
     }
 
-    pub async fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &Py<PyDict>, lang: &LanguageIdentifier) -> Result<()> {
+    pub async fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &ActionContext, lang: &LanguageIdentifier) -> Result<()> {
         match decode_res {
             None => event_signal.lock().sendable()?.call("empty_reco", base_context),
             Some(decode_res) => {
@@ -192,7 +191,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
                             if result.confidence >= MIN_SCORE_FOR_ACTION {
                                 if let Some(intent_name) = result.name {
                                     info!("Let's call an action");
-                                    let slots_context = add_slots(base_context,result.slots)?;
+                                    let slots_context = add_slots(base_context,result.slots);
                                     self.intent_map.call_order(&intent_name, &slots_context);
                                     info!("Action called");
                                 }
@@ -218,30 +217,20 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
     Ok(())
     }
 
-    pub async fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
+    pub async fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &ActionContext, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         let mut interface = MqttInterface::new(curr_lang)?;
         interface.interface_loop(config, signal_event, base_context, self).await
     }
 }
 
 
-fn add_slots(base_context: &Py<PyDict>, slots: Vec<NluResponseSlot>) -> Result<Py<PyDict>> {
-    let gil = Python::acquire_gil();
-    let py = gil.python();
-
-    // What to do here if this fails?
-    let result = base_context.as_ref(py).copy()?;
-
+fn add_slots(base_context: &ActionContext, slots: Vec<NluResponseSlot>) -> ActionContext {
+    let mut result = base_context.clone();
     for slot in slots.into_iter() {
-        result.set_item(slot.name, slot.value).map_err(
-            |py_err|anyhow!("Couldn't set name in base context: {:?}", py_err)
-        )?;
+        result.set(slot.name, slot.value);
     }
 
-
-
-    Ok(result.into_py(py))
-
+    result
 }
 
 #[async_trait(?Send)]
@@ -257,7 +246,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> Signal for SignalOrder<M>
     fn end_load(&mut self, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         self.end_loading()
     }
-    async fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
+    async fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &ActionContext, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         self.record_loop(signal_event, config, base_context, curr_lang).await
     }
 }

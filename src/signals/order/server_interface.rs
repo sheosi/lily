@@ -4,6 +4,7 @@ use std::mem::replace;
 use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
 
+use crate::actions::ActionContext;
 use crate::config::Config;
 use crate::nlu::{NluManager, NluManagerConf, NluManagerStatic};
 use crate::python::add_context_data;
@@ -17,7 +18,6 @@ use lily_common::audio::{Audio, decode_ogg_opus};
 use lily_common::communication::*;
 use lily_common::extensions::MakeSendable;
 use log::{error, info, warn};
-use pyo3::{types::PyDict, Py};
 use rmp_serde::{decode, encode};
 use rumqttc::{Event, Packet, QoS};
 use unic_langid::LanguageIdentifier;
@@ -121,7 +121,7 @@ impl MqttInterface {
     }
 
 
-    pub async fn interface_loop<M: NluManager + NluManagerConf + NluManagerStatic> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &Py<PyDict>, order: &mut SignalOrder<M>) -> Result<()> {
+    pub async fn interface_loop<M: NluManager + NluManagerConf + NluManagerStatic> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &ActionContext, order: &mut SignalOrder<M>) -> Result<()> {
         let ibm_data = config.stt.ibm.clone();
         let mqtt_conf = ConnectionConfResolved::from(
             config.mqtt.clone(),
@@ -178,7 +178,7 @@ impl MqttInterface {
                                 stt.process(&as_raw).await?;
                                 if msg_nlu.is_final {
                                     let satellite = msg_nlu.satellite.clone();
-                                    let context = add_context_data(&base_context, stt.lang(), &satellite)?;
+                                    let context = add_context_data(&base_context, stt.lang(), &satellite);
                                     if let Err(e) = order.received_order(
                                         stt.end_decoding().await?, 
                                         signal_event.clone(),
@@ -198,7 +198,7 @@ impl MqttInterface {
                         }
                         "lily/event" => {
                             let msg: MsgEvent = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
-                            let context = add_context_data(base_context,&self.curr_langs[0], &msg.satellite)?;
+                            let context = add_context_data(base_context,&self.curr_langs[0], &msg.satellite);
                             signal_event.lock().unwrap().call(&msg.event, &context);
                         }
                         "lily/disconnected" => {

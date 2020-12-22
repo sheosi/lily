@@ -130,10 +130,6 @@ impl HalfBakedDoubleError {
 
 
 pub fn load_packages(path: &Path, curr_lang: &Vec<LanguageIdentifier>) -> Result<SignalRegistry> {
-    // Get GIL
-    let gil = Python::acquire_gil();
-    let py = gil.python();
-
     let loaders: Vec<Box<dyn Loader>> = vec![
         Box::new(PythonLoader::new()),
         Box::new(EmbeddedLoader::new())
@@ -147,7 +143,7 @@ pub fn load_packages(path: &Path, curr_lang: &Vec<LanguageIdentifier>) -> Result
 
     for loader in &loaders {
         let (ldr_sigreg, ldr_actreg) = 
-            loader.init_base(py,  global_sigreg.clone(), global_actreg.clone(), curr_lang.to_owned())?;
+            loader.init_base(global_sigreg.clone(), global_actreg.clone(), curr_lang.to_owned())?;
 
         base_sigreg.extend(ldr_sigreg);
         base_actreg.extend(ldr_actreg);
@@ -163,16 +159,22 @@ pub fn load_packages(path: &Path, curr_lang: &Vec<LanguageIdentifier>) -> Result
         let mut pkg_actreg = base_actreg.clone();
         for loader in &loaders {
             let (local_sigreg, local_actreg)= 
-                loader.load_code(py, &entry, &pkg_sigreg, &pkg_actreg).map_err(|e|{
+                loader.load_code(&entry, &pkg_sigreg, &pkg_actreg).map_err(|e|{
                     HalfBakedDoubleError::from((pkg_sigreg, pkg_actreg), e)
                 })?;
 
                 pkg_sigreg = local_sigreg;
                 pkg_actreg = local_actreg;
         }
-        load_trans(py, &entry, curr_lang).map_err(|e|{
-            HalfBakedDoubleError::from((pkg_sigreg.clone(), pkg_actreg.clone()), e)
-        })?;
+        {
+            // Get GIL
+            let gil = Python::acquire_gil();
+            let py = gil.python();
+
+            load_trans(py, &entry, curr_lang).map_err(|e|{
+                HalfBakedDoubleError::from((pkg_sigreg.clone(), pkg_actreg.clone()), e)
+            })?;
+        }
         load_skills(&mut pkg_sigreg, &pkg_actreg, &entry).map_err(|e|{
             HalfBakedDoubleError::from((pkg_sigreg, pkg_actreg), e)
         })?;
@@ -209,8 +211,8 @@ pub fn load_packages(path: &Path, curr_lang: &Vec<LanguageIdentifier>) -> Result
 }
 
 trait Loader {
-    fn init_base(&self, py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<(LocalSignalRegistry, LocalActionRegistry)>;
-    fn load_code(&self, py: Python, pkg_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry)> ;
+    fn init_base(&self, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<(LocalSignalRegistry, LocalActionRegistry)>;
+    fn load_code(&self, pkg_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry)> ;
 }
 
 struct PythonLoader {}
@@ -247,7 +249,11 @@ impl PythonLoader {
 }
 
 impl Loader for PythonLoader {
-    fn init_base(&self, py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared, _lang: Vec<LanguageIdentifier>) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+    fn init_base(&self, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared, _lang: Vec<LanguageIdentifier>) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+        // Get GIL
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+
         let path = &PYTHON_SDK_PATH.resolve();
         let (initial_signals, initial_actions) = add_py_folder(py, &PYTHON_SDK_PATH.resolve())?;
         let mut sigreg = LocalSignalRegistry::new(glob_sigreg);
@@ -259,7 +265,10 @@ impl Loader for PythonLoader {
         Ok((sigreg, actreg))
     }
 
-    fn load_code(&self, py: Python, pkg_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+    fn load_code(&self, pkg_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+        // Get GIL
+        let gil = Python::acquire_gil();
+        let py = gil.python();
         Self::load_package_python(py, &pkg_path.join("python"), &pkg_path, base_sigreg, base_actreg)
     }
 }
@@ -279,7 +288,7 @@ impl EmbeddedLoader {
 }
 
 impl Loader for EmbeddedLoader {
-    fn init_base(&self, _py: Python, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+    fn init_base(&self, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
         let mut sigreg = LocalSignalRegistry::new(glob_sigreg);
         sigreg.insert("order".into(), Rc::new(RefCell::new(new_signal_order(lang))))?;
         sigreg.insert("timer".into(), Rc::new(RefCell::new(Timer::new())))?;
@@ -287,7 +296,7 @@ impl Loader for EmbeddedLoader {
         Ok((sigreg, LocalActionRegistry::new(glob_actreg)))
     }
 
-    fn load_code(&self, _py: Python, _pkg_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
+    fn load_code(&self, _pkg_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry)> {
         Ok((base_sigreg.clone(), base_actreg.clone()))
     }
 }

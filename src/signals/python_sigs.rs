@@ -6,14 +6,14 @@ use std::rc::Rc;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use crate::actions::{ActionSet ,PyActionSet};
+use crate::actions::{ActionSet ,PyActionSet, ActionContext};
 use crate::config::Config;
 use crate::python::{call_for_pkg, HalfBakedError, remove_from_signals, yaml_to_python};
 use crate::signals::{LocalSignalRegistry, Signal, SignalEventShared, SignalRegistry};
 
 use async_trait::async_trait;
 use anyhow::{anyhow, Result};
-use pyo3::{conversion::IntoPy, types::{PyDict, PyTuple}, Py, PyAny, Python, PyObject};
+use pyo3::{conversion::IntoPy, types::PyTuple, Py, PyAny, Python, PyObject};
 use unic_langid::LanguageIdentifier;
 
 
@@ -139,14 +139,14 @@ impl Signal for PythonSignal {
         self.call_py_method(py, "end_load", (curr_langs,), false)
     }
     async fn event_loop(&mut self, _signal_event: SignalEventShared,
-        _config: &Config, base_context: &Py<PyDict>,
+        _config: &Config, base_context: &ActionContext,
         curr_langs: &Vec<LanguageIdentifier>) -> Result<()> {
 
         let gil= Python::acquire_gil();
         let py = gil.python();
 
         let curr_langs: Vec<String> = curr_langs.into_iter().map(|i|i.to_string()).collect();
-        self.call_py_method(py, "event_loop", (base_context, curr_langs), true)
+        self.call_py_method(py, "event_loop", (base_context.to_owned(), curr_langs), true)
     }
 }
 

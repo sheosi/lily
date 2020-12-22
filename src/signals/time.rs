@@ -1,12 +1,11 @@
 use std::sync::{Arc, Mutex};
 
-use crate::actions::ActionSet;
+use crate::actions::{ActionContext, ActionSet};
 use crate::config::Config;
 use crate::signals::{Signal, SignalEventShared};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use pyo3::{types::PyDict, Py};
 use unic_langid::LanguageIdentifier;
 
 pub struct Timer {}
@@ -19,7 +18,7 @@ impl Signal for Timer {
     fn end_load(&mut self, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         Ok(())
     }
-    async fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &Py<PyDict>, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
+    async fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &ActionContext, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         Ok(())
     }
 }

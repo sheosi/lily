@@ -14,6 +14,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 // This crate
+use crate::actions::ActionContext;
 use crate::config::Config;
 use crate::packages::load_packages;
 use crate::python::python_init;
@@ -22,7 +23,7 @@ use crate::python::python_init;
 use anyhow::Result;
 use lily_common::other::init_log;
 use lily_common::vars::PACKAGES_PATH;
-use pyo3::{conversion::IntoPy, Python, types::PyDict};
+use pyo3::Python;
 use unic_langid::LanguageIdentifier;
 
 
@@ -73,15 +74,7 @@ pub async fn main()  -> Result<()> {
     }
 
     let mut sigreg = load_packages(&Path::new(&PACKAGES_PATH.resolve()), &curr_langs)?;
-
-    let base_context = {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-
-        PyDict::new(py).into_py(py)
-    };
-
-    sigreg.call_loop("order", &config, &base_context, &curr_langs).await?;
+    sigreg.call_loop("order", &config, &ActionContext::new(), &curr_langs).await?;
 
     Ok(())
 }
