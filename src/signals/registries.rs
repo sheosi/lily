@@ -12,6 +12,7 @@ use crate::signals::{Signal, SignalEvent, SignalEventShared, SignalRegistryShare
 use anyhow::{anyhow, Result};
 use lily_common::extensions::MakeSendable;
 use log::warn;
+use tokio::task::LocalSet;
 use unic_langid::LanguageIdentifier;
 
 #[derive(Clone)]
@@ -70,13 +71,25 @@ impl SignalRegistry {
         Ok(())
     }
 
-    pub async fn call_loop(&mut self,
-        sig_name: &str,
+    pub async fn call_loops(&mut self,
         config: &Config,
         base_context: &ActionContext,
         curr_lang: &Vec<LanguageIdentifier>
     ) -> Result<()> {
-        self.signals[sig_name].borrow_mut().event_loop(self.event.clone(), config, base_context, curr_lang).await
+        let local = LocalSet::new();
+        for (name, sig) in self.signals.clone() {
+            let event = self.event.clone();
+            let config = config.clone();
+            let base_context = base_context.clone();
+            let curr_lang = curr_lang.clone();
+            local.spawn_local(async move {
+                sig.borrow_mut().event_loop(event, &config, &base_context, &curr_lang).await.unwrap();
+            });
+        }
+
+        local.await;
+        Ok(())
+        
     }
 
     pub fn get_map_ref(&self) -> &HashMap<String,Rc<RefCell<dyn Signal>>> {

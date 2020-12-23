@@ -15,15 +15,13 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{ActionSet, ActionContext};
+use crate::actions::{ActionSet, ActionContext, SharedActionSet};
 use crate::config::Config;
 
 // Other crates
 use anyhow::Result;
 use async_trait::async_trait;
-use pyo3::Python;
 use lily_common::extensions::MakeSendable;
-use log::warn;
 use unic_langid::LanguageIdentifier;
 
 pub type SignalEventShared = Arc<Mutex<SignalEvent>>;
@@ -66,17 +64,7 @@ impl OrderMap {
 
     pub fn call_order(&mut self, act_name: &str, context: &ActionContext) {
         if let Some(action_set) = self.map.get_mut(act_name) {
-            let gil = Python::acquire_gil();
-            let python = gil.python();
-
-            match action_set.lock() {
-                Ok(ref mut m) => {
-                    m.call_all(python, context);
-                }
-                Err(_) => {
-                    warn!("ActionSet \"{}\" had an error before and can't be used anymore", act_name);
-                }
-            }
+            action_set.call_all(context, ||{act_name.into()});
         }
     }
 }

@@ -74,7 +74,7 @@ pub async fn main()  -> Result<()> {
     }
 
     let mut sigreg = load_packages(&Path::new(&PACKAGES_PATH.resolve()), &curr_langs)?;
-    sigreg.call_loop("order", &config, &ActionContext::new(), &curr_langs).await?;
+    sigreg.call_loops(&config, &ActionContext::new(), &curr_langs).await?;
 
     Ok(())
 }

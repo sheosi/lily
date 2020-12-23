@@ -23,7 +23,7 @@ use pyo3::exceptions::PyOSError;
 pub type ActionRegistryShared = Rc<RefCell<ActionRegistry>>;
 
 pub trait ActionInstance {
-    fn call(&self, py: Python, context: &ActionContext) -> Result<()>;
+    fn call(&self, context: &ActionContext) -> Result<()>;
     fn get_name(&self) -> String;
 }
 
@@ -201,7 +201,10 @@ impl PythonActionInstance {
 }
 
 impl ActionInstance for PythonActionInstance {
-    fn call(&self ,py: Python, context: &ActionContext) -> Result<()> {
+    fn call(&self ,context: &ActionContext) -> Result<()> {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+
         let trig_act = self.obj.getattr(py, "trigger_action")?;
         std::env::set_current_dir(self.lily_pkg_path.as_ref())?;
         call_for_pkg(self.lily_pkg_path.as_ref(),
@@ -245,10 +248,26 @@ impl ActionSet {
         Ok(())
     }
 
-    pub fn call_all(&mut self, py: Python, context: &ActionContext) {
+    pub fn call_all(&mut self, context: &ActionContext) {
         for action in &self.acts {
-            if let Err(e) = action.call(py, context) {
+            if let Err(e) = action.call(context) {
                 error!("Action {} failed while being triggered: {}", &action.get_name(), e);
+            }
+        }
+    }
+}
+
+pub trait SharedActionSet {
+    fn call_all<F: FnOnce()->String>(&self, context: &ActionContext, f: F);
+}
+impl SharedActionSet for Arc<Mutex<ActionSet>> {
+    fn call_all<F: FnOnce()->String>(&self, context: &ActionContext, f: F) {
+        match self.lock() {
+            Ok(ref mut m) => {
+                m.call_all(context);
+            }
+            Err(_) => {
+                warn!("ActionSet of  {} had an error before and can't be used anymore", f());
             }
         }
     }
@@ -270,7 +289,7 @@ impl PyActionSet {
     fn call(&mut self, py: Python, context: &ActionContext) {
         
         match self.act_set.lock() {
-            Ok(ref mut m) => m.call_all(py, context),
+            Ok(ref mut m) => m.call_all(context),
             Err(_) => warn!("A PyActionSet had an error before and can't be used anymore")
         }
     }

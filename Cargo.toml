@@ -47,6 +47,8 @@ base64 = "^0.13" # For sending data to the online TTS and STT
 tungstenite = "^0.11" # Web sockets for online STT (0.10 because of compatibility with tokio-tungstenite)
 tokio-tungstenite = "^0.12"
 
+chrono = "^0.4"
+
 lily_common = {path = "common", default-features = false}
 
 # Localization
