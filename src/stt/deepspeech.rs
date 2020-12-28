@@ -89,7 +89,10 @@ impl Stt for DeepSpeechStt {
         let metadata = stream.finish_with_metadata(1)?;
         let transcript = &metadata.transcripts()[0];
 
-        Ok(Some(DecodeRes{hypothesis: transcript_to_string(transcript)}))
+        Ok(Some(DecodeRes{
+            hypothesis: transcript_to_string(transcript),
+            confidence: transcript.confidence()}
+        ))
     }
 
     fn get_info(&self) -> SttInfo {
