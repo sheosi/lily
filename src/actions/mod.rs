@@ -286,7 +286,7 @@ impl PyActionSet {
 
 #[pymethods]
 impl PyActionSet {
-    fn call(&mut self, py: Python, context: &ActionContext) {
+    fn call(&mut self, context: &ActionContext) {
         
         match self.act_set.lock() {
             Ok(ref mut m) => m.call_all(context),

@@ -77,7 +77,7 @@ impl SignalRegistry {
         curr_lang: &Vec<LanguageIdentifier>
     ) -> Result<()> {
         let local = LocalSet::new();
-        for (name, sig) in self.signals.clone() {
+        for (_, sig) in self.signals.clone() {
             let event = self.event.clone();
             let config = config.clone();
             let base_context = base_context.clone();
