@@ -4,6 +4,7 @@ mod nlu;
 mod path_ext;
 mod python;
 mod packages;
+mod queries;
 mod signals;
 mod stt;
 mod tts;

@@ -7,7 +7,7 @@ use std::sync::Arc;
 // This crate
 use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry};
 use crate::python::{add_py_folder, call_for_pkg, remove_from_actions, remove_from_signals};
-use crate::signals::{LocalSignalRegistry, new_signal_order, PythonSignal, SignalRegistry, SignalRegistryShared, Timer};
+use crate::signals::{LocalSignalRegistry, new_signal_order, PythonSignal, SignalRegistry, SignalRegistryShared, Timer, PollQuery};
 use crate::vars::{PYTHON_SDK_PATH, PACKAGES_PATH_ERR_MSG, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
 
 // Other crates
@@ -292,6 +292,7 @@ impl Loader for EmbeddedLoader {
         let mut sigreg = LocalSignalRegistry::new(glob_sigreg);
         sigreg.insert("order".into(), Rc::new(RefCell::new(new_signal_order(lang))))?;
         sigreg.insert("timer".into(), Rc::new(RefCell::new(Timer::new())))?;
+        sigreg.insert("private__poll_query".into(), Rc::new(RefCell::new(PollQuery::new())))?;
 
         Ok((sigreg, LocalActionRegistry::new(glob_actreg)))
     }
