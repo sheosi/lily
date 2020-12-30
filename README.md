@@ -10,26 +10,26 @@ cloned with that installed and ready beforehand.
 
 First install git LFS, for Debian/Ubuntu it is:
 
-```
+```shell
 sudo apt install git-lfs
 ```
 
 Then, no matter which OS you are under you need to initialize git LFS:
 
-```
+```shell
 git lfs install
 ```
 
 Now, you can clone the repo:
 
-```
+```shell
 git clone https://github.com/sheosi/lily
 ```
 
 Alternatively, if you already have cloned the repository but did not had lfs 
 installed, on the root folder of this folder do:
 
-```
+```shell
 git lfs pull
 ```
 
@@ -42,19 +42,19 @@ And you'll be good to go.
 #### Dependencies needed at compile time and runtime:
 
 *On Debian:*
-```
+```shell
 sudoo apt install libssldev libasound2-dev libpocketsphinx-dev libpshinxbase-dev python3-all-dev libopus-dev clang libgsl-dev
 ```
 
 *Optional* dependency for feature `extra_langs_tts` (Languages not provided by Pico Tts for local Tts):
 *Debian*
-```
+```shell
 sudo apt install libespeak-ng-dev
 ```
 
 #### Python dependencies (needed for runtime):
 
-```
+```shell
 pip3 install --user snips-nlu
 pip3 install --user fluent.runtime
 ```
@@ -67,6 +67,17 @@ need [Rust](https://www.rust-lang.org/) and cargo (bundled alongside Rust) for t
 
 `cargo build`
 
+### Debian package
+This repository can make a Debian package, however it is still dependent on 
+`snips-nlu` and `fluent.runtime` packages being installed and it does not 
+install them on it's own.
+
+To generate the Debian package.
+
+```shell
+cargo install cargo-deb
+cargo deb
+```
 
 ## Features
 
