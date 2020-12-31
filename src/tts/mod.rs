@@ -159,9 +159,9 @@ impl TtsFactory {
     }
 
     #[cfg(feature = "google_tts")]
-    fn make_cloud_tts(lang: &LanguageIdentifier, gateway_key: Option<(String, String)>, prefs: &VoiceDescr, local: Box<dyn Tts>) -> Result<Box<dyn Tts>, TtsConstructionError> {
-        if let Some((api_gateway, api_key)) = gateway_key {
-            Ok(Box::new(TtsOnlineInterface::new(IbmTts::new(lang, api_gateway.to_string(), api_key.to_string(), prefs)?, local)))
+    fn make_cloud_tts(lang: &LanguageIdentifier, gateway_key: Option<IbmTtsData>, prefs: &VoiceDescr, local: Box<dyn Tts>) -> Result<Box<dyn Tts>, TtsConstructionError> {
+        if let Some(ibm_data) = gateway_key {
+            Ok(Box::new(TtsOnlineInterface::new(IbmTts::new(lang, ibm_data.gateway, ibm_data.key, prefs)?, local)))
         }
         else {
             Ok(Box::new(TtsOnlineInterface::new(GTts::new(lang), local)))

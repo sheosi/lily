@@ -10,7 +10,7 @@ use crate::signals::{Signal, SignalEventShared};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use tokio::{task::LocalSet, time::sleep};
+use tokio::time::sleep;
 use unic_langid::LanguageIdentifier;
 
 struct UserTask {

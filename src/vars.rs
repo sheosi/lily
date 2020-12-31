@@ -15,6 +15,7 @@ pub const PICO_DATA_PATH: PathRef = PathRef::new("resources/tts");
 pub const PYTHON_SDK_PATH: PathRef = PathRef::new("resources/python");
 pub const MAIN_CONF_PATH: PathRef = PathRef::new("conf.yaml");
 pub const PS_LOG_PATH: PathRef = PathRef::new("resources/stt/pocketsphinx.log");
+pub const PYTHON_VIRTUALENV: PathRef = PathRef::new("resources/python/env");
 
 lazy_static! {
     static ref ORG_PATH: PathBuf = std::env::current_dir().expect("Couldn't get current_dir").canonicalize().expect("Failed to canonicalize current_dir");

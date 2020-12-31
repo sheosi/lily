@@ -1,5 +1,5 @@
 use crate::tts::{OnlineTtsError, Tts, TtsStatic, TtsError, TtsInfo, VoiceDescr, TtsConstructionError, negotiate_langs_res};
-use crate::vars::{NO_COMPATIBLE_LANG_MSG, DEFAULT_SAMPLES_PER_SECOND};
+use crate::vars::NO_COMPATIBLE_LANG_MSG;
 use async_trait::async_trait;
 use reqwest::Client;
 use unic_langid::{LanguageIdentifier, langid, langids};
@@ -61,7 +61,7 @@ impl GTts {
 #[async_trait(?Send)]
 impl Tts for GTts {
     async fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
-        self.engine.synth(input, &self.curr_lang).await.map(|b|Ok(Audio::new_encoded(b, DEFAULT_SAMPLES_PER_SECOND)))?
+        self.engine.synth(input, &self.curr_lang).await.map(|b|Ok(Audio::new_encoded(b)))?
     }
 
     fn get_info(&self) -> TtsInfo {

@@ -52,13 +52,6 @@ sudoo apt install libssldev libasound2-dev libpocketsphinx-dev libpshinxbase-dev
 sudo apt install libespeak-ng-dev
 ```
 
-#### Python dependencies (needed for runtime):
-
-```shell
-pip3 install --user snips-nlu
-pip3 install --user fluent.runtime
-```
-
 Note: The first time that you use a language it needs to be downloaded by the NLU, so it needs internet at that time. Also, installing them as system would make this download fail, and you would need to install the languages on your own, for english: `snips-nlu download en`
 
 ### Build process

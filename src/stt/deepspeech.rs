@@ -57,7 +57,7 @@ impl SttBatched for DeepSpeechStt {
 
         Ok(Some(DecodeRes{
             hypothesis: transcript_to_string(transcript),
-            confidence: transcript.confidence()
+            confidence: transcript.confidence() as f32
         }))
     }
 
@@ -91,7 +91,7 @@ impl Stt for DeepSpeechStt {
 
         Ok(Some(DecodeRes{
             hypothesis: transcript_to_string(transcript),
-            confidence: transcript.confidence()}
+            confidence: transcript.confidence() as f32}
         ))
     }
 

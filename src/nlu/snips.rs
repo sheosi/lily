@@ -2,14 +2,13 @@ use std::collections::HashMap;
 use std::convert::Into;
 use std::path::{Path, PathBuf};
 
-use crate::python::get_sys_path;
+use crate::python::python_has_module_path;
 use crate::nlu::compare_sets_and_train;
 use crate::nlu::{EntityDef, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponse, NluResponseSlot, NluUtterance};
 use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH};
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use pyo3::{FromPyObject, Python};
 use regex::Regex;
 use serde::Serialize;
 use snips_nlu_lib::SnipsNluEngine;
@@ -138,22 +137,7 @@ impl SnipsNluManager {
     }
 
     fn is_lang_installed(lang: &LanguageIdentifier) -> Result<bool> {
-           let gil = Python::acquire_gil();
-           let py = gil.python();
-
-           let sys_path = get_sys_path(py)?;
-           let mut found = false;
-           for path in sys_path.iter() {
-                let path_str: &str = FromPyObject::extract(path)?;
-                let path = Path::new(path_str);
-                let lang_path = path.join("snips_nlu").join("data").join(lang.language.as_str());
-                if lang_path.exists() {
-                    found = true;
-                    break;
-                }
-           }
-
-           Ok(found)
+        python_has_module_path(&Path::new("snips_nlu").join("data").join(lang.language.as_str()))
     }
 }
 

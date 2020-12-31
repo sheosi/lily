@@ -1,13 +1,15 @@
+use std::env;
 use std::cell::{RefCell, Ref};
 use std::collections::HashMap;
 use std::fs::{File, self};
 use std::io::Read;
 use std::rc::Rc;
 use std::path::Path;
+use std::process::Command;
 
 use crate::actions::ActionContext;
 use crate::signals::order::server_interface::{CAPS_MANAGER, MSG_OUTPUT};
-use crate::vars::{PYDICT_SET_ERR_MSG, NO_YAML_FLOAT_MSG};
+use crate::vars::{PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_YAML_FLOAT_MSG};
 
 use anyhow::{anyhow, Result};
 use pyo3::{conversion::IntoPy, PyErr, Python, types::{PyBool, PyList, PyDict, PyString}, PyObject, PyResult, prelude::*, wrap_pyfunction, FromPyObject, exceptions::*};
@@ -113,6 +115,26 @@ pub fn python_init() -> Result<()> {
     extern "C" fn safe_lily_impl() -> *mut pyo3::ffi::PyObject {
         unsafe{PyInit__lily_impl()}
     }
+
+    let py_env = PYTHON_VIRTUALENV.resolve();
+    std::fs::create_dir_all(&py_env)?;
+    env::set_var("PYTHON_VIRTUALENV", py_env.to_str().unwrap());
+
+    //Make sure we have all deps
+    fn check_module_installed(pkg: &str) -> Result<()> {
+        if !python_has_module_path(&Path::new(pkg))? {
+            if !Command::new("python3")
+                .args(&["-m", "pip", "install", pkg]).status()?.success() {
+                log::warn!("Could not install mandatory Python module {}", pkg);
+            }
+        }
+
+        Ok(())
+    }
+    
+    check_module_installed("snips-nlu")?;
+    check_module_installed("fluent.runtime")?;
+
 
     let mod_name = std::ffi::CString::new("_lily_impl")?.into_raw();
     unsafe {assert!(pyo3::ffi::PyImport_AppendInittab(mod_name, Some(safe_lily_impl)) != -1);};
@@ -242,6 +264,25 @@ pub fn get_inst_class_name(py: Python, instance: &PyObject) -> Option<String> {
     let type_obj = instance.getattr(py, "__class__").ok();
     let type_name = type_obj.and_then(|p|p.getattr(py, "__name__").ok());
     type_name.and_then(|p|p.extract(py).ok())
+}
+
+pub fn python_has_module_path(module_path: &Path) -> Result<bool> {
+    let gil = Python::acquire_gil();
+    let py = gil.python();
+
+    let sys_path = get_sys_path(py)?;
+    let mut found = false;
+    for path in sys_path.iter() {
+        let path_str: &str = FromPyObject::extract(path)?;
+        let path = Path::new(path_str);
+        let lang_path = path.join(module_path);
+        if lang_path.exists() {
+            found = true;
+            break;
+        }
+    }
+
+    Ok(found)
 }
 
 // Define executable module
