@@ -220,7 +220,7 @@ impl ActionInstance for PythonActionInstance {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        get_inst_class_name(py, &self.obj).unwrap()
+        get_inst_class_name(py, &self.obj).expect("Python object has not class name")
     }
 }
 

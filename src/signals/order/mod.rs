@@ -1,7 +1,7 @@
 pub mod server_interface;
 
 // Standard library
-use std::collections::HashMap;
+use std::collections::{HashMap};
 use std::sync::{Arc, Mutex};
 
 // This crate
@@ -53,8 +53,8 @@ enum OrderData {
 }
 
 fn add_order<N: NluManager + NluManagerStatic + NluManagerConf>(
-    sig_arg: serde_yaml::Value,
     nlu_man: &mut HashMap<LanguageIdentifier, NluState<N>>,
+    sig_arg: serde_yaml::Value,
     skill_name: &str,
     pkg_name: &str,
     langs: &Vec<LanguageIdentifier>
@@ -117,6 +117,7 @@ fn add_order<N: NluManager + NluManagerStatic + NluManagerConf>(
     }
     Ok(())
 }
+
 enum NluState<M: NluManager + NluManagerStatic + NluManagerConf> {
     Training(M), Done(M::NluType), InProcess
 }
@@ -237,7 +238,7 @@ fn add_slots(base_context: &ActionContext, slots: Vec<NluResponseSlot>) -> Actio
 impl<M:NluManager + NluManagerStatic + NluManagerConf> Signal for SignalOrder<M> {
     fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
 
-        add_order(sig_arg, &mut self.nlu, skill_name, pkg_name, &self.langs)?;
+        add_order(&mut self.nlu, sig_arg, skill_name, pkg_name, &self.langs)?;
         self.intent_map.add_order(skill_name, act_set);
 
         Ok(())

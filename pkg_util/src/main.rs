@@ -191,7 +191,7 @@ impl RepoData {
 fn extract_zip(zip: Bytes, out_path: &Path) -> Result<()> {
     let mut archive = ZipArchive::new(std::io::Cursor::new(zip))?;
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i).unwrap();
+        let mut file = archive.by_index(i)?;
         let file_path = out_path.join(file.name());
         if file.name().ends_with("/") {
             fs::create_dir_all(file.name())?;

@@ -11,7 +11,7 @@ use crate::signals::{Signal, SignalEvent, SignalEventShared, SignalRegistryShare
 
 use anyhow::{anyhow, Result};
 use lily_common::extensions::MakeSendable;
-use log::warn;
+use log::{error, warn};
 use tokio::task::LocalSet;
 use unic_langid::LanguageIdentifier;
 
@@ -77,13 +77,17 @@ impl SignalRegistry {
         curr_lang: &Vec<LanguageIdentifier>
     ) -> Result<()> {
         let local = LocalSet::new();
-        for (_, sig) in self.signals.clone() {
+        for (sig_name, sig) in self.signals.clone() {
             let event = self.event.clone();
             let config = config.clone();
             let base_context = base_context.clone();
             let curr_lang = curr_lang.clone();
             local.spawn_local(async move {
-                sig.borrow_mut().event_loop(event, &config, &base_context, &curr_lang).await.unwrap();
+
+                let res = sig.borrow_mut().event_loop(event, &config, &base_context, &curr_lang).await;
+                if let Err(e) = res {
+                    error!("Signal '{}' had an error: {}", sig_name, e.to_string());
+                }
             });
         }
 

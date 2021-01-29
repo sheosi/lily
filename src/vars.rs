@@ -49,6 +49,8 @@ pub const ALPHA_BETA_MSG: &str = "Setting alpha and beta failed, though this sho
 pub const SET_BEAM_MSG: &str = "Setting beam's width this wasn't expected to happen";
 #[cfg(feature = "deepspeech_stt")]
 pub const DEEPSPEECH_READ_FAIL_MSG: &str = "Failed to read deepspeech's folder";
+pub const UNEXPECTED_MSG: &str = "Something unexpected (and probably terrible) happened, this should be reported";
+
 // Other
 pub const DEFAULT_HOTWORD_SENSITIVITY: f32 = 0.43;
 pub const MIN_SCORE_FOR_ACTION: f32 = 0.3;

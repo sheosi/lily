@@ -1,7 +1,7 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 use std::mem::replace;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::ops::DerefMut;
 
 use crate::actions::ActionContext;
@@ -28,8 +28,18 @@ thread_local!{
 }
 
 
+struct Session {
+    device: String
+}
+impl Session {
+    fn new(device: String) -> Self {
+        Self {device}
+    }
+}
+
 struct SessionManager {
-    sessions: HashMap<String, SttPoolItem>,
+    sessions: HashMap<String, Arc<Session>>,
+    curr_utt_stt: HashMap<String, SttPoolItem>,
     sttset: SttSet
 }
 
@@ -37,26 +47,43 @@ impl SessionManager {
     fn new(sttset: SttSet) -> Self {
         Self {
             sessions: HashMap::new(),
+            curr_utt_stt: HashMap::new(),
             sttset
         }
     }
 
+    fn session_for(&mut self, uuid: String) -> Weak<Session> {
+        match self.sessions.entry(uuid.clone()) {
+            Entry::Occupied(o) => {
+                Arc::downgrade(o.get())
+            }
+            Entry::Vacant(v) => {
+                let arc = Arc::new(Session::new(uuid));
+                Arc::downgrade(v.insert(arc))
+            }
+        }
+    }
+
     async fn get_stt(&mut self, uuid: &str, audio:&[i16]) -> Result<&mut SttPoolItem> {
-        if !self.sessions.contains_key(uuid) {
-            let mut stt = self.sttset.get_session_for(audio).await?;
+        if !self.curr_utt_stt.contains_key(uuid) {
+            let mut stt = self.sttset.guess_stt(audio).await?;
             stt.begin_decoding().await?;
-            self.sessions.insert(uuid.to_owned(),stt);
+            self.curr_utt_stt.insert(uuid.to_owned(),stt);
         }
 
-        Ok(self.sessions.get_mut(uuid).unwrap())
+        Ok(self.curr_utt_stt.get_mut(uuid).unwrap())
     }
 
     fn end_session(&mut self, uuid: &str) -> Result<()> {
-        if self.sessions.remove(uuid).is_some() {
-            Ok(())
+        match self.sessions.remove(uuid)  {
+            Some(_) => {Ok(())}
+            None => {Err(anyhow!("{} had no active session", uuid))}
         }
-        else {
-            Err(anyhow!(format!("Tried to end session of client '{}' which doesn't exists", uuid)))
+    }
+    fn end_utt(&mut self, uuid: &str) -> Result<()> {
+        match self.curr_utt_stt.remove(uuid)  {
+            Some(_) => {Ok(())}
+            None => {Err(anyhow!("{} had no active session", uuid))}
         }
     }
 }
@@ -107,7 +134,6 @@ pub struct MqttInterface {
 
 
 
-
 impl MqttInterface {
     pub fn new(curr_langs: &Vec<LanguageIdentifier>) -> Result<Self> {
         let common_out = Arc::new(Mutex::new(vec![]));
@@ -148,10 +174,13 @@ impl MqttInterface {
         };
         
         let mut tts_set = HashMap::new();
-        for lang in &self.curr_langs {
+        let mut def_lang = None;
+        for (i,lang) in self.curr_langs.iter().enumerate() {
             let tts = TtsFactory::load_with_prefs(lang, config.tts.prefer_online, config.tts.ibm.clone(), &voice_prefs)?;
             info!("Using tts {}", tts.get_info());
             tts_set.insert(lang, tts);
+
+            if i == 0 {def_lang = Some(lang);}
         }
 
         loop {
@@ -172,6 +201,7 @@ impl MqttInterface {
                         "lily/nlu_process" => {
                             let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
                             let (as_raw, _) = decode_ogg_opus(msg_nlu.audio, DEFAULT_SAMPLES_PER_SECOND)?;
+                            let session = sessions.session_for(msg_nlu.satellite.clone());
                             {
                                 let stt = sessions.get_stt(&msg_nlu.satellite, &as_raw).await?;
 
@@ -192,7 +222,9 @@ impl MqttInterface {
                                 }
                             }
                             if msg_nlu.is_final {
-                                sessions.end_session(&msg_nlu.satellite)?;
+                                if let Err(e) = sessions.end_utt(&msg_nlu.satellite) {
+                                    warn!("{}",e);
+                                }
                             }
                             
                         }
@@ -221,10 +253,30 @@ impl MqttInterface {
                             audio
                         }
                         SendData::String((str, lang)) => {
-                            let tts = tts_set.get_mut(&lang).unwrap();
-                            tts.synth_text(&str).await?
+                            match tts_set.get_mut(&lang) {
+                                Some(tts) => {
+                                    tts.synth_text(&str).await?
+                                }
+                                None => {
+                                    warn!("Received answer for language {:?} not in the config or that has no TTS, using default", lang);
+                                    let def = def_lang.as_ref().expect("There's no language assigned, need one at least");
+                                    match tts_set.get_mut(def) {
+                                        Some(tts) => {
+                                            tts.synth_text(&str).await?
+                                        }
+                                        None => {
+                                            warn!("Default has no tts either, sending empty audio");
+                                            Audio::new_empty(DEFAULT_SAMPLES_PER_SECOND)
+                                        }
+                                    } 
+                                }
+                            }
                         }
                     };
+
+                    if let Err(e) = sessions.end_session(&uuid_str) {
+                        warn!("{}",e);
+                    }
                     let msg_pack = encode::to_vec(&MsgAnswerVoice{data: audio_data.into_encoded()?})?;
                     client.publish(format!("lily/{}/say_msg", uuid_str), QoS::AtMostOnce, false, msg_pack).await?;
                 }

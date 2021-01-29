@@ -166,6 +166,11 @@ async fn receive (
                             //rec_mut.start_recording().expect(AUDIO_REC_START_ERR_MSG);
                         }
                     }
+                    _ if topic.ends_with("/session_end") => {
+                        debug!("Received msg from server");
+                        let msg: MsgAnswerVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
+
+                    }
                     _ => {}
                 }
             }
@@ -335,6 +340,7 @@ pub async fn main() -> anyhow::Result<()> {
     let (client, mut eloop) = make_mqtt_conn(&mqtt_conn, Some(last_will))?;
 
     client.subscribe(&format!("lily/{}/say_msg", mqtt_conn.name), QoS::AtMostOnce).await?;
+    client.subscribe(&format!("lily/{}/session_end", mqtt_conn.name), QoS::AtMostOnce).await?;
     client.subscribe("lily/satellite_welcome", QoS::AtMostOnce).await?;
     let client_share = Rc::new(RefCell::new(client));
 

@@ -5,6 +5,7 @@ use std::ops::{Deref, DerefMut};
 use std::rc::{Rc, Weak};
 
 use crate::stt::{IbmSttData, Stt, SttError, SttFactory};
+use crate::vars::UNEXPECTED_MSG;
 
 use anyhow::Result;
 use unic_langid::LanguageIdentifier;
@@ -87,14 +88,14 @@ impl Deref for SttPoolItem {
 
 impl DerefMut for SttPoolItem {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.value.as_mut().unwrap()
+        self.value.as_mut().expect("Tried to access an empty pool item")
     }
 }
 
 impl Drop for SttPoolItem {
     fn drop(&mut self) {
         if let Some(pool) = self.pool.upgrade() {
-            pool.borrow_mut().return_val(self.value.take().unwrap());
+            pool.borrow_mut().return_val(self.value.take().expect("Tried to drop an empty pool item"));
         }
     }
 }
@@ -123,9 +124,9 @@ impl SttSet {
         Ok(())
     }
 
-    pub async fn get_session_for(&mut self, audio: &[i16]) -> Result<SttPoolItem> {
+    pub async fn guess_stt(&mut self, audio: &[i16]) -> Result<SttPoolItem> {
         let lang = self.detector.detect_lang(audio).await?;
-        Ok(self.map.get_mut(&lang).unwrap().take().await?)
+        Ok(self.map.get_mut(&lang).expect(UNEXPECTED_MSG).take().await?)
     }
 }
 

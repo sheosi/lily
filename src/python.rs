@@ -118,7 +118,7 @@ pub fn python_init() -> Result<()> {
 
     let py_env = PYTHON_VIRTUALENV.resolve();
     std::fs::create_dir_all(&py_env)?;
-    env::set_var("PYTHON_VIRTUALENV", py_env.to_str().unwrap());
+    env::set_var("PYTHON_VIRTUALENV", py_env.as_os_str());
 
     //Make sure we have all deps
     fn check_module_installed(pkg: &str) -> Result<()> {
@@ -385,8 +385,6 @@ fn play_file(py: Python, uuid: &str, input: &str) -> PyResult<PyObject> {
     else {
         Ok(py.None())
     }*/
-
-    // TODO: Send audio
 }
 
 #[pyfunction]

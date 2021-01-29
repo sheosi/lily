@@ -157,7 +157,6 @@ impl WatsonSocket {
 	}
 
 	async fn get_answer(&mut self) -> Result<Option<DecodeRes>, OnlineSttError> {
-		// Ignore {"state": "listening"}
 		loop {
 			if let Message::Text(response_str) = self.socket.next().await.unwrap().expect("Error reading message") {
 				let response_res: Result<WatsonResponse,_> = serde_json::from_str(&response_str);
