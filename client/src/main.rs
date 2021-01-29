@@ -336,7 +336,7 @@ pub async fn main() -> anyhow::Result<()> {
     };
 
     let msg = MsgGoodbye{satellite: mqtt_conn.name.clone()};
-    let last_will = LastWill::new("lily/disconnected", QoS::ExactlyOnce, encode::to_vec(&msg)?);
+    let last_will = LastWill::new("lily/disconnected", encode::to_vec(&msg)?, QoS::ExactlyOnce, false);
     let (client, mut eloop) = make_mqtt_conn(&mqtt_conn, Some(last_will))?;
 
     client.subscribe(&format!("lily/{}/say_msg", mqtt_conn.name), QoS::AtMostOnce).await?;
