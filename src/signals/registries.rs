@@ -8,9 +8,9 @@ use std::sync::{Arc, Mutex};
 use crate::actions::{ActionContext, ActionSet};
 use crate::config::Config;
 use crate::signals::{Signal, SignalEvent, SignalEventShared, SignalRegistryShared};
+use crate::vars::POISON_MSG;
 
 use anyhow::{anyhow, Result};
-use lily_common::extensions::MakeSendable;
 use log::{error, warn};
 use tokio::task::LocalSet;
 use unic_langid::LanguageIdentifier;
@@ -130,7 +130,7 @@ impl LocalSignalRegistry {
 
     pub fn add_sigact_rel(&mut self,sig_name: &str, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
         if sig_name == "event" {
-            self.event.lock().sendable()?.add(skill_name, act_set);
+            self.event.lock().expect(POISON_MSG).add(skill_name, act_set);
             Ok(())
         }
         else {

@@ -23,7 +23,6 @@ use crate::config::Config;
 // Other crates
 use anyhow::Result;
 use async_trait::async_trait;
-use lily_common::extensions::MakeSendable;
 use unic_langid::LanguageIdentifier;
 
 pub type SignalEventShared = Arc<Mutex<SignalEvent>>;

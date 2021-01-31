@@ -7,6 +7,7 @@ use crate::actions::{ActionContext, ActionSet};
 use crate::config::Config;
 use crate::queries::{Condition, Query, QueryRegistry};
 use crate::signals::{Signal, SignalEventShared};
+use crate::vars::POISON_MSG;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -53,7 +54,7 @@ impl Signal for PollQuery {
             sleep(Duration::from_secs(30)).await;
             for task in &self.tasks {
                 if task.condition.check(&task.query) {
-                    task.act_set.lock().unwrap().call_all(base_context);
+                    task.act_set.lock().expect(POISON_MSG).call_all(base_context);
                 }
             }
         }

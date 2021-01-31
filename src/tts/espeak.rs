@@ -50,10 +50,11 @@ enum CallbackResponse {
 }
 
 extern "C" fn espeak_callback(wav: *mut c_short, num_samples: c_int, _: *mut espeak_EVENT) -> c_int {
+    // Note: I'm going to leave this poison handling since we are treating directly with C code
     let wav_slc = unsafe {std::slice::from_raw_parts(wav, num_samples.try_into().expect("The received number of parts can't fit in a usize, is it negative?"))};
     match (*SOUND_BUFFER).lock() {
         Ok(buffer) => {
-            buffer.borrow_mut().extend_from_slice(wav_slc);
+            ;
         },
         Err(poisoned) => {
             warn!("Espeak TTS buffer was corrupted");

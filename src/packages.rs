@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry};
 use crate::python::{add_py_folder, call_for_pkg, remove_from_actions, remove_from_signals};
 use crate::signals::{LocalSignalRegistry, new_signal_order, PythonSignal, SignalRegistry, SignalRegistryShared, Timer, PollQuery};
-use crate::vars::{PYTHON_SDK_PATH, PACKAGES_PATH_ERR_MSG, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
+use crate::vars::{PACKAGES_PATH_ERR_MSG, POISON_MSG, PYTHON_SDK_PATH, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
 
 // Other crates
 use anyhow::{anyhow, Result};
@@ -89,7 +89,7 @@ pub fn load_skills(sigreg: &mut LocalSignalRegistry, action_registry: &LocalActi
                     for (act_name, act_arg) in actions.into_iter() {
                         let act = action_registry.get(&act_name).ok_or_else(||anyhow!("Action {} is not registered",act_name))?;
                         let act_inst = act.borrow().instance(&act_arg, pkg_path.clone());
-                        act_set.lock().unwrap().add_action(act_inst)?;
+                        act_set.lock().expect(POISON_MSG).add_action(act_inst)?;
                     }
 
 

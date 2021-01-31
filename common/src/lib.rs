@@ -1,6 +1,5 @@
 pub mod audio;
 pub mod communication;
-pub mod extensions;
 #[cfg(feature = "client")]
 pub mod hotword;
 pub mod other;
@@ -34,7 +33,7 @@ mod tests {
             let mut rec_dev = RecDevice::new();
             rec_dev.start_recording()?;
             std::thread::sleep(std::time::Duration::from_millis(50));
-            let audio = AudioRaw::new_raw(rec_dev.read()?.unwrap().to_owned(), DEFAULT_SAMPLES_PER_SECOND);
+            let audio = AudioRaw::new_raw(rec_dev.read()?.expect("No audio").to_owned(), DEFAULT_SAMPLES_PER_SECOND);
             rec_dev.stop_recording()?;
             let opus = audio.to_ogg_opus()?;
             let audio2 = decode_ogg_opus(opus, DEFAULT_SAMPLES_PER_SECOND)?;
@@ -49,7 +48,7 @@ mod tests {
             let mut rec_dev = RecDevice::new();
             rec_dev.start_recording()?;
             std::thread::sleep(std::time::Duration::from_millis(40));
-            let audio = AudioRaw::new_raw(rec_dev.read()?.unwrap().to_owned(), DEFAULT_SAMPLES_PER_SECOND);
+            let audio = AudioRaw::new_raw(rec_dev.read()?.expect("No audio").to_owned(), DEFAULT_SAMPLES_PER_SECOND);
             rec_dev.stop_recording()?;
             let opus = audio.to_ogg_opus()?;
             let audio2 = decode_ogg_opus(opus, DEFAULT_SAMPLES_PER_SECOND)?;

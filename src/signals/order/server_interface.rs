@@ -11,12 +11,11 @@ use crate::python::add_context_data;
 use crate::signals::{SignalEventShared, SignalOrder};
 use crate::stt::{SttPool, SttPoolItem, SttSet};
 use crate::tts::{Gender, TtsFactory, VoiceDescr};
-use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
+use crate::vars::{DEFAULT_SAMPLES_PER_SECOND, POISON_MSG};
 
 use anyhow::{anyhow, Result};
 use lily_common::audio::{Audio, decode_ogg_opus};
 use lily_common::communication::*;
-use lily_common::extensions::MakeSendable;
 use log::{error, info, warn};
 use rmp_serde::{decode, encode};
 use rumqttc::{Event, Packet, QoS};
@@ -64,14 +63,15 @@ impl SessionManager {
         }
     }
 
-    async fn get_stt(&mut self, uuid: &str, audio:&[i16]) -> Result<&mut SttPoolItem> {
-        if !self.curr_utt_stt.contains_key(uuid) {
-            let mut stt = self.sttset.guess_stt(audio).await?;
-            stt.begin_decoding().await?;
-            self.curr_utt_stt.insert(uuid.to_owned(),stt);
+    async fn get_stt(&mut self, uuid: String, audio:&[i16]) -> Result<&mut SttPoolItem> {
+        match self.curr_utt_stt.entry(uuid) {
+            Entry::Occupied(o) => Ok(o.into_mut()),
+            Entry::Vacant(v) => {
+                let mut stt = self.sttset.guess_stt(audio).await?;
+                stt.begin_decoding().await?;
+                Ok(v.insert(stt))
+            }
         }
-
-        Ok(self.curr_utt_stt.get_mut(uuid).unwrap())
     }
 
     fn end_session(&mut self, uuid: &str) -> Result<()> {
@@ -203,7 +203,7 @@ impl MqttInterface {
                             let (as_raw, _) = decode_ogg_opus(msg_nlu.audio, DEFAULT_SAMPLES_PER_SECOND)?;
                             let session = sessions.session_for(msg_nlu.satellite.clone());
                             {
-                                let stt = sessions.get_stt(&msg_nlu.satellite, &as_raw).await?;
+                                let stt = sessions.get_stt(msg_nlu.satellite.clone(), &as_raw).await?;
 
                                 stt.process(&as_raw).await?;
                                 if msg_nlu.is_final {
@@ -231,7 +231,7 @@ impl MqttInterface {
                         "lily/event" => {
                             let msg: MsgEvent = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
                             let context = add_context_data(base_context,&self.curr_langs[0], &msg.satellite);
-                            signal_event.lock().unwrap().call(&msg.event, &context);
+                            signal_event.lock().expect(POISON_MSG).call(&msg.event, &context);
                         }
                         "lily/disconnected" => {
                             let msg: MsgGoodbye = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
@@ -245,7 +245,7 @@ impl MqttInterface {
                 _ => {}
             }
             {
-                let msg_vec = replace(self.common_out.lock().unwrap().deref_mut(), Vec::new());
+                let msg_vec = replace(self.common_out.lock().expect(POISON_MSG).deref_mut(), Vec::new());
                 for (msg_data, uuid_str) in msg_vec {
 
                     let audio_data = match msg_data {
@@ -299,12 +299,12 @@ impl MqttInterfaceOutput {
     }
 
     pub fn answer(&mut self, input: &str, lang: &LanguageIdentifier, to: String) -> Result<()> {
-        self.client.lock().sendable()?.push((SendData::String((input.into(), lang.to_owned())), to));
+        self.client.lock().expect(POISON_MSG).push((SendData::String((input.into(), lang.to_owned())), to));
         Ok(())
     }
 
     pub fn send_audio(&mut self, audio: Audio, to: String) -> Result<()> {
-        self.client.lock().sendable()?.push((SendData::Audio(audio), to));
+        self.client.lock().expect(POISON_MSG).push((SendData::Audio(audio), to));
         Ok(())
     }
 }

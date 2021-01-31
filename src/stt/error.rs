@@ -62,5 +62,8 @@ pub enum OnlineSttError {
     OpusEncode(#[from] opus::Error),
 
     #[error("Websocket failure")]
-	WebSocket(#[from] tungstenite::Error)
+    WebSocket(#[from] tungstenite::Error),
+    
+    #[error("Connection closed")]
+    ConnectionClosed
 }

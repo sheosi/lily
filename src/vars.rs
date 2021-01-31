@@ -50,6 +50,7 @@ pub const SET_BEAM_MSG: &str = "Setting beam's width this wasn't expected to hap
 #[cfg(feature = "deepspeech_stt")]
 pub const DEEPSPEECH_READ_FAIL_MSG: &str = "Failed to read deepspeech's folder";
 pub const UNEXPECTED_MSG: &str = "Something unexpected (and probably terrible) happened, this should be reported";
+pub const POISON_MSG: &str = "A shared lock had a panic in another thread";
 
 // Other
 pub const DEFAULT_HOTWORD_SENSITIVITY: f32 = 0.43;

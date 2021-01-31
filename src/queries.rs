@@ -4,11 +4,21 @@ use std::rc::Rc;
 
 pub type QueryData = HashMap<String, String>;
 pub trait Query {
-    
+    fn is_monitorable(&self) -> bool;
 }
 
 struct PythonQuery {
 
+}
+
+impl Query for PythonQuery {
+    fn is_monitorable(&self) -> bool {true}
+}
+
+impl PythonQuery {
+    pub fn new() -> Self {
+        PythonQuery {}
+    }
 }
 
 struct DummyQuery {
@@ -16,7 +26,7 @@ struct DummyQuery {
 }
 
 impl Query for DummyQuery {
-    
+    fn is_monitorable(&self) -> bool {true}
 }
 
 impl DummyQuery {

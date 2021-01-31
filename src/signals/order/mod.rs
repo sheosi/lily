@@ -10,8 +10,8 @@ use crate::config::Config;
 use crate::nlu::{EntityInstance, EntityDef, EntityData, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponseSlot, NluUtterance};
 use crate::python::{try_translate, try_translate_all};
 use crate::stt::DecodeRes;
-use crate::signals::{MakeSendable, OrderMap, Signal, SignalEventShared};
-use crate::vars::MIN_SCORE_FOR_ACTION;
+use crate::signals::{OrderMap, Signal, SignalEventShared};
+use crate::vars::{MIN_SCORE_FOR_ACTION, POISON_MSG};
 use self::server_interface::MqttInterface;
 
 // Other crates
@@ -154,7 +154,8 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
     pub fn end_loading(&mut self) -> Result<()> {
         for lang in &self.langs {
             let (train_path, model_path) = M::get_paths();
-            let val  = match self.nlu.insert(lang.clone(), NluState::InProcess).unwrap() {
+            let err = || {anyhow!("Received language '{}' has not been registered", lang.to_string())};
+            let val  = match self.nlu.insert(lang.clone(), NluState::InProcess).ok_or_else(err)? {
                 NluState::Training(mut nlu_man) => {
                     if M::is_lang_compatible(lang) {
                         nlu_man.ready_lang(lang)?;
@@ -178,11 +179,12 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
 
     pub async fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &ActionContext, lang: &LanguageIdentifier) -> Result<()> {
         match decode_res {
-            None => event_signal.lock().sendable()?.call("empty_reco", base_context),
+            None => event_signal.lock().expect(POISON_MSG).call("empty_reco", base_context),
             Some(decode_res) => {
 
                 if !decode_res.hypothesis.is_empty() {
-                    match self.nlu.get_mut(&lang).unwrap() {
+                    const ERR_MSG: &str = "Received language to the NLU was not registered";
+                    match self.nlu.get_mut(&lang).expect(ERR_MSG) {
                         NluState::Done(ref mut nlu) => {
                             let result = nlu.parse(&decode_res.hypothesis).await.map_err(|err|anyhow!("Failed to parse: {:?}", err))?;
                             info!("{:?}", result);
@@ -197,11 +199,11 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
                                     info!("Action called");
                                 }
                                 else {
-                                    event_signal.lock().sendable()?.call("unrecognized", &base_context);
+                                    event_signal.lock().expect(POISON_MSG).call("unrecognized", &base_context);
                                 }
                             }
                             else {
-                                event_signal.lock().sendable()?.call("unrecognized", &base_context);
+                                event_signal.lock().expect(POISON_MSG).call("unrecognized", &base_context);
                             }
 
                         },
@@ -211,7 +213,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf> SignalOrder<M> {
                     }
                 }
                 else {
-                    event_signal.lock().sendable()?.call("empty_reco", &base_context);
+                    event_signal.lock().expect(POISON_MSG).call("empty_reco", &base_context);
                 }
             }
         }

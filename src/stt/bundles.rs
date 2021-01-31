@@ -35,7 +35,7 @@ impl<S: SttBatched> Stt for SttBatcher<S> {
     }
 
     async fn process(&mut self, audio: &[i16]) -> Result<(), SttError> {
-        self.copy_audio.append_audio(audio, DEFAULT_SAMPLES_PER_SECOND);
+        self.copy_audio.append_audio(audio, DEFAULT_SAMPLES_PER_SECOND)?;
         Ok(())
     }
 
