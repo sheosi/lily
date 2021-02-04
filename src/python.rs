@@ -1,18 +1,17 @@
 use std::env;
-use std::cell::{RefCell, Ref};
 use std::collections::HashMap;
 use std::fs::{File, self};
 use std::io::Read;
-use std::rc::Rc;
 use std::path::Path;
 use std::process::Command;
 
 use crate::actions::ActionContext;
+use crate::packages::{call_for_pkg, PYTHON_LILY_PKG};
 use crate::signals::order::server_interface::{CAPS_MANAGER, MSG_OUTPUT};
 use crate::vars::{PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_YAML_FLOAT_MSG};
 
 use anyhow::{anyhow, Result};
-use pyo3::{conversion::IntoPy, PyErr, Python, types::{PyBool, PyList, PyDict, PyString}, PyObject, PyResult, prelude::*, wrap_pyfunction, FromPyObject, exceptions::*};
+use pyo3::{conversion::IntoPy, PyErr, Python, types::{PyBool, PyList, PyDict}, PyObject, PyResult, prelude::*, wrap_pyfunction, FromPyObject, exceptions::*};
 use pyo3::{type_object::PyTypeObject};
 use fluent_langneg::negotiate::{negotiate_languages, NegotiationStrategy};
 use lily_common::audio::Audio;
@@ -20,52 +19,6 @@ use log::info;
 use serde_yaml::Value;
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
-
-thread_local! {
-    pub static PYTHON_LILY_PKG: RefString = RefString::new("<None>");
-}
-
-pub struct RefString {
-    current_val: RefCell<Rc<String>>,
-    default_val: Rc<String>
-}
-
-impl RefString {
-    pub fn new(def: &str) -> Self {
-        let default_val = Rc::new(def.to_owned());
-        Self {current_val: RefCell::new(default_val.clone()), default_val}
-    }
-
-    pub fn clear(&self) {
-        self.current_val.replace(self.default_val.clone());
-    }
-
-    pub fn set(&self, val: Rc<String>) {
-        self.current_val.replace(val);
-    }
-
-    pub fn borrow(&self) -> Ref<String> {
-        Ref::map(self.current_val.borrow(), |r|r.as_ref())
-    }
-}
-
-fn extract_name(path: &Path) -> Result<Rc<String>> {
-    let os_str = path.file_name().ok_or_else(||anyhow!("Can't get package path's name"))?;
-    let pkg_name_str = os_str.to_str().ok_or_else(||anyhow!("Can't transform package path name to str"))?;
-    Ok(Rc::new(pkg_name_str.to_string()))
-}
-
-pub fn call_for_pkg<F, R>(path: &Path, f: F) -> Result<R> where F: FnOnce(Rc<String>) -> R {
-    let canon_path = path.canonicalize()?;
-    let pkg_name = extract_name(&canon_path)?;
-    std::env::set_current_dir(&canon_path)?;
-    PYTHON_LILY_PKG.with(|c| c.set(pkg_name.clone()));
-    let r = f(pkg_name);
-    PYTHON_LILY_PKG.with(|c| c.clear());
-
-    Ok(r)
-}
-
 
 pub fn yaml_to_python(py: Python, yaml: &serde_yaml::Value) -> PyObject {
     // If for some reason we can't transform, just panic, but the odds should be really small
@@ -205,7 +158,7 @@ pub fn try_translate_all(input: &str, lang: &str) -> Result<Vec<String>> {
 pub fn add_py_folder(python: Python, actions_path: &Path) -> Result<(Vec<(PyObject, PyObject)>, Vec<(PyObject, PyObject)>)> {
     call_for_pkg::<_, Result<()>>(actions_path.parent().ok_or_else(||anyhow!("Can't get parent of path, this is an invalid path for python data"))?, |_|{
         // Add folder to sys.path
-        add_to_sys_path(python, actions_path).map_err(|py_err|anyhow!("Python error while adding to sys.path: {:?}", py_err))?;
+        sys_path::add(python, actions_path).map_err(|py_err|anyhow!("Python error while adding to sys.path: {:?}", py_err))?;
         info!("Add folder: {}", actions_path.to_str().ok_or_else(||anyhow!("Coudln't transform actions_path into string"))?);
 
 
@@ -270,7 +223,7 @@ pub fn python_has_module_path(module_path: &Path) -> Result<bool> {
     let gil = Python::acquire_gil();
     let py = gil.python();
 
-    let sys_path = get_sys_path(py)?;
+    let sys_path = sys_path::get(py)?;
     let mut found = false;
     for path in sys_path.iter() {
         let path_str: &str = FromPyObject::extract(path)?;
@@ -298,6 +251,7 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add("_play_file", wrap_pyfunction!(play_file, m)?)?;
     m.add("conf", wrap_pyfunction!(get_conf_string, m)?)?;
     m.add("has_cap", wrap_pyfunction!(client_has_cap,m)?)?;
+    m.add("_add_action", wrap_pyfunction!(add_action, m)?)?;
     m.add_class::<crate::actions::PyActionSet>()?;
 
     Ok(())
@@ -400,24 +354,37 @@ fn get_conf_string(py: Python, conf_name: &str) -> PyResult<PyObject> {
 }
 
 #[pyfunction]
-fn client_has_cap(_py: Python, client: &str, cap: &str) -> PyResult<bool> {
+fn client_has_cap(client: &str, cap: &str) -> PyResult<bool> {
     CAPS_MANAGER.with(|c| c.borrow().has_cap(client, cap));
     Ok(true)
 }
 
-pub fn get_sys_path<'a>(py: Python::<'a>)-> Result<&'a PyList> {
-    let sys = py.import("sys").map_err(|py_err|anyhow!("Failed while importing sys package: {:?}", py_err))?;
+#[pyfunction]
+fn add_action(act_class: Py<PyAny>) -> PyResult<()> {
     
-    let obj = sys.get("path").map_err(|py_err|anyhow!("Error while getting path module from sys: {:?}", py_err))?;
-    obj.cast_as::<PyList>().map_err(|py_err|anyhow!("What? Couldn't get path as a List: {:?}", py_err))
+    Ok(())
 }
 
-pub fn add_to_sys_path(py: Python, path: &Path) -> Result<()> {
+mod sys_path {
+    use std::path::Path;
 
-    let path_str = path.to_str().ok_or_else(||anyhow!("Couldn't transform given path to add to sys.path into an str"))?;
-    get_sys_path(py)?.insert(1, PyString::new(py, path_str))?;
+    use anyhow::{anyhow, Result};
+    use pyo3::{types::{PyList, PyString}, Python};
 
-    Ok(())
+    pub fn get<'a>(py: Python::<'a>)-> Result<&'a PyList> {
+        let sys = py.import("sys").map_err(|py_err|anyhow!("Failed while importing sys package: {:?}", py_err))?;
+        
+        let obj = sys.get("path").map_err(|py_err|anyhow!("Error while getting path module from sys: {:?}", py_err))?;
+        obj.cast_as::<PyList>().map_err(|py_err|anyhow!("What? Couldn't get path as a List: {:?}", py_err))
+    }
+
+    pub fn add(py: Python, path: &Path) -> Result<()> {
+
+        let path_str = path.to_str().ok_or_else(||anyhow!("Couldn't transform given path to add to sys.path into an str"))?;
+        self::get(py)?.insert(1, PyString::new(py, path_str))?;
+
+        Ok(())
+    }
 }
 
 pub fn set_python_locale(py: Python, lang_id: &LanguageIdentifier) -> Result<()> {

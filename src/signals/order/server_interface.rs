@@ -30,6 +30,7 @@ thread_local!{
 struct Session {
     device: String
 }
+
 impl Session {
     fn new(device: String) -> Self {
         Self {device}
@@ -131,7 +132,6 @@ pub struct MqttInterface {
     common_out: Arc<Mutex<Vec<(SendData, String)>>>,
     curr_langs: Vec<LanguageIdentifier>
 }
-
 
 
 impl MqttInterface {

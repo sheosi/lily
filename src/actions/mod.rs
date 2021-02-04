@@ -11,7 +11,8 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::python::{call_for_pkg, get_inst_class_name, HalfBakedError, PyException, remove_from_actions, yaml_to_python};
+use crate::packages::call_for_pkg;
+use crate::python::{get_inst_class_name, HalfBakedError, PyException, remove_from_actions, yaml_to_python};
 
 // Other crates
 use anyhow::{anyhow, Result};

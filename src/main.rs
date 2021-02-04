@@ -18,7 +18,7 @@ use std::rc::Rc;
 use crate::actions::ActionContext;
 use crate::config::Config;
 use crate::packages::load_packages;
-use crate::python::python_init;
+use crate::python::{python_init, set_python_locale};
 
 // Other crates
 use anyhow::Result;
@@ -71,7 +71,7 @@ pub async fn main()  -> Result<()> {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
-        crate::python::set_python_locale(py, &curr_langs[0])?;
+        set_python_locale(py, &curr_langs[0])?;
     }
 
     let mut sigreg = load_packages(&Path::new(&PACKAGES_PATH.resolve()), &curr_langs)?;

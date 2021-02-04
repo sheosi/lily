@@ -1,12 +1,12 @@
 // Standard library
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 
 // This crate
 use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry};
-use crate::python::{add_py_folder, call_for_pkg, remove_from_actions, remove_from_signals};
+use crate::python::{add_py_folder, remove_from_actions, remove_from_signals};
 use crate::signals::{LocalSignalRegistry, new_signal_order, PythonSignal, SignalRegistry, SignalRegistryShared, Timer, PollQuery};
 use crate::vars::{PACKAGES_PATH_ERR_MSG, POISON_MSG, PYTHON_SDK_PATH, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
 
@@ -16,6 +16,10 @@ use pyo3::Python;
 use thiserror::Error;
 use log::{error, info, warn};
 use unic_langid::LanguageIdentifier;
+
+thread_local! {
+    pub static PYTHON_LILY_PKG: RefString = RefString::new("<None>");
+}
 
 trait IntoMapping {
     fn into_mapping(self) -> Option<serde_yaml::Mapping>;
@@ -28,6 +32,47 @@ impl IntoMapping for serde_yaml::Value {
             _ => None
         }
     }
+}
+
+pub fn call_for_pkg<F, R>(path: &Path, f: F) -> Result<R> where F: FnOnce(Rc<String>) -> R {
+    let canon_path = path.canonicalize()?;
+    let pkg_name = extract_name(&canon_path)?;
+    std::env::set_current_dir(&canon_path)?;
+    PYTHON_LILY_PKG.with(|c| c.set(pkg_name.clone()));
+    let r = f(pkg_name);
+    PYTHON_LILY_PKG.with(|c| c.clear());
+
+    Ok(r)
+}
+
+pub struct RefString {
+    current_val: RefCell<Rc<String>>,
+    default_val: Rc<String>
+}
+
+impl RefString {
+    pub fn new(def: &str) -> Self {
+        let default_val = Rc::new(def.to_owned());
+        Self {current_val: RefCell::new(default_val.clone()), default_val}
+    }
+
+    pub fn clear(&self) {
+        self.current_val.replace(self.default_val.clone());
+    }
+
+    pub fn set(&self, val: Rc<String>) {
+        self.current_val.replace(val);
+    }
+
+    pub fn borrow(&self) -> Ref<String> {
+        Ref::map(self.current_val.borrow(), |r|r.as_ref())
+    }
+}
+
+fn extract_name(path: &Path) -> Result<Rc<String>> {
+    let os_str = path.file_name().ok_or_else(||anyhow!("Can't get package path's name"))?;
+    let pkg_name_str = os_str.to_str().ok_or_else(||anyhow!("Can't transform package path name to str"))?;
+    Ok(Rc::new(pkg_name_str.to_string()))
 }
 
 fn load_trans(python: Python, pkg_path: &Path, curr_langs: &Vec<LanguageIdentifier>) -> Result<()>{

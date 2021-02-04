@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 pub type QueryData = HashMap<String, String>;
+pub type QueryResult = Vec<String>;
 pub trait Query {
     fn is_monitorable(&self) -> bool;
+    fn execute(&mut self, data: QueryData) -> QueryResult;
 }
 
 struct PythonQuery {
@@ -13,6 +15,9 @@ struct PythonQuery {
 
 impl Query for PythonQuery {
     fn is_monitorable(&self) -> bool {true}
+    fn execute(&mut self, _data: QueryData) -> QueryResult {
+        std::todo!();
+    }
 }
 
 impl PythonQuery {
@@ -27,6 +32,9 @@ struct DummyQuery {
 
 impl Query for DummyQuery {
     fn is_monitorable(&self) -> bool {true}
+    fn execute(&mut self, _data: QueryData) -> QueryResult {
+        vec![]
+    }
 }
 
 impl DummyQuery {
