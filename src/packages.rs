@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 // This crate
-use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry};
+use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry, PythonAction};
 use crate::python::{add_py_folder, remove_from_actions, remove_from_signals};
 use crate::signals::{LocalSignalRegistry, new_signal_order, PythonSignal, SignalRegistry, SignalRegistryShared, Timer, PollQuery};
 use crate::vars::{PACKAGES_PATH_ERR_MSG, POISON_MSG, PYTHON_SDK_PATH, WRONG_YAML_ROOT_MSG, WRONG_YAML_KEY_MSG, WRONG_YAML_SECTION_TYPE_MSG};
@@ -280,10 +280,11 @@ impl PythonLoader {
         }?;
 
         let mut actreg = base_actreg.clone();
-        match actreg.extend_and_init_classes(py, action_classes) {
+        match PythonAction::extend_and_init_classes_local(&mut actreg, py, action_classes) {
             Ok(()) => {Ok(())}
             Err(e) => {
                 remove_from_actions(py, &e.cls_names).expect(&format!("Couldn't remove '{:?}' from actions", e.cls_names));
+                // Also, drop all actions from this package
                 sigreg.minus(base_sigreg).remove_from_global();
                 Err(e.source)
             }
@@ -299,13 +300,15 @@ impl Loader for PythonLoader {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
+        // Same as load_package_python, but since those actions are crucial we
+        // want to make sure they exist and propagate error otherwise
         let path = &PYTHON_SDK_PATH.resolve();
         let (initial_signals, initial_actions) = add_py_folder(py, &PYTHON_SDK_PATH.resolve())?;
         let mut sigreg = LocalSignalRegistry::new(glob_sigreg);
         PythonSignal::extend_and_init_classes_py_local(&mut sigreg, py, path, initial_signals)?;
 
-        let mut actreg =LocalActionRegistry::new(glob_actreg);
-        actreg.extend_and_init_classes(py, initial_actions)?;
+        let mut actreg = LocalActionRegistry::new(glob_actreg);
+        PythonAction::extend_and_init_classes_local(&mut actreg, py, initial_actions)?;
 
         Ok((sigreg, actreg))
     }

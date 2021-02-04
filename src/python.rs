@@ -174,17 +174,17 @@ pub fn add_py_folder(python: Python, actions_path: &Path) -> Result<(Vec<(PyObje
         Ok(())
     })??;
 
-    let signal_classes: Vec<(PyObject, PyObject)> = {
-        let sgn_cls_obj = python.import("lily_ext")?.get("_signal_classes")?;
+    let ext_mod = python.import("lily_ext")?;
+
+    let extract_dict = |name: &str| -> Result<Vec<(PyObject,PyObject)>> {
+        let sgn_cls_obj = ext_mod.get(name)?; // Get objects
+        ext_mod.set_item(name, PyDict::new(python))?; // Reset dict
         let sgn_dict = sgn_cls_obj.downcast::<PyDict>().map_err(|e|anyhow!("signal_classes is not a dict: {}",e))?;
-        sgn_dict.items().extract()?
+        Ok(sgn_dict.items().extract()?)
     };
 
-    let action_classes: Vec<(PyObject, PyObject)> = {
-        let act_cls_obj = python.import("lily_ext")?.get("_action_classes")?;
-        let act_dict = act_cls_obj.downcast::<PyDict>().map_err(|e|anyhow!("action_classes is not a dict: {}",e))?;
-        act_dict.items().extract()?
-    };
+    let signal_classes= extract_dict("_signal_classes")?;
+    let action_classes = extract_dict("_action_classes")?;
 
     Ok((signal_classes, action_classes))
 }
@@ -251,7 +251,6 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add("_play_file", wrap_pyfunction!(play_file, m)?)?;
     m.add("conf", wrap_pyfunction!(get_conf_string, m)?)?;
     m.add("has_cap", wrap_pyfunction!(client_has_cap,m)?)?;
-    m.add("_add_action", wrap_pyfunction!(add_action, m)?)?;
     m.add_class::<crate::actions::PyActionSet>()?;
 
     Ok(())
@@ -357,12 +356,6 @@ fn get_conf_string(py: Python, conf_name: &str) -> PyResult<PyObject> {
 fn client_has_cap(client: &str, cap: &str) -> PyResult<bool> {
     CAPS_MANAGER.with(|c| c.borrow().has_cap(client, cap));
     Ok(true)
-}
-
-#[pyfunction]
-fn add_action(act_class: Py<PyAny>) -> PyResult<()> {
-    
-    Ok(())
 }
 
 mod sys_path {

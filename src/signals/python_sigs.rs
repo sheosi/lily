@@ -66,14 +66,11 @@ impl PythonSignal {
     
             for (key, val) in  &signal_classes {
                 let name = key.to_string();
-                // We'll get old items, let's ignore them
-                if !reg.contains(&name) {
-                    let pyobj = val.call(py, PyTuple::empty(py), None).map_err(|py_err|
-                        anyhow!("Python error while instancing action \"{}\": {:?}", name, py_err.to_string())
-                    )?;
-                    let sigobj: Rc<RefCell<dyn Signal>> = Rc::new(RefCell::new(PythonSignal::new(key.clone(), pyobj, pkg_path.clone())));
-                    sig_to_add.push((name, sigobj));
-                }
+                let pyobj = val.call(py, PyTuple::empty(py), None).map_err(|py_err|
+                    anyhow!("Python error while instancing signal \"{}\": {:?}", name, py_err.to_string())
+                )?;
+                let sigobj: Rc<RefCell<dyn Signal>> = Rc::new(RefCell::new(PythonSignal::new(key.clone(), pyobj, pkg_path.clone())));
+                sig_to_add.push((name, sigobj));
             }
             Ok(sig_to_add)
         };
