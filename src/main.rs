@@ -3,7 +3,7 @@ mod config;
 mod nlu;
 mod path_ext;
 mod python;
-mod packages;
+mod skills;
 mod queries;
 mod signals;
 mod stt;
@@ -17,7 +17,7 @@ use std::rc::Rc;
 // This crate
 use crate::actions::ActionContext;
 use crate::config::Config;
-use crate::packages::load_packages;
+use crate::skills::load_packages;
 use crate::python::{python_init, set_python_locale};
 
 // Other crates

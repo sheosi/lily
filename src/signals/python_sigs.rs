@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::actions::{ActionSet ,PyActionSet, ActionContext};
 use crate::config::Config;
-use crate::packages::call_for_pkg;
+use crate::skills::call_for_pkg;
 use crate::python::{HalfBakedError, remove_from_signals, yaml_to_python};
 use crate::signals::{LocalSignalRegistry, Signal, SignalEventShared, SignalRegistry};
 

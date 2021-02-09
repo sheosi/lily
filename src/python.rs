@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::actions::ActionContext;
-use crate::packages::{call_for_pkg, PYTHON_LILY_PKG};
+use crate::skills::{call_for_pkg, PYTHON_LILY_PKG};
 use crate::signals::order::server_interface::{CAPS_MANAGER, MSG_OUTPUT};
 use crate::vars::{PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_YAML_FLOAT_MSG};
 
