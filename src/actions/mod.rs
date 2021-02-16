@@ -11,8 +11,9 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::skills::call_for_pkg;
-use crate::python::{get_inst_class_name, HalfBakedError, PyException, remove_from_actions, yaml_to_python};
+use crate::collections::{BaseRegistry, GlobalReg, LocalBaseRegistry};
+use crate::skills::call_for_skill;
+use crate::python::{get_inst_class_name, HalfBakedError, PyException, remove_from_actions};
 
 // Other crates
 use anyhow::{anyhow, Result};
@@ -29,90 +30,12 @@ pub trait ActionInstance {
 }
 
 pub trait Action {
-    fn instance(&self, yaml: &serde_yaml::Value, lily_pkg_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send>;
+    fn instance(&self, lily_skill_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send>;
 }
 
 
-pub struct ActionRegistry {
-    map: HashMap<String, Rc<RefCell<dyn Action + Send>>>
-}
-
-impl fmt::Debug for ActionRegistry {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ActionRegistry")
-         .field("map", &self.map.keys().collect::<Vec<&String>>())
-         .finish()
-    }
-}
-
-impl ActionRegistry {
-
-    pub fn new() -> Self {
-        Self{map: HashMap::new()}
-    }
-}
-
-pub struct LocalActionRegistry {
-    map: HashMap<String, Rc<RefCell<dyn Action + Send>>>,
-    global_reg: ActionRegistryShared
-}
-
-impl fmt::Debug for LocalActionRegistry {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("LocalActionRegistry")
-         .field("map", &self.map.keys().collect::<Vec<&String>>())
-         .field("global_reg", &self.global_reg)
-         .finish()
-    }
-}
-
-impl LocalActionRegistry {
-    pub fn new(global_reg: ActionRegistryShared) -> Self {
-        Self {map: HashMap::new(), global_reg}
-    }
-
-    pub fn extend(&mut self, other: Self) {
-        self.map.extend(other.map)
-    }
-
-    pub fn get(&self, action_name: &str) -> Option<&Rc<RefCell<dyn Action + Send>>> {
-        self.map.get(action_name)
-    }
-
-    pub fn minus(&self, other: &Self) -> Self {
-        let mut res = Self{
-            map: HashMap::new(),
-            global_reg: self.global_reg.clone()
-        };
-
-        for (k,v) in &self.map {
-            if !other.map.contains_key(k) {
-                res.map.insert(k.clone(), v.clone());
-            }
-        }
-
-        res
-    }
-
-    pub fn remove_from_global(&self) {
-        for (sgnl,_) in &self.map {
-            self.global_reg.borrow_mut().map.remove(sgnl);
-        }
-    }
-
-}
-
-impl Clone for LocalActionRegistry {
-    fn clone(&self) -> Self {        
-        let dup_refs = |pair:(&String, &Rc<RefCell<dyn Action + Send>>)| {
-            let (key, val) = pair;
-            (key.to_owned(), val.clone())
-        };
-
-        let new_map: HashMap<String, Rc<RefCell<dyn Action + Send>>> = self.map.iter().map(dup_refs).collect();
-        Self{map: new_map, global_reg: self.global_reg.clone()}
-    }
-}
+pub type ActionRegistry = BaseRegistry<dyn Action + Send>;
+pub type LocalActionRegistry = LocalBaseRegistry<dyn Action + Send, ActionRegistry>;
 
 
 #[derive(Debug)]
@@ -132,8 +55,8 @@ impl PythonAction {
         action_classes: Vec<(PyObject, PyObject)>)
         -> Result<(), HalfBakedError> {
 
-        let actions = Self::extend_and_init_classes(&mut act_reg.global_reg.borrow_mut(), py, action_classes)?;
-        act_reg.map.extend(actions);
+        let actions = Self::extend_and_init_classes(&mut act_reg.get_global_mut(), py, action_classes)?;
+        act_reg.extend_with_map(actions);
         Ok(())
     }
 
@@ -161,7 +84,7 @@ impl PythonAction {
 
                 for (name, action) in act_to_add {
                     res.insert(name.clone(), action.clone());
-                    act_reg.map.insert(name, action);
+                    act_reg.insert(name, action);
                 }
 
                 Ok(res)
@@ -169,7 +92,7 @@ impl PythonAction {
 
             Err(e) => {
                 Err(HalfBakedError::from(
-                    HalfBakedError::gen_diff(&act_reg.map, action_classes),
+                    HalfBakedError::gen_diff(&act_reg.get_map_ref(), action_classes),
                     e
                 ))
             }
@@ -178,10 +101,10 @@ impl PythonAction {
 }
 
 impl Action for PythonAction {
-    fn instance(&self, yaml: &serde_yaml::Value, lily_pkg_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send> {
+    fn instance(&self, lily_skill_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send> {
         let gil = Python::acquire_gil();
         let py = gil.python();
-        Box::new(PythonActionInstance::new(py, self.obj.clone(), yaml, lily_pkg_path))
+        Box::new(PythonActionInstance::new(py, self.obj.clone(), lily_skill_path))
     }
 }
 
@@ -199,13 +122,12 @@ impl Drop for PythonAction {
 
 pub struct PythonActionInstance {
     obj: PyObject,
-    args: PyObject,
-    lily_pkg_path: Arc<PathBuf>
+    lily_skill_path: Arc<PathBuf>
 }
 
 impl PythonActionInstance {
-    pub fn new (py: Python, act_obj:Py<PyAny>, yaml: &serde_yaml::Value, lily_pkg_path:Arc<PathBuf>) -> Self {
-        Self{obj: act_obj, args: yaml_to_python(py, &yaml), lily_pkg_path}
+    pub fn new (py: Python, act_obj:Py<PyAny>, lily_skill_path:Arc<PathBuf>) -> Self {
+        Self{obj: act_obj, lily_skill_path}
     }
 }
 
@@ -215,11 +137,11 @@ impl ActionInstance for PythonActionInstance {
         let py = gil.python();
 
         let trig_act = self.obj.getattr(py, "trigger_action")?;
-        std::env::set_current_dir(self.lily_pkg_path.as_ref())?;
-        call_for_pkg(self.lily_pkg_path.as_ref(),
+        std::env::set_current_dir(self.lily_skill_path.as_ref())?;
+        call_for_skill(self.lily_skill_path.as_ref(),
         |_|trig_act.call(
             py,
-            (self.args.clone_ref(py), context.clone()),
+            (context.clone(),),
             None)
         ).py_excep::<PyOSError>()??;
 
@@ -249,6 +171,10 @@ impl fmt::Debug for ActionSet {
 impl ActionSet {
     pub fn create() -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(Self {acts: Vec::new()}))
+    }
+
+    pub fn with(action: Box<dyn ActionInstance + Send>) -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self {acts: vec![action]}))
     }
 
     pub fn add_action(&mut self, action: Box<dyn ActionInstance + Send>) -> Result<()>{

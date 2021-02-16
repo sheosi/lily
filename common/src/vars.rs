@@ -14,7 +14,7 @@ pub const DEEPSPEECH_DATA_PATH: PathRef = PathRef::new("resources/stt/deepspeech
 pub const PICO_DATA_PATH: PathRef = PathRef::new("resources/tts");
 pub const SNOWBOY_DATA_PATH: PathRef = PathRef::new("resources/hotword");
 pub const PYTHON_SDK_PATH: PathRef = PathRef::new("resources/python");
-pub const PACKAGES_PATH: PathRef = PathRef::new("packages");
+pub const SKILLS_PATH: PathRef = PathRef::new("skills");
 pub const LAST_SPEECH_PATH: PathRef = PathRef::new("last_speech.ogg");
 pub const MAIN_CONF_PATH: PathRef = PathRef::new("conf.yaml");
 pub const PS_LOG_PATH: PathRef = PathRef::new("resources/stt/pocketsphinx.log");
@@ -41,7 +41,7 @@ impl PathRef {
 pub const WRONG_YAML_KEY_MSG: &str = "A Yaml entry must be string convertable, report this together with the Yaml that caused this error";
 pub const WRONG_YAML_ROOT_MSG: &str = "A 'skill_defs.yaml' file must start with a hash";
 pub const WRONG_YAML_SECTION_TYPE_MSG: &str = "A skill section must be a hash";
-pub const PACKAGES_PATH_ERR_MSG: &str = "Packages folder can't be read";
+pub const SKILLS_PATH_ERR_MSG: &str = "Skills folder can't be read";
 pub const AUDIO_REC_START_ERR_MSG: &str = "Failed while trying to start audio recording, please report this";
 pub const AUDIO_REC_STOP_ERR_MSG: &str = "Failed while trying to stop audio recording, please report this";
 pub const CLOCK_TOO_EARLY_MSG :&str = "Somehow the system's clock time is before unix epoch, this is not supported, check your system's time and the CMOS battery";

@@ -1,0 +1,45 @@
+# Actions ########################################################################
+# In the future:
+# action:
+#   name: base_answers
+#   arg1: skndskds
+#
+# or
+#
+# action:
+#   base_answers:
+#     arg1: asassas
+say_hello:
+  samples: $order_say_hello
+  action: base_answer 
+
+say_name:
+  samples: $order_say_name
+  action: base_answer
+
+repeat:
+  samples: $order_repeat
+  entities:
+    what_to_repeat:
+      kind:
+        data:
+          - $data1
+          - $data2
+
+
+  action: base_answer
+
+say_time:
+  samples: $order_say_time
+  action: say_date_time
+
+say_date:
+  samples: $order_say_date
+  action: say_date_time
+
+events:
+  - action: event_handling
+  - lily_start # Called by lily executable when it's ready to serve petitions
+  - init_reco
+  - unrecognized
+  - empty_reco # Called by Lily when active voice ends and nothing is recorded

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::convert::Into;
+use std::fmt::{self, Debug};
 use std::path::{Path, PathBuf};
 
 use crate::python::python_has_module_path;
@@ -49,6 +50,7 @@ pub struct EntityValue {
     synonnyms: String
 }
 
+#[derive(Debug)]
 pub struct SnipsNluManager {
     intents: Vec<(String, Vec<NluUtterance>)>,
     entities: HashMap<String, EntityDef>
@@ -223,8 +225,15 @@ impl NluManagerConf for SnipsNluManager {
 
 /// Nlu ////////////////////////////////////////////////////////////////////////////////////////////
 
+
 pub struct SnipsNlu {
     engine: SnipsNluEngine,
+}
+
+impl Debug for SnipsNlu {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt.debug_struct("SnipsNlu").finish()
+    }
 }
 
 impl SnipsNlu {

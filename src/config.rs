@@ -35,7 +35,7 @@ pub struct Config {
 
 
     #[serde(flatten)]
-    pub pkgs_conf: HashMap<String, Value>
+    pub skills_conf: HashMap<String, Value>
 }
 
 fn def_hotword_sensitivity() -> f32 {
@@ -49,7 +49,7 @@ impl Default for Config {
             language: None,
             hotword_sensitivity: DEFAULT_HOTWORD_SENSITIVITY,
             debug_record_active_speech: false,
-            pkgs_conf: HashMap::new(),
+            skills_conf: HashMap::new(),
             mqtt: ConnectionConf::default(),
             tts: TtsData::default()
         }
@@ -69,10 +69,10 @@ impl Config {
     
     }
 
-    pub fn get_package_path(&self, pkg_name: &str, pkg_path: &str) -> Option<&str> {
-        self.pkgs_conf.get(pkg_name).and_then(|m| {
+    pub fn get_package_path(&self, skill_name: &str, skill_path: &str) -> Option<&str> {
+        self.skills_conf.get(skill_name).and_then(|m| {
             let mut curr_map = m;
-            for path_part in pkg_path.split("/") {
+            for path_part in skill_path.split("/") {
                 match curr_map.get(path_part) {
                     Some(inner_data) => curr_map = inner_data,
                     None => return None

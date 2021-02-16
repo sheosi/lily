@@ -22,7 +22,8 @@ from _lily_impl import conf
 
 _action_classes: Dict[str, Any] = {}
 _signal_classes: Dict[str, Any] = {}
-packages_translations = {}
+_query_classes:  Dict[str, Any] = {}
+skills_translations = {}
 
 #pylint: disable=invalid-name
 class __ProtocolErrs:
@@ -96,29 +97,32 @@ def __compare_class_with(cls: Any, model: Any) -> __ProtocolErrs:
 
     return res
 
+def __compare_had_errors(cls: Any, model:Any, title:str, name: str) -> bool:
+    cls_err = __compare_class_with(cls, model)
+    if cls_err.has_errors():
+        _lily_impl.log_error(f"{title.capitalize()} {name} doesn't conform to the {title} protocol: {cls_err}. Won't be loaded")
+    else:
+        if cls_err.has_warns():
+            _lily_impl.log_warn(f"{title.capitalize()} {name} might have some problems: {cls_err}")
+
+    return cls_err.has_errors()
 
 class ActionProtocol:
     """Just an example action to compare to incoming actions"""
-    def trigger_action(self, args, context):
-        """This function is called when an action is triggered. 'args' is the
-        yaml data in python form (variables, dicts ...) comming from skill
-        definition while 'context' is filled by the signal, and mostly will have
-        things like slots or other relevant data"""
+    def trigger_action(self, context):
+        """This function is called when an action is triggered. 'context' is
+        filled by the signal, and mostly will have things like slots
+        or other relevant data"""
 
 
 def action(name: str):
-    """Declares a class an action, it will be available for skills to use. To 
+    """Declares a class an action, it will be available for skills to use. To
     learn more see the ActionProtocol class. Note: the class will be checked at
     runtime and might be rejected if it doesn't conform to the ActionProtocol
     (will also be checked at compile time with mypy and Python 3.8)"""
     def inner_deco(cls: ActionProtocol):
-        cls_err = __compare_class_with(cls, ActionProtocol)
-        if cls_err.has_errors():
-            _lily_impl.log_error(f"Action {name} doesn't conform to the action protocol: {cls_err}. Won't be loaded")
-        else:
-            if cls_err.has_warns():
-                _lily_impl.log_warn(f"Action {name} might have some problems: {cls_err}")
-
+        
+        if not __compare_had_errors(cls, ActionProtocol, 'Action', name):
             _action_classes[name] = cls
 
         return cls
@@ -127,10 +131,9 @@ def action(name: str):
 
 
 class SignalProtocol:
-    """The definition of a signal. A signal is in charge of reacting according
-    to the configuration in each skill (passed by 'args' as Python variables
-    from Yaml data) by activating an ActionSet"""
-    def add_sig_receptor(self, args: Any, skill_name: str, pkg_name: str, actset: _lily_impl.PyActionSet):
+    """The definition of a signal. A signal react when some event has happened
+       by activating an ActionSet"""
+    def add_sig_receptor(self, args: Dict[str, str], intent_name: str, skill_name: str, actset: _lily_impl.PyActionSet):
         """Called by the app to add  saet of actions that should be executed in
         relation to some event"""
 
@@ -145,22 +148,32 @@ class SignalProtocol:
         future)"""
 
 def signal(name: str):
-    """Declares a class a signal, it will be available for skills to react to.
-    To learn more see the SignalProtocol class. Note: the class will be checked
-    at runtime and might be reject if doesn't conform to the SignalProtocol
-    (will also be checked at compile time with mypy and Python 3.8)"""
+    """Declares a class a signal.To learn more see the SignalProtocol class.
+    Note: the class will be checked at runtime and might be reject if doesn't
+    conform to the SignalProtocol (will also be checked at compile time with
+    mypy and Python 3.8)"""
     def inner_deco(cls):
-        cls_err = __compare_class_with(cls, SignalProtocol)
-        if cls_err.has_errors():
-            _lily_impl.log_error(f"Signal {name} doesn't conform to the signal protocol: {cls_err}. Won't be loaded")
-        else:
-            if cls_err.has_warns():
-                _lily_impl.log_warn(f"Signal {name} might have some problems: {cls_err}")
-
+        if not __compare_had_errors(cls, SignalProtocol, 'Signal', name):
             _signal_classes[name] = cls
+
         return cls
 
     return inner_deco
+
+
+class QueryProtocol:
+    pass
+
+def query(name: str):
+    """Declares a class a query, it will """
+    def inner_deco(cls):
+        if not __compare_had_errors(cls, QueryProtocol, 'Query', name):
+            _query_classes[name] = cls
+
+        return cls
+    return inner_deco
+
+
 
 def __gen_bundle(lang: str, trans_path: Path) -> FluentBundle:
     bundle = FluentBundle([lang])
@@ -203,14 +216,14 @@ def __set_translations(curr_langs_str: List[str]):
 
         bundles: Dict[str, FluentBundle] = reduce( add_to_dict, neg_langs, {})
 
-        packages_translations[_lily_impl._get_curr_lily_package()] = TransPack(bundles, default_lang)
+        skills_translations[_lily_impl._get_curr_lily_package()] = TransPack(bundles, default_lang)
 
     else:
         _lily_impl.log_warn("Translations not present in " + os.getcwd())
 
 
 def _gen_trans_list(trans_name: str, lang: str) -> Tuple[FluentBundle, List[Any]]:
-    translations = packages_translations[_lily_impl._get_curr_lily_package()]
+    translations = skills_translations[_lily_impl._get_curr_lily_package()]
     if lang in translations.current_langs:
         try:
             trans = translations.current_langs[lang].get_message(trans_name)
@@ -293,18 +306,3 @@ def answer(output: str, context: Dict[str, str]):
         _lily_impl._say(uuid, output, context["__lily_data_lang"])
     else:
         _lily_impl.log_error(f"Satellite '{uuid}' doesn't implement 'voice' capapbility, answer can't be sent")
-
-
-@action(name="say")
-class Say():
-    def trigger_action(self, args: str, context: Dict[str, Any]):
-        answer(translate(args, context), context)
-
-@action(name="play_file")
-class PlayFile():
-    def trigger_action(self, args: str, context: Dict[str, Any]):
-        uuid = context["__lily_data_satellite"]
-        if _lily_impl.has_cap(uuid, 'voice'):
-            _lily_impl._play_file(uuid ,args)
-        else:
-            _lily_impl.log_error(f"Satellite '{uuid}' doesn't implement 'voice', audio can't be sent")

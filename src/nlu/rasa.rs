@@ -18,7 +18,7 @@ use serde_yaml::Value;
 use thiserror::Error;
 use unic_langid::{langid, LanguageIdentifier};
 
-
+#[derive(Debug)]
 pub struct RasaNlu {
     client: Client,
     _process: Child
@@ -122,6 +122,7 @@ struct RasaNluPipelineElement {
 }
 
 
+#[derive(Debug)]
 pub struct RasaNluManager {
     intents: Vec<(String, Vec<NluUtterance>)>,
     synonyms: Vec<EntityData>

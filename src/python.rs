@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::actions::ActionContext;
-use crate::skills::{call_for_pkg, PYTHON_LILY_PKG};
+use crate::skills::{call_for_skill, PYTHON_LILY_SKILL};
 use crate::signals::order::server_interface::{CAPS_MANAGER, MSG_OUTPUT};
 use crate::vars::{PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_YAML_FLOAT_MSG};
 
@@ -155,8 +155,8 @@ pub fn try_translate_all(input: &str, lang: &str) -> Result<Vec<String>> {
 /// Imports every module in the passed path then it returns 
 /// the unfiltered lists (with both old and new) of signals
 /// (the first one) and actions (the second one)
-pub fn add_py_folder(python: Python, actions_path: &Path) -> Result<(Vec<(PyObject, PyObject)>, Vec<(PyObject, PyObject)>)> {
-    call_for_pkg::<_, Result<()>>(actions_path.parent().ok_or_else(||anyhow!("Can't get parent of path, this is an invalid path for python data"))?, |_|{
+pub fn add_py_folder(python: Python, actions_path: &Path) -> Result<(Vec<(PyObject, PyObject)>, Vec<(PyObject, PyObject)>, Vec<(PyObject, PyObject)>)> {
+    call_for_skill::<_, Result<()>>(actions_path.parent().ok_or_else(||anyhow!("Can't get parent of path, this is an invalid path for python data"))?, |_|{
         // Add folder to sys.path
         sys_path::add(python, actions_path).map_err(|py_err|anyhow!("Python error while adding to sys.path: {:?}", py_err))?;
         info!("Add folder: {}", actions_path.to_str().ok_or_else(||anyhow!("Coudln't transform actions_path into string"))?);
@@ -185,8 +185,9 @@ pub fn add_py_folder(python: Python, actions_path: &Path) -> Result<(Vec<(PyObje
 
     let signal_classes= extract_dict("_signal_classes")?;
     let action_classes = extract_dict("_action_classes")?;
+    let query_classes = extract_dict("_query_classes")?;
 
-    Ok((signal_classes, action_classes))
+    Ok((signal_classes, action_classes, query_classes))
 }
 
 pub fn remove_from_signals(py: Python, list: &Vec<Py<PyAny>>) -> Result<()> {
@@ -272,7 +273,7 @@ fn python_say(py: Python, uuid: &str, text: &str, lang: &str) -> PyResult<PyObje
 
 #[pyfunction]
 fn get_current_package( ) -> PyResult<String> {
-    PYTHON_LILY_PKG.with(|n|
+    PYTHON_LILY_SKILL.with(|n|
         Ok(n.borrow().clone())
     )
 }
@@ -322,7 +323,6 @@ fn play_file(py: Python, uuid: &str, input: &str) -> PyResult<PyObject> {
                 let mut buffer = vec![0; fs::metadata(&input)?.len() as usize];
                 f.read(&mut buffer)?;
 
-                // We don't know the actual sps, so let's just have 0
                 output.send_audio(Audio::new_encoded(buffer), uuid.to_string()).py_excep::<PyAttributeError>()?;
             }
             _=>{}
@@ -343,7 +343,7 @@ fn play_file(py: Python, uuid: &str, input: &str) -> PyResult<PyObject> {
 #[pyfunction]
 fn get_conf_string(py: Python, conf_name: &str) -> PyResult<PyObject> {
     let curr_conf = crate::config::GLOBAL_CONF.with(|c|c.borrow().clone());
-    let conf_data = PYTHON_LILY_PKG.with(|n| {
+    let conf_data = PYTHON_LILY_SKILL.with(|n| {
         curr_conf.get_package_path(&(&n).borrow(), conf_name)
     });
     Ok(match conf_data {

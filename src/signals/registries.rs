@@ -1,33 +1,25 @@
 // Standard library
-use std::fmt;
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use crate::actions::{ActionContext, ActionSet};
+use crate::actions::ActionContext;
 use crate::config::Config;
-use crate::signals::{Signal, SignalEvent, SignalEventShared, SignalRegistryShared};
-use crate::vars::POISON_MSG;
+use crate::collections::{BaseRegistry, GlobalReg, LocalBaseRegistry};
+use crate::signals::{Signal, SignalEvent, SignalEventShared, SignalOrderCurrent, SignalRegistryShared};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
+use delegate::delegate;
 use log::{error, warn};
 use tokio::task::LocalSet;
 use unic_langid::LanguageIdentifier;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SignalRegistry {
     event: SignalEventShared,
-    signals: HashMap<String, Rc<RefCell<dyn Signal>>>
-}
-
-impl fmt::Debug for SignalRegistry {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SignalRegistry")
-            .field("event", &self.event)
-            .field("signals", &self.signals.keys().cloned().collect::<Vec<String>>().join(","))
-            .finish()
-    }
+    order: Option<Rc<RefCell<SignalOrderCurrent>>>,
+    base: BaseRegistry<dyn Signal>
 }
 
 impl SignalRegistry {
@@ -35,27 +27,16 @@ impl SignalRegistry {
     pub fn new() -> Self {
         Self {
             event: Arc::new(Mutex::new(SignalEvent::new())),
-            signals: HashMap::new()
+            order: None,
+            base: BaseRegistry::new()
         }
-    }
-
-    pub fn contains(&self, name: &str) -> bool {
-        self.signals.contains_key(name)
-    }
-
-    pub fn insert(&mut self, sig_name: String, signal: Rc<RefCell<dyn Signal>>) -> Result<()> {
-        match self.signals.contains_key(&sig_name) {
-            false => {self.signals.insert(sig_name, signal);Ok(())},
-            true => Err(anyhow!(format!("Signal {} already exists", sig_name)))
-        }
-        
     }
 
     pub fn end_load(&mut self, curr_langs: &Vec<LanguageIdentifier>) -> Result<()> {
 
         let mut to_remove = Vec::new();
 
-        for (sig_name, signal) in self.signals.iter_mut() {
+        for (sig_name, signal) in self.base.iter_mut() {
             if let Err(e) = signal.borrow_mut().end_load(curr_langs) {
                 warn!("Signal \"{}\" had trouble in \"end_load\", will be disabled, error: {}", &sig_name, e);
 
@@ -65,7 +46,7 @@ impl SignalRegistry {
 
         // Delete any signals which had problems during end_load
         for sig_name in &to_remove {
-            self.signals.remove(sig_name);
+            self.base.remove(sig_name);
         }
 
         Ok(())
@@ -77,7 +58,7 @@ impl SignalRegistry {
         curr_lang: &Vec<LanguageIdentifier>
     ) -> Result<()> {
         let local = LocalSet::new();
-        for (sig_name, sig) in self.signals.clone() {
+        for (sig_name, sig) in self.base.clone() {
             let event = self.event.clone();
             let config = config.clone();
             let base_context = base_context.clone();
@@ -96,90 +77,67 @@ impl SignalRegistry {
         
     }
 
-    pub fn get_map_ref(&self) -> &HashMap<String,Rc<RefCell<dyn Signal>>> {
-        &self.signals
+    delegate!{to self.base{
+        pub fn contains(&self, name: &str) -> bool;
+        pub fn get_map_ref(&mut self) -> &HashMap<String,Rc<RefCell<dyn Signal>>>;
+    }}
+}
+
+impl GlobalReg<dyn Signal> for SignalRegistry {
+    fn remove(&mut self, sig_name: &str) {
+        self.base.remove(sig_name)
+    }
+
+    fn insert(&mut self, sig_name: String, signal: Rc<RefCell<dyn Signal>>) -> Result<()> {
+        self.base.insert(sig_name, signal)
     }
 }
 
 // To show each package just those signals available to them
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct LocalSignalRegistry {
     event: SignalEventShared,
-    signals: HashMap<String, Rc<RefCell<dyn Signal>>>,
-    global_reg: SignalRegistryShared
+    base: LocalBaseRegistry<dyn Signal, SignalRegistry>
 }
 
-impl fmt::Debug for LocalSignalRegistry {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("LocalSignalRegistry")
-            .field("event", &self.event)
-            .field("signals", &self.signals.keys().cloned().collect::<Vec<String>>().join(","))
-            .field("global_reg", &self.global_reg)
-            .finish()
-    }
-}
 
 impl LocalSignalRegistry {
+    
     pub fn new(global_reg: SignalRegistryShared) -> Self {
         Self {
             event: {global_reg.borrow().event.clone()},
-            signals: HashMap::new(),
-            global_reg: {global_reg.clone()}
+            base: LocalBaseRegistry::new(global_reg.clone())
         }
     }
 
-    pub fn add_sigact_rel(&mut self,sig_name: &str, sig_arg: serde_yaml::Value, skill_name: &str, pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
-        if sig_name == "event" {
-            self.event.lock().expect(POISON_MSG).add(skill_name, act_set);
-            Ok(())
-        }
-        else {
-            match self.signals.get(sig_name) {
-                Some(signal) => signal.borrow_mut().add(sig_arg, skill_name, pkg_name, act_set),
-                None => Err(anyhow!("Signal named \"{}\" was not found", sig_name))
-            }
-        }
+    pub fn extend(&mut self, other: LocalSignalRegistry) {
+        self.base.extend(other.base);
     }
 
-    pub fn insert(&mut self, sig_name: String, signal: Rc<RefCell<dyn Signal>>) -> Result<()> {
-        (*self.global_reg).borrow_mut().insert(sig_name.clone(), signal.clone())?;
-        self.signals.insert(sig_name, signal);
-
-        Ok(())
-    }
-
-    pub fn extend(&mut self, other: Self) {
-        self.signals.extend(other.signals);
-    }
-
-    pub fn extend_with_map(&mut self, other: HashMap<String, Rc<RefCell<dyn Signal>>>) {
-        self.signals.extend(other);
-    }
-
-    pub fn minus(&self, other: &Self) -> Self {
-        let mut res = Self{
-            event: self.event.clone(),
-            signals: HashMap::new(),
-            global_reg: self.global_reg.clone()
-        };
-
-        for (k,v) in &self.signals {
-            if !other.signals.contains_key(k) {
-                res.signals.insert(k.clone(), v.clone());
-            }
-        }
-
-        res
-    }
-
-    pub fn remove_from_global(&self) {
-        for (sgnl,_) in &self.signals {
-            self.global_reg.borrow_mut().signals.remove(sgnl);
+    pub fn minus(&self, other: &Self) -> Self{
+        let new_base = self.base.minus(&other.base);
+        Self { 
+            event: {self.event.clone()},
+            base: new_base
         }
     }
 
-    pub fn get_global_mut(&self) -> std::cell::RefMut<SignalRegistry> {
-        (*self.global_reg).borrow_mut()
+    
+    pub fn get_sig_order(&self) -> Option<Rc<RefCell<SignalOrderCurrent>>> {
+        self.get_global_mut().order.clone()
     }
+
+    pub fn get_sig_event(&self) -> Arc<Mutex<SignalEvent>> {
+        self.event.clone()
+    }
+
+    // Just reuse methods
+    delegate! {to self.base{
+        pub fn insert(&mut self, sig_name: String, signal: Rc<RefCell<dyn Signal>>) -> Result<()>;
+        pub fn extend_with_map(&mut self, other: HashMap<String, Rc<RefCell<dyn Signal>>>);
+        pub fn remove_from_global(&self);
+        pub fn get(&self, action_name: &str) -> Option<&Rc<RefCell<dyn Signal>>>;
+        pub fn get_global_mut(&self) -> RefMut<SignalRegistry>;
+    }}
 }
 

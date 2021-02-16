@@ -1,15 +1,17 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::time::{Duration};
 use std::sync::{Arc, Mutex};
 
 use crate::actions::{ActionContext, ActionSet, SharedActionSet};
 use crate::config::Config;
-use crate::signals::{Signal, SignalEventShared};
+use crate::signals::{Signal, SignalEventShared, UserSignal};
 use crate::vars::UNEXPECTED_MSG;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime, Utc};
+use log::warn;
 use tokio::{spawn, time::sleep};
 use serde::{de::{self, Visitor}, Deserialize, Deserializer};
 use unic_langid::LanguageIdentifier;
@@ -50,6 +52,13 @@ impl<'de> Deserialize<'de> for MyDateTime {
         deserializer.deserialize_i32(MyDateTimeVisitor)
     }
 }
+impl MyDateTime {
+    fn parse(date_str: &str) ->  Result<Self> {
+        let naive = NaiveDateTime::parse_from_str(date_str, "%Y-%m-%d %H:%M:%S")?;
+        let date = DateTime::<Utc>::from_utc(naive, Utc);
+        Ok(Self {inner: date})
+    }
+}
 #[derive(Clone, Debug, Deserialize)]
 enum TimerKind {
     Once(Duration),
@@ -59,16 +68,6 @@ enum TimerKind {
 
 #[async_trait(?Send)]
 impl Signal for Timer {
-    fn add(&mut self, sig_arg: serde_yaml::Value, _skill_name: &str, _pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
-        match serde_yaml::from_value(sig_arg) {
-            Ok(a) => {
-                self.timers.push((a, act_set));
-                Ok(())
-            }
-            Err(_) => Err(anyhow!("Timer argument wasn't ok"))
-        }
-    
-    }
     fn end_load(&mut self, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         Ok(())
     }
@@ -105,9 +104,51 @@ impl Signal for Timer {
         Ok(())
     }
 }
+#[async_trait(?Send)]
+impl UserSignal for Timer{
+    fn add(&mut self, data: HashMap<String,String>, _intent_name: &str, _skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
+        Ok(self.timers.push((Self::from_data(data)?, act_set)))
+    }
+}
 
 impl Timer {
     pub fn new() -> Self {
         Self {timers: Vec::new()}
+    }
+
+    fn from_data(data: HashMap<String, String>) -> Result<TimerKind> {
+        if data.contains_key("seconds") || data.contains_key("minutes") || data.contains_key("hours") {
+
+            fn get_time(data: &HashMap<String, String>, name: &str) -> Result<u64, std::num::ParseIntError> {
+                data.get(name).map(|s|{
+                    let res = s.parse();
+                    if let Err(_) = res {
+                        warn!("'{}' can't be parsed as number", s);
+                    }
+                    res
+                })
+                // If there's no record just return 0
+                .unwrap_or(Ok(0))
+
+            }
+            let secs  = get_time(&data, "seconds")?;
+            let mins  = get_time(&data, "minutes")?;
+            let hours = get_time(&data, "hours")?;
+
+            let dur = Duration::from_secs(secs + mins * 60 + hours * 3600);
+
+            if data.contains_key("kind") && data["kind"] == "every" {
+                Ok(TimerKind::Every(dur))
+            }
+            else {
+                Ok(TimerKind::Once(dur))
+            }
+        }
+        else if data.contains_key("date") {
+            Ok(TimerKind::On(MyDateTime::parse(&data["date"])?))
+        }
+        else {
+            Err(anyhow!("Non-coincident format for timer"))
+        }
     }
 }

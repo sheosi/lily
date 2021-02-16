@@ -1,15 +1,20 @@
-
-
 use std::collections::HashMap;
+use std::fmt::{self, Debug};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
+use std::marker::PhantomData;
+use std::str::FromStr;
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use crate::python::try_translate;
+use crate::signals::StringList;
+
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use serde::Serialize;
+use serde::{de::{self, MapAccess, Visitor}, Deserialize, Deserializer, Serialize};
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use unic_langid::LanguageIdentifier;
+use void::Void;
 
 #[cfg(not(feature="devel_rasa_nlu"))]
 mod snips;
@@ -22,7 +27,7 @@ mod rasa;
 pub use self::rasa::*;
 
 pub trait NluManager {
-    type NluType: Nlu;
+    type NluType: Nlu + Debug;
     fn ready_lang(&mut self, lang: &LanguageIdentifier) -> Result<()>;
 
     fn add_intent(&mut self, order_name: &str, phrases: Vec<NluUtterance>);
@@ -49,6 +54,7 @@ pub trait NluManagerConf {
     fn get_paths() -> (PathBuf, PathBuf);
 }
 
+#[derive(Debug)]
 pub enum NluUtterance{
     Direct(String),
     WithEntities {text: String, entities: HashMap<String, EntityInstance>}
@@ -59,27 +65,112 @@ pub trait Nlu {
     async fn parse(&self, input: &str) -> Result<NluResponse>;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EntityInstance {
     pub kind: String,
     pub example: String
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct EntityData {
+    #[serde(rename = "text")]
     pub value: String,
-    pub synonyms: Vec<String>
+    #[serde(default, alias = "synonym")]
+    pub synonyms: StringList
 }
 
-#[derive(Serialize)]
+impl EntityData {
+    pub fn into_translation(self, lang: &LanguageIdentifier) -> Result<Self> {
+        let l_str = lang.to_string();
+        let value = try_translate(&self.value, &l_str)?;
+        let synonyms = self.synonyms.into_translation(lang)
+        .map_err(|v|anyhow!("Translation of '{}' failed", v.join("\"")))?;
+
+        Ok(EntityData {value,synonyms: StringList::from_vec(synonyms)})
+    }
+}
+
+impl FromStr for EntityData {
+    type Err = Void;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(EntityData {
+            value: s.to_string(),
+            synonyms: StringList::new()
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for EntityData {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'de> {
+        let data = String::deserialize(deserializer)?;
+        FromStr::from_str(&data).map_err(de::Error::custom)
+    }
+}
+
+fn string_or_struct<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+where
+    T: Deserialize<'de> + FromStr<Err = Void>,
+    D: Deserializer<'de>,
+{
+        // This is a Visitor that forwards string types to T's `FromStr` impl and
+    // forwards map types to T's `Deserialize` impl. The `PhantomData` is to
+    // keep the compiler from complaining about T being an unused generic type
+    // parameter. We need T in order to know the Value type for the Visitor
+    // impl.
+    struct StringOrStruct<T>(PhantomData<fn() -> T>);
+
+    impl<'de, T> Visitor<'de> for StringOrStruct<T>
+    where
+        T: Deserialize<'de> + FromStr<Err = Void>,
+    {
+        type Value = T;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("string or map")
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<T, E>
+        where
+            E: de::Error,
+        {
+            Ok(FromStr::from_str(value).unwrap())
+        }
+
+        fn visit_map<M>(self, map: M) -> Result<T, M::Error>
+        where
+            M: MapAccess<'de>,
+        {
+            // `MapAccessDeserializer` is a wrapper that turns a `MapAccess`
+            // into a `Deserializer`, allowing it to be used as the input to T's
+            // `Deserialize` implementation. T then deserializes itself using
+            // the entries from the map visitor.
+            Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))
+        }
+    }
+
+    deserializer.deserialize_any(StringOrStruct(PhantomData))
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct EntityDef {
-    //Note: This was made for Snips, but Rasa is a bit different, use_synonyms
-    // and automatically_extensible doesn't exist. Also uses just one data
+    //Note: This was made for Snips, but Rasa is a bit different
+    // automatically_extensible don't exist. Also uses just one data
     pub data: Vec<EntityData>,
-    pub use_synonyms: bool,
+    #[serde(alias="accept_others")]
     pub automatically_extensible: bool
 }
 
+impl EntityDef {
+    pub fn into_translation(self, lang: &LanguageIdentifier) -> Result<EntityDef> {
+        let data_res: Result<Vec<_>,_> = self.data.into_iter().map(|d|d.into_translation(lang)).collect();
+        Ok(EntityDef {
+            data: data_res?,
+            automatically_extensible: self.automatically_extensible
+        })
+    }
+}
 
 #[derive(Debug)]
 pub struct NluResponse {

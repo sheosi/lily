@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::actions::{ActionContext, ActionSet};
 use crate::config::Config;
-use crate::queries::{Condition, Query, QueryRegistry};
+use crate::queries::{Condition, Query};
 use crate::signals::{Signal, SignalEventShared};
 use crate::vars::POISON_MSG;
 
@@ -38,14 +38,6 @@ impl PollQuery {
 
 #[async_trait(?Send)]
 impl Signal for PollQuery {
-    fn add(&mut self, sig_arg: serde_yaml::Value, _skill_name: &str, _pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
-        let _query_data: String = serde_yaml::from_value(sig_arg)?;
-        let query = QueryRegistry::get_dummy();
-        let task = UserTask::new(query, act_set);
-        self.tasks.push(task);
-
-        Ok(())
-    }
     fn end_load(&mut self, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         Ok(())
     }
@@ -58,5 +50,14 @@ impl Signal for PollQuery {
                 }
             }
         }
+    }
+}
+
+impl PollQuery {
+    fn add(&mut self, query: Rc<RefCell<dyn Query>>, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
+        let task = UserTask::new(query, act_set);
+        self.tasks.push(task);
+
+        Ok(())
     }
 }

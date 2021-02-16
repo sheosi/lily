@@ -6,11 +6,12 @@ use std::rc::Rc;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use crate::actions::{ActionSet ,PyActionSet, ActionContext};
+use crate::actions::{ActionContext, ActionSet, PyActionSet};
+use crate::collections::GlobalReg;
 use crate::config::Config;
-use crate::skills::call_for_pkg;
-use crate::python::{HalfBakedError, remove_from_signals, yaml_to_python};
-use crate::signals::{LocalSignalRegistry, Signal, SignalEventShared, SignalRegistry};
+use crate::skills::call_for_skill;
+use crate::python::{HalfBakedError, remove_from_signals};
+use crate::signals::{LocalSignalRegistry, Signal, SignalEventShared, SignalRegistry, UserSignal};
 
 use async_trait::async_trait;
 use anyhow::{anyhow, Result};
@@ -21,20 +22,20 @@ use unic_langid::LanguageIdentifier;
 pub struct PythonSignal {
     sig_inst: PyObject,
     sig_name: Py<PyAny>,
-    lily_pkg_path: Arc<PathBuf>
+    lily_skill_path: Arc<PathBuf>
 }
 
 impl PythonSignal {
-    pub fn new(sig_name: Py<PyAny>, sig_inst: PyObject, lily_pkg_path: Arc<PathBuf>) -> Self {
-        Self {sig_name, sig_inst, lily_pkg_path}
+    pub fn new(sig_name: Py<PyAny>, sig_inst: PyObject, lily_skill_path: Arc<PathBuf>) -> Self {
+        Self {sig_name, sig_inst, lily_skill_path}
     }
 
     fn call_py_method<A:IntoPy<Py<PyTuple>>>(&mut self, py: Python, name: &str, args: A, required: bool) -> Result<()> {
-        std::env::set_current_dir(self.lily_pkg_path.as_ref())?;
+        std::env::set_current_dir(self.lily_skill_path.as_ref())?;
         match self.sig_inst.getattr(py, name) {
             Ok(meth) => {
-                call_for_pkg(
-                    self.lily_pkg_path.as_ref(),
+                call_for_skill(
+                    self.lily_skill_path.as_ref(),
                     |_| {
                         meth.call(py, args, None).map_err(
                             |py_err|{
@@ -58,8 +59,8 @@ impl PythonSignal {
         }        
     }
 
-    pub fn extend_and_init_classes_py(reg: &mut SignalRegistry, py: Python, pkg_path: &Path, signal_classes: Vec<(PyObject,PyObject)>) -> Result<HashMap<String, Rc<RefCell<dyn Signal>>>, HalfBakedError> {
-        let pkg_path = Arc::new(pkg_path.to_owned());
+    pub fn extend_and_init_classes_py(reg: &mut SignalRegistry, py: Python, skill_path: &Path, signal_classes: Vec<(PyObject,PyObject)>) -> Result<HashMap<String, Rc<RefCell<dyn Signal>>>, HalfBakedError> {
+        let skill_path = Arc::new(skill_path.to_owned());
     
         let process_list = || -> Result<_> {
             let mut sig_to_add = vec![];
@@ -69,7 +70,7 @@ impl PythonSignal {
                 let pyobj = val.call(py, PyTuple::empty(py), None).map_err(|py_err|
                     anyhow!("Python error while instancing signal \"{}\": {:?}", name, py_err.to_string())
                 )?;
-                let sigobj: Rc<RefCell<dyn Signal>> = Rc::new(RefCell::new(PythonSignal::new(key.clone(), pyobj, pkg_path.clone())));
+                let sigobj: Rc<RefCell<dyn Signal>> = Rc::new(RefCell::new(PythonSignal::new(key.clone(), pyobj, skill_path.clone())));
                 sig_to_add.push((name, sigobj));
             }
             Ok(sig_to_add)
@@ -105,11 +106,11 @@ impl PythonSignal {
     pub fn extend_and_init_classes_py_local(
         reg: &mut LocalSignalRegistry,
         py: Python,
-        pkg_path: &Path,
+        skill_path: &Path,
         signal_classes: Vec<(PyObject, PyObject)>
     ) -> Result<(), HalfBakedError> {
 
-        let signals = Self::extend_and_init_classes_py(&mut reg.get_global_mut(), py, pkg_path, signal_classes)?;
+        let signals = Self::extend_and_init_classes_py(&mut reg.get_global_mut(), py, skill_path, signal_classes)?;
         reg.extend_with_map(signals);
         Ok(())
     }
@@ -117,18 +118,6 @@ impl PythonSignal {
 
 #[async_trait(?Send)]
 impl Signal for PythonSignal {
-    fn add(&mut self, sig_arg: serde_yaml::Value, skill_name: &str,
-        pkg_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
-
-        // Pass act_set to python so that Python signals can somehow call their respective actions
-        let gil= Python::acquire_gil();
-        let py = gil.python();
-
-        let py_arg = yaml_to_python(py, &sig_arg);
-        let actset = PyActionSet::from_arc(act_set);
-
-        self.call_py_method(py, "add_sig_receptor", (py_arg, skill_name, pkg_name, actset), true)
-    }
     fn end_load(&mut self, curr_langs: &Vec<LanguageIdentifier>) -> Result<()> {
         let gil= Python::acquire_gil();
         let py = gil.python();
@@ -145,6 +134,19 @@ impl Signal for PythonSignal {
 
         let curr_langs: Vec<String> = curr_langs.into_iter().map(|i|i.to_string()).collect();
         self.call_py_method(py, "event_loop", (base_context.to_owned(), curr_langs), true)
+    }
+}
+
+impl UserSignal for PythonSignal {
+    fn add(&mut self, data: HashMap<String, String>, intent_name: &str,
+        skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
+
+        // Pass act_set to python so that Python signals can somehow call their respective actions
+        let gil= Python::acquire_gil();
+        let py = gil.python();
+
+        let actset = PyActionSet::from_arc(act_set);
+        self.call_py_method(py, "add_sig_receptor", (data, intent_name, skill_name, actset), true)
     }
 }
 

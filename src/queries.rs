@@ -2,14 +2,23 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use crate::collections::{BaseRegistry, LocalBaseRegistry};
+use crate::python::HalfBakedError;
+
+use pyo3::{PyObject, Python};
+
 pub type QueryData = HashMap<String, String>;
 pub type QueryResult = Vec<String>;
+pub type QueryRegistry = BaseRegistry<dyn Query>;
+pub type QueryRegistryShared = Rc<RefCell<QueryRegistry>>;
+pub type LocalQueryRegistry = LocalBaseRegistry<dyn Query, QueryRegistry>;
+
 pub trait Query {
     fn is_monitorable(&self) -> bool;
     fn execute(&mut self, data: QueryData) -> QueryResult;
 }
 
-struct PythonQuery {
+pub struct PythonQuery {
 
 }
 
@@ -23,6 +32,12 @@ impl Query for PythonQuery {
 impl PythonQuery {
     pub fn new() -> Self {
         PythonQuery {}
+    }
+
+    pub fn extend_and_init_classes_local(act_reg: &mut LocalQueryRegistry,
+        py:Python,
+        query_classes: Vec<(PyObject, PyObject)>) -> Result<(), HalfBakedError> {
+            Ok(())
     }
 }
 
@@ -41,10 +56,6 @@ impl DummyQuery {
     fn new() -> Self {
         Self {}
     }
-}
-
-pub struct QueryRegistry {
-
 }
 
 impl QueryRegistry {

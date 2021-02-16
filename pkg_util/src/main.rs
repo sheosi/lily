@@ -13,7 +13,7 @@ use thiserror::Error;
 use zip::ZipArchive;
 
 const DEF_REPO_URL: &str = "";
-const PKG_PATH: &str = "../packages";
+const PKG_PATH: &str = "../skills";
 
 
 #[tokio::main(flavor="current_thread")]
@@ -171,7 +171,7 @@ fn print_path_cute(pkg_name: &str, pkg_path: &Path) -> Result<()> {
 
 #[derive(Debug, Deserialize)]
 struct RepoData {
-    packages: HashMap<String, String>
+    skills: HashMap<String, String>
 }
 impl RepoData {
     async fn get_from(json_url: &str) -> Result<RepoData> {
@@ -182,7 +182,7 @@ impl RepoData {
 
     async fn install(&self, pkg_path: &Path, pkg_name: &str) -> Result<()> {
         let http = Client::new();
-        let pkg_url = self.packages.get(pkg_name).ok_or(RepoError::NotFound(pkg_name.into()))?;
+        let pkg_url = self.skills.get(pkg_name).ok_or(RepoError::NotFound(pkg_name.into()))?;
         let zip_data = http.get(pkg_url).send().await?.bytes().await?;
         extract_zip(zip_data, &pkg_path.join(pkg_name))
     }
