@@ -1,9 +1,9 @@
 
 use crate::stt::{DecodeRes, SttError, Stt, SttInfo};
-use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
 use async_trait::async_trait;
 use lily_common::audio::AudioRaw;
+use lily_common::vars::DEFAULT_SAMPLES_PER_SECOND;
 
 #[cfg(feature = "unused")]
 use crate::stt::SttBatched;

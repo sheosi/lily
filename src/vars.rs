@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-use lazy_static::lazy_static;
+use lily_common::vars::PathRef;
 
 // Paths
 #[cfg(not(feature = "devel_rasa_nlu"))]
@@ -16,24 +15,8 @@ pub const PYTHON_SDK_PATH: PathRef = PathRef::new("resources/python");
 pub const MAIN_CONF_PATH: PathRef = PathRef::new("conf.yaml");
 pub const PS_LOG_PATH: PathRef = PathRef::new("resources/stt/pocketsphinx.log");
 pub const PYTHON_VIRTUALENV: PathRef = PathRef::new("resources/python/env");
+pub const SKILLS_PATH: PathRef = PathRef::new("skills");
 
-lazy_static! {
-    static ref ORG_PATH: PathBuf = std::env::current_dir().expect("Couldn't get current_dir").canonicalize().expect("Failed to canonicalize current_dir");
-}
-
-pub struct PathRef {
-    path_ref: &'static str
-}
-
-impl PathRef {
-    const fn new(path_ref: &'static str) -> Self {
-        Self{path_ref}
-    }
-
-    pub fn resolve(&self) -> PathBuf {
-        ORG_PATH.join(self.path_ref)
-    }
-}
 
 // Messages
 pub const SKILLS_PATH_ERR_MSG: &str = "Skills folder can't be read";
@@ -50,6 +33,4 @@ pub const UNEXPECTED_MSG: &str = "Something unexpected (and probably terrible) h
 pub const POISON_MSG: &str = "A shared lock had a panic in another thread";
 
 // Other
-pub const DEFAULT_HOTWORD_SENSITIVITY: f32 = 0.43;
 pub const MIN_SCORE_FOR_ACTION: f32 = 0.3;
-pub const DEFAULT_SAMPLES_PER_SECOND: u32 = 16000;

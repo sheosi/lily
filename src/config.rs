@@ -4,11 +4,12 @@ use std::rc::Rc;
 
 use crate::stt::SttData;
 use crate::tts::TtsData;
-use crate::vars::{DEFAULT_HOTWORD_SENSITIVITY, MAIN_CONF_PATH};
+use crate::vars::MAIN_CONF_PATH;
 
 use anyhow::{anyhow, Result};
 use lily_common::communication::ClientConf;
 use lily_common::other::{false_val, ConnectionConf, none};
+use lily_common::vars::DEFAULT_HOTWORD_SENSITIVITY;
 use serde::Deserialize;
 use serde_yaml::Value;
 

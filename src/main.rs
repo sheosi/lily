@@ -20,11 +20,11 @@ use crate::actions::ActionContext;
 use crate::config::Config;
 use crate::skills::load_skills;
 use crate::python::{python_init, set_python_locale};
+use crate::vars::SKILLS_PATH;
 
 // Other crates
 use anyhow::Result;
 use lily_common::other::init_log;
-use lily_common::vars::SKILLS_PATH;
 use pyo3::Python;
 use unic_langid::LanguageIdentifier;
 

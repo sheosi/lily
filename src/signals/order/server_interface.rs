@@ -12,11 +12,12 @@ use crate::python::add_context_data;
 use crate::signals::{SignalEventShared, SignalOrder};
 use crate::stt::{SttPool, SttPoolItem, SttSet};
 use crate::tts::{Gender, TtsFactory, VoiceDescr};
-use crate::vars::{DEFAULT_SAMPLES_PER_SECOND, POISON_MSG};
+use crate::vars::POISON_MSG;
 
 use anyhow::{anyhow, Result};
 use lily_common::audio::{Audio, decode_ogg_opus};
 use lily_common::communication::*;
+use lily_common::vars::DEFAULT_SAMPLES_PER_SECOND;
 use log::{error, info, warn};
 use rmp_serde::{decode, encode};
 use rumqttc::{Event, Packet, QoS};

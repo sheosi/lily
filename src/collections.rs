@@ -78,13 +78,14 @@ pub struct LocalBaseRegistry<A: ?std::marker::Sized, R: GlobalReg<A> + fmt::Debu
 
 impl<A: ?std::marker::Sized, R: GlobalReg<A> + fmt::Debug> fmt::Debug for LocalBaseRegistry<A,R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let global =self.global_reg.fmt(f);
+        let global = self.global_reg.fmt(f);
         f.debug_struct("LocalActionRegistry")
          .field("map", &self.map.keys().collect::<Vec<&String>>())
          .field("global_reg", &global)
          .finish()
     }
 }
+
 impl<A: ?std::marker::Sized, R: GlobalReg<A> + fmt::Debug> LocalBaseRegistry<A,R> {
     
     pub fn new(global_reg: Rc<RefCell<R>>) -> Self {

@@ -123,7 +123,7 @@ pub fn load_intents(
                 serde_yaml::from_str(yaml_str)?
             };
 
-            let mut sig_order = signals.get_sig_order().expect("Order signal was not initialized");
+            let sig_order = signals.get_sig_order().expect("Order signal was not initialized");
             for (type_name, data) in skilldef.types.into_iter() {
                 sig_order.borrow_mut().add_slot_type(type_name, data)?;
             }
@@ -163,7 +163,7 @@ pub fn load_intents(
             let def_action = def_action.ok_or_else(||anyhow!("Skill contains events but no action linked"))?;
             let action = actions.get(&def_action).ok_or_else(||anyhow!("Action '{}' does not exist", &def_action))?.borrow_mut().instance(skill_path.clone());
             let act_set = ActionSet::create();
-            act_set.lock().unwrap().add_action(action);
+            act_set.lock().unwrap().add_action(action)?;
             for ev in evs {
                 sigevent.lock().unwrap().add(&ev, act_set.clone());
             }

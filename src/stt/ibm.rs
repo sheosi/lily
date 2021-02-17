@@ -1,12 +1,12 @@
 use std::time::{Duration, Instant};
 
 use crate::stt::{DecodeRes, OnlineSttError, Stt, SttInfo, SttConstructionError, SttBatched,SttError};
-use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
 use async_trait::async_trait;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
-use futures::{SinkExt, StreamExt}	;
+use futures::{SinkExt, StreamExt};
 use lily_common::audio::AudioRaw;
+use lily_common::vars::DEFAULT_SAMPLES_PER_SECOND;
 use maplit::hashmap;
 use reqwest::{Client, header};
 use tokio_tungstenite::{connect_async, WebSocketStream};

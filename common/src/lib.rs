@@ -1,10 +1,8 @@
 pub mod audio;
 pub mod communication;
 #[cfg(feature = "client")]
-pub mod hotword;
+pub mod client;
 pub mod other;
-#[cfg(feature = "client")]
-pub mod vad;
 pub mod vars;
 
 
