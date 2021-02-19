@@ -181,7 +181,7 @@ pub fn add_py_folder(python: Python, actions_path: &Path) -> Result<(Vec<(PyObje
 
     let extract_dict = |name: &str| -> Result<Vec<(PyObject,PyObject)>> {
         let sgn_cls_obj = ext_mod.get(name)?; // Get objects
-        ext_mod.set_item(name, PyDict::new(python))?; // Reset dict
+        ext_mod.dict().set_item(name, PyDict::new(python))?; // Reset dict
         let sgn_dict = sgn_cls_obj.downcast::<PyDict>().map_err(|e|anyhow!("signal_classes is not a dict: {}",e))?;
         Ok(sgn_dict.items().extract()?)
     };
@@ -191,30 +191,6 @@ pub fn add_py_folder(python: Python, actions_path: &Path) -> Result<(Vec<(PyObje
     let query_classes = extract_dict("_query_classes")?;
 
     Ok((signal_classes, action_classes, query_classes))
-}
-
-pub fn remove_from_signals(py: Python, list: &Vec<Py<PyAny>>) -> Result<()> {
-    let sgn_cls_obj = py.import("lily_ext")?.get("_signal_classes")?;
-    let sgn_dict = sgn_cls_obj.downcast::<PyDict>().map_err(|e|anyhow!("signal_classes is not a dict: {}",e))?;
-
-    for sgnl in list {
-        sgn_dict.del_item(sgnl)?;
-    }
-
-    Ok(())   
-}
-
-
-pub fn remove_from_actions(py: Python, list: &Vec<Py<PyAny>>) -> Result<()> {
-    let act_cls_obj = py.import("lily_ext")?.get("_action_classes")?;
-    let act_dict = act_cls_obj.downcast::<PyDict>().map_err(|e|anyhow!("action_classes is not a dict: {}",e))?;
-
-    for act in list {
-        act_dict.del_item(act)?;
-    }
-
-    Ok(())
-    
 }
 
 pub fn get_inst_class_name(py: Python, instance: &PyObject) -> Option<String> {
@@ -245,7 +221,6 @@ pub fn python_has_module_path(module_path: &Path) -> Result<bool> {
 // Define executable module
 #[pymodule]
 fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
-    println!("Adding module");
     m.add("__doc__", "Internal implementations of Lily's Python functions")?;
     m.add("_say", wrap_pyfunction!(python_say, m)?)?;
     m.add("_negotiate_lang", wrap_pyfunction!(negotiate_lang, m)?)?;

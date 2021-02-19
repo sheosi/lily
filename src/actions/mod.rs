@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 // This crate
 use crate::collections::{BaseRegistry, GlobalReg, LocalBaseRegistry};
 use crate::skills::call_for_skill;
-use crate::python::{get_inst_class_name, HalfBakedError, PyException, remove_from_actions};
+use crate::python::{get_inst_class_name, HalfBakedError, PyException};
 
 // Other crates
 use anyhow::{anyhow, Result};
@@ -108,17 +108,6 @@ impl Action for PythonAction {
     }
 }
 
-impl Drop for PythonAction {
-    fn drop(&mut self) {
-        println!("Python action dropped!");
-        let gil= Python::acquire_gil();
-        let py = gil.python(); 
-
-        remove_from_actions(py, &vec![self.act_name.clone()]).expect(
-            &format!("Failed to remove action: {}", self.act_name.to_string())
-        );
-    }
-}
 
 pub struct PythonActionInstance {
     obj: PyObject,

@@ -10,7 +10,7 @@ use crate::actions::{ActionContext, ActionSet, PyActionSet};
 use crate::collections::GlobalReg;
 use crate::config::Config;
 use crate::skills::call_for_skill;
-use crate::python::{HalfBakedError, remove_from_signals};
+use crate::python::HalfBakedError;
 use crate::signals::{LocalSignalRegistry, Signal, SignalEventShared, SignalRegistry, UserSignal};
 
 use async_trait::async_trait;
@@ -147,16 +147,5 @@ impl UserSignal for PythonSignal {
 
         let actset = PyActionSet::from_arc(act_set);
         self.call_py_method(py, "add_sig_receptor", (data, intent_name, skill_name, actset), true)
-    }
-}
-
-impl Drop for PythonSignal {
-    fn drop(&mut self) {
-        println!("Python signal dropped!");
-        let gil= Python::acquire_gil();
-        let py = gil.python();
-        remove_from_signals(py, &vec![self.sig_name.clone()]).expect(
-            &format!("Failed to remove signal: {}", self.sig_name.to_string())
-        );
     }
 }

@@ -8,7 +8,7 @@ use std::sync::Arc;
 // This crate
 use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry, PythonAction};
 use crate::collections::GlobalReg;
-use crate::python::{add_py_folder, remove_from_actions, remove_from_signals};
+use crate::python::add_py_folder;
 use crate::queries::{LocalQueryRegistry, PythonQuery, QueryRegistry};
 use crate::signals::{Hook, IntentData, LocalSignalRegistry, new_signal_order, PythonSignal, SignalRegistry, SignalRegistryShared, Timer, PollQuery};
 use crate::nlu::EntityDef;
@@ -295,7 +295,6 @@ impl PythonLoader {
         match PythonSignal::extend_and_init_classes_py_local(&mut sigreg, py, skill_path, signal_classes) {
             Ok(()) =>{Ok(())}
             Err(e) => {
-                remove_from_signals(py, &e.cls_names).expect(&format!("Coudln't remove '{:?}' from signals", e.cls_names));
                 Err(e.source)
             }
         }?;
@@ -304,7 +303,6 @@ impl PythonLoader {
         match PythonAction::extend_and_init_classes_local(&mut actreg, py, action_classes) {
             Ok(()) => {Ok(())}
             Err(e) => {
-                remove_from_actions(py, &e.cls_names).expect(&format!("Couldn't remove '{:?}' from actions", e.cls_names));
                 // Also, drop all actions from this package
                 sigreg.minus(base_sigreg).remove_from_global();
                 Err(e.source)
@@ -315,7 +313,6 @@ impl PythonLoader {
         match PythonQuery::extend_and_init_classes_local(&mut queryreg, py, query_classes) {
             Ok(()) => {Ok(())}
             Err(e) => {
-                remove_from_actions(py, &e.cls_names).expect(&format!("Couldn't remove '{:?}' from actions", e.cls_names));
                 // Also, drop all actions from this package
                 sigreg.minus(base_sigreg).remove_from_global();
                 actreg.minus(base_actreg).remove_from_global();
