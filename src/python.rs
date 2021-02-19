@@ -12,7 +12,7 @@ use crate::vars::{PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_YAML_FLOAT_MSG};
 
 use anyhow::{anyhow, Result};
 use pyo3::{conversion::IntoPy, PyErr, Python, types::{PyBool, PyList, PyDict}, PyObject, PyResult, prelude::*, wrap_pyfunction, FromPyObject, exceptions::*};
-use pyo3::{type_object::PyTypeObject};
+use pyo3::type_object::PyTypeObject;
 use fluent_langneg::negotiate::{negotiate_languages, NegotiationStrategy};
 use lily_common::audio::Audio;
 use log::info;
@@ -73,6 +73,9 @@ pub fn python_init() -> Result<()> {
     std::fs::create_dir_all(&py_env)?;
     env::set_var("PYTHON_VIRTUALENV", py_env.as_os_str());
 
+    let mod_name = std::ffi::CString::new("_lily_impl")?.into_raw();
+    unsafe {assert!(pyo3::ffi::PyImport_AppendInittab(mod_name, Some(safe_lily_impl)) != -1);};
+
     //Make sure we have all deps
     fn check_module_installed(pkg: &str) -> Result<()> {
         if !python_has_module_path(&Path::new(pkg))? {
@@ -89,8 +92,8 @@ pub fn python_init() -> Result<()> {
     check_module_installed("fluent.runtime")?;
 
 
-    let mod_name = std::ffi::CString::new("_lily_impl")?.into_raw();
-    unsafe {assert!(pyo3::ffi::PyImport_AppendInittab(mod_name, Some(safe_lily_impl)) != -1);};
+    
+
 
     Ok(())
 }
@@ -242,6 +245,7 @@ pub fn python_has_module_path(module_path: &Path) -> Result<bool> {
 // Define executable module
 #[pymodule]
 fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
+    println!("Adding module");
     m.add("__doc__", "Internal implementations of Lily's Python functions")?;
     m.add("_say", wrap_pyfunction!(python_say, m)?)?;
     m.add("_negotiate_lang", wrap_pyfunction!(negotiate_lang, m)?)?;

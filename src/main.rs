@@ -8,6 +8,8 @@ mod collections;
 mod queries;
 mod signals;
 mod stt;
+#[cfg(test)]
+mod tests;
 mod tts;
 mod vars;
 
