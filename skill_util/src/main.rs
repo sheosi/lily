@@ -92,7 +92,7 @@ fn do_init(pkg_path_str: &str) -> Result<()> {
     let mut py_file = fs::File::create(py_mod_path.join("__init__.py"))?;
     write!(&mut py_file, "from lily_ext import action, answer, conf, translate
 
-@action(name = \"{}\")
+@action(name = \"default_action\")
 class {}:
 
     def __init__(self):
@@ -101,7 +101,7 @@ class {}:
     def trigger_action(self, args, context):
         pass
 
-    ", pkg_name.to_lowercase(), first_upper(pkg_name.to_owned()))?;
+    ", pkg_name.to_lowercase())?;
 
     // Create translation
     let trans_path = pkg_path.join("translations");
@@ -122,18 +122,15 @@ class {}:
     // Skills definition file
     let mut model = fs::File::create(pkg_path.join("model.yaml"))?;
     write!(&mut model, "example:
-    signals:
-        order: 
-        text: \"Say hello to {{$friend_name}}\"
-        entities:
-            friend_name:
-            kind:
-                data:
-                - Alex
-                - John
-            example: Alex
-    actions:
-        say: $example_translation_say
+    samples: \"Say hello to {{$friend_name}}\"
+    entities:
+        friend_name:
+        kind:
+            data:
+            - Alex
+            - John
+        example: Alex
+    action: default_action
 ")?;
 
     print_path_cute(pkg_name,&pkg_path)?;

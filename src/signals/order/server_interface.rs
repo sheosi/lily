@@ -233,7 +233,7 @@ impl MqttInterface {
                         "lily/event" => {
                             let msg: MsgEvent = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
                             let context = add_context_data(base_context,&self.curr_langs[0], &msg.satellite);
-                            signal_event.lock().expect(POISON_MSG).call(&msg.event, &context);
+                            signal_event.lock().expect(POISON_MSG).call(&msg.event, context.clone());
                         }
                         "lily/disconnected" => {
                             let msg: MsgGoodbye = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;

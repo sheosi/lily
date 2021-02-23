@@ -302,7 +302,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug> SignalOrder<M> {
 
     pub async fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &ActionContext, lang: &LanguageIdentifier) -> Result<()> {
         match decode_res {
-            None => event_signal.lock().expect(POISON_MSG).call("empty_reco", base_context),
+            None => event_signal.lock().expect(POISON_MSG).call("empty_reco", base_context.clone()),
             Some(decode_res) => {
 
                 if !decode_res.hypothesis.is_empty() {
@@ -318,16 +318,17 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug> SignalOrder<M> {
                                 if let Some(intent_name) = result.name {
                                     info!("Let's call an action");
                                     let mut slots_context = add_slots(base_context,result.slots);
+                                    slots_context.set("type".to_string(), "intent".to_string());
                                     slots_context.set("intent".to_string(), self.demangle(&intent_name).to_string());
                                     self.intent_map.call_mapping(&intent_name, &slots_context);
                                     info!("Action called");
                                 }
                                 else {
-                                    event_signal.lock().expect(POISON_MSG).call("unrecognized", &base_context);
+                                    event_signal.lock().expect(POISON_MSG).call("unrecognized", base_context.clone());
                                 }
                             }
                             else {
-                                event_signal.lock().expect(POISON_MSG).call("unrecognized", &base_context);
+                                event_signal.lock().expect(POISON_MSG).call("unrecognized", base_context.clone());
                             }
 
                         },
@@ -337,7 +338,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug> SignalOrder<M> {
                     }
                 }
                 else {
-                    event_signal.lock().expect(POISON_MSG).call("empty_reco", &base_context);
+                    event_signal.lock().expect(POISON_MSG).call("empty_reco", base_context.clone());
                 }
             }
         }

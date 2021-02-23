@@ -43,8 +43,10 @@ impl SignalEvent {
         self.event_map.add_mapping(event_name, act_set)
     }
 
-    pub fn call(&mut self, event_name: &str, context: &ActionContext) {
-        self.event_map.call_mapping(event_name, context)
+    pub fn call(&mut self, event_name: &str, mut context: ActionContext) {
+        context.set("type".to_string(), "event".to_string());
+        context.set("event".to_string(), "event_name".to_string());
+        self.event_map.call_mapping(event_name, &context)
     }
 }
 
