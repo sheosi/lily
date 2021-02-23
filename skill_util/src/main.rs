@@ -120,8 +120,8 @@ class {}:
     }
 
     // Skills definition file
-    let mut skills_def = fs::File::create(pkg_path.join("skills_def.yaml"))?;
-    write!(&mut skills_def, "example:
+    let mut model = fs::File::create(pkg_path.join("model.yaml"))?;
+    write!(&mut model, "example:
     signals:
         order: 
         text: \"Say hello to {{$friend_name}}\"

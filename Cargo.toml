@@ -133,6 +133,6 @@ assets = [
     ["packages/default/sounds/end_recognition.ogg", "usr/share/lily/default/sounds/end_recognition.ogg", "644"],
     ["packages/default/translations/en-US/translations.ftl", "usr/share/lily/default/translations/en-US/translations.ftl", "644"],
     ["packages/default/translations/es-ES/translations.ftl", "usr/share/lily/default/translations/es-ES/translations.ftl", "644"],
-    ["packages/default/skills_def.yaml", "usr/share/lily/default/skills_def.yaml", "644"],
+    ["packages/default/model.yaml", "usr/share/lily/default/model.yaml", "644"],
 
 ]

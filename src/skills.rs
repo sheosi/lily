@@ -100,7 +100,7 @@ pub fn load_intents(
     let skill_path = Arc::new(path.to_path_buf());
     call_for_skill::<_, Result<()>>(path, |skill_name| {
 
-        let yaml_path = path.join("intents_def.yaml");
+        let yaml_path = path.join("model.yaml");
         if yaml_path.is_file() {
             #[derive(Debug, Deserialize)]
             enum EventOrAction {
