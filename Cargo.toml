@@ -70,7 +70,7 @@ devel_rasa_nlu= []
 unused = []
 
 [workspace]
-members = ["client", "common", "pkg_util"]
+members = ["client", "common", "skill_util"]
 
 
 [package.metadata.deb]

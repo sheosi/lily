@@ -29,7 +29,7 @@ impl UserTask {
 pub struct PollQuery {
     tasks: Vec<UserTask>
 }
-
+        
 impl PollQuery {
     pub fn new() -> Self {
         Self{tasks: Vec::new()}
