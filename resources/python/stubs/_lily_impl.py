@@ -9,9 +9,6 @@ and other utilities)"""
 
 from typing import Any, Dict, Iterator, Iterable, List, Optional, Tuple
 
-def _say(client:str, text: str, lang: str):
-    "Sends the text to be said or shown (depending on the circumstances)"
-
 def conf(conf_name: str) -> str:
     "Gets some conf value"
     ...
@@ -36,10 +33,6 @@ def log_error(text: str):
 def _get_curr_lily_package() -> str:
     """Returns the name of the package being executed right now"""
     return ""
-
-def _play_file(client:str, file_name: str):
-    """Plays a music file"""
-    ...
 
 def has_cap(client: str, cap: str) -> bool:
     """Returns True if the 'client' has declared that supports 'cap'"""
@@ -178,4 +171,13 @@ class ActionContextValuesView(Iterable):
         ...
 
     def __reversed__(self) -> Iterator[str]:
+        ...
+
+class ActionAnswer():
+    @staticmethod
+    def load_audio(path: str)-> 'ActionAnswer':
+        ...
+
+    @staticmethod
+    def text(text: str) -> 'ActionAnswer':
         ...

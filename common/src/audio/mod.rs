@@ -19,6 +19,7 @@ use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 use log::warn;
 use thiserror::Error;
 
+#[derive(Clone)]
 struct AudioEncoded {
     data: Vec<u8>
 }
@@ -41,6 +42,7 @@ impl AudioEncoded {
     }
 }
 
+#[derive(Clone)]
 enum Data {
     Raw(AudioRaw),
     Encoded(AudioEncoded)
@@ -85,6 +87,7 @@ impl Data {
 }
 
 // Just some and audio dummy for now
+#[derive(Clone)]
 pub struct Audio {
     buffer: Data
 }
@@ -162,7 +165,7 @@ impl Audio {
 
 // For managing raw audio, mostly coming from the mic,
 // is fixed at 16 KHz and mono (what most STTs )
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AudioRaw {
     pub buffer: Vec<i16>
 }

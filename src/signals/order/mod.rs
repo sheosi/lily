@@ -1,19 +1,19 @@
 pub mod server_interface;
 
 // Standard library
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{ActionContext, ActionSet};
+use crate::actions::{ActionAnswer, ActionContext, ActionSet, MainAnswer};
 use crate::config::Config;
 use crate::nlu::{EntityData, EntityDef, EntityInstance, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponseSlot, NluUtterance};
 use crate::python::{try_translate, try_translate_all};
 use crate::stt::DecodeRes;
 use crate::signals::{ActMap, Signal, SignalEventShared};
 use crate::vars::{MIN_SCORE_FOR_ACTION, POISON_MSG};
-use self::server_interface::MqttInterface;
+use self::server_interface::{MqttInterface, MSG_OUTPUT};
 
 // Other crates
 use anyhow::{Result, anyhow};
@@ -300,8 +300,8 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug> SignalOrder<M> {
         Ok(())
     }
 
-    pub async fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &ActionContext, lang: &LanguageIdentifier) -> Result<()> {
-        match decode_res {
+    pub async fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &ActionContext, lang: &LanguageIdentifier, satellite: String) -> Result<()> {
+        let ans = match decode_res {
             None => event_signal.lock().expect(POISON_MSG).call("empty_reco", base_context.clone()),
             Some(decode_res) => {
 
@@ -320,15 +320,16 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug> SignalOrder<M> {
                                     let mut slots_context = add_slots(base_context,result.slots);
                                     slots_context.set("type".to_string(), "intent".to_string());
                                     slots_context.set("intent".to_string(), self.demangle(&intent_name).to_string());
-                                    self.intent_map.call_mapping(&intent_name, &slots_context);
+                                    let answers = self.intent_map.call_mapping(&intent_name, &slots_context);
                                     info!("Action called");
+                                    answers
                                 }
                                 else {
-                                    event_signal.lock().expect(POISON_MSG).call("unrecognized", base_context.clone());
+                                    event_signal.lock().expect(POISON_MSG).call("unrecognized", base_context.clone())
                                 }
                             }
                             else {
-                                event_signal.lock().expect(POISON_MSG).call("unrecognized", base_context.clone());
+                                event_signal.lock().expect(POISON_MSG).call("unrecognized", base_context.clone())
                             }
 
                         },
@@ -338,11 +339,16 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug> SignalOrder<M> {
                     }
                 }
                 else {
-                    event_signal.lock().expect(POISON_MSG).call("empty_reco", base_context.clone());
+                    event_signal.lock().expect(POISON_MSG).call("empty_reco", base_context.clone())
                 }
             }
+        };
+        
+        if let Some(answers) = ans {
+            answers.into_iter().map(|a|process_answer(a, lang, satellite.clone()));
         }
-    Ok(())
+
+        Ok(())
     }
 
     pub async fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &ActionContext, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
@@ -359,6 +365,25 @@ fn add_slots(base_context: &ActionContext, slots: Vec<NluResponseSlot>) -> Actio
     }
 
     result
+}
+
+fn process_answer(ans: ActionAnswer, lang: &LanguageIdentifier, uuid: String) -> Result<()> {
+    MSG_OUTPUT. with::<_,Result<()>>(|m|{match *m.borrow_mut() {
+        Some(ref mut output) => {
+            match ans.answer {
+                MainAnswer::Sound(s) => {
+                    output.send_audio(s, uuid)
+                }
+                MainAnswer::Text(t) => {
+                    output.answer(t, lang, uuid)
+                }
+            }?;
+            
+        }
+        _=>{}
+    };
+    Ok(())
+    })
 }
 
 impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug>  SignalOrder<M> {

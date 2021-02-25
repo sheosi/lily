@@ -6,7 +6,9 @@ pub use self::action_context::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt; // For Debug in LocalActionRegistry
-use std::path::PathBuf;
+use std::fs::{self, File};
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -14,18 +16,60 @@ use std::sync::{Arc, Mutex};
 use crate::collections::{BaseRegistry, GlobalReg, LocalBaseRegistry};
 use crate::skills::call_for_skill;
 use crate::python::{get_inst_class_name, HalfBakedError, PyException};
+use crate::vars::POISON_MSG;
 
 // Other crates
 use anyhow::{anyhow, Result};
-use log::{error, warn};
-use pyo3::{Py, PyAny, PyObject, Python, types::PyTuple};
+use log::error;
+use lily_common::audio::Audio;
+use pyo3::{Py, PyAny, PyObject, PyResult, Python, types::PyTuple};
 use pyo3::prelude::{pyclass, pymethods};
 use pyo3::exceptions::PyOSError;
 
 pub type ActionRegistryShared = Rc<RefCell<ActionRegistry>>;
 
+#[derive(Clone)]
+pub enum MainAnswer {
+    Sound(Audio),
+    Text(String)
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub struct ActionAnswer {
+    pub answer: MainAnswer
+}
+
+
+impl ActionAnswer {
+    pub fn audio_file(path: &Path) -> Result<Self> {
+        let mut f = File::open(path)?;
+        let mut buffer = vec![0; fs::metadata(path)?.len() as usize];
+        f.read(&mut buffer)?;
+        let a = Audio::new_encoded(buffer);
+        Ok(Self {answer: MainAnswer::Sound(a)})
+    }
+
+    pub fn send_text(text: String) -> Result<Self> {
+        Ok(Self {answer: MainAnswer::Text(text)})
+    }
+}
+
+#[pymethods]
+impl ActionAnswer {
+    #[staticmethod]
+    pub fn load_audio(path: &str) -> PyResult<Self> {
+        Self::audio_file(Path::new(path)).py_excep::<PyOSError>()
+    }
+    #[staticmethod]
+    pub fn text(text: String) -> PyResult<Self> {
+        Self::send_text(text).py_excep::<PyOSError>()
+    }
+}
+
+
 pub trait ActionInstance {
-    fn call(&self, context: &ActionContext) -> Result<()>;
+    fn call(&self, context: &ActionContext) -> Result<ActionAnswer>;
     fn get_name(&self) -> String;
 }
 
@@ -121,20 +165,20 @@ impl PythonActionInstance {
 }
 
 impl ActionInstance for PythonActionInstance {
-    fn call(&self ,context: &ActionContext) -> Result<()> {
+    fn call(&self ,context: &ActionContext) -> Result<ActionAnswer> {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
         let trig_act = self.obj.getattr(py, "trigger_action")?;
         std::env::set_current_dir(self.lily_skill_path.as_ref())?;
-        call_for_skill(self.lily_skill_path.as_ref(),
+        let r = call_for_skill(self.lily_skill_path.as_ref(),
         |_|trig_act.call(
             py,
             (context.clone(),),
             None)
         ).py_excep::<PyOSError>()??;
 
-        Ok(())
+        Ok(r.extract(py)?)
     }
     fn get_name(&self) -> String {
         let gil = Python::acquire_gil();
@@ -172,28 +216,27 @@ impl ActionSet {
         Ok(())
     }
 
-    pub fn call_all(&mut self, context: &ActionContext) {
+    pub fn call_all(&mut self, context: &ActionContext) -> Vec<ActionAnswer> {
+        let mut res = Vec::new();
         for action in &self.acts {
-            if let Err(e) = action.call(context) {
-                error!("Action {} failed while being triggered: {}", &action.get_name(), e);
+            match action.call(context) {
+                Ok(a) => res.push(a),
+                Err(e) =>  {
+                    error!("Action {} failed while being triggered: {}", &action.get_name(), e);
+                }
             }
         }
+        res
     }
 }
 
+// Just exists as a way of extending Arc
 pub trait SharedActionSet {
-    fn call_all<F: FnOnce()->String>(&self, context: &ActionContext, f: F);
+    fn call_all<F: FnOnce()->String>(&self, context: &ActionContext, f: F) -> Vec<ActionAnswer>;
 }
 impl SharedActionSet for Arc<Mutex<ActionSet>> {
-    fn call_all<F: FnOnce()->String>(&self, context: &ActionContext, f: F) {
-        match self.lock() {
-            Ok(ref mut m) => {
-                m.call_all(context);
-            }
-            Err(_) => {
-                warn!("ActionSet of  {} had an error before and can't be used anymore", f());
-            }
-        }
+    fn call_all<F: FnOnce()->String>(&self, context: &ActionContext, f: F) -> Vec<ActionAnswer> {
+        self.lock().expect(POISON_MSG).call_all(context)
     }
 }
 
@@ -210,11 +253,7 @@ impl PyActionSet {
 
 #[pymethods]
 impl PyActionSet {
-    fn call(&mut self, context: &ActionContext) {
-        
-        match self.act_set.lock() {
-            Ok(ref mut m) => m.call_all(context),
-            Err(_) => warn!("A PyActionSet had an error before and can't be used anymore")
-        }
+    fn call(&mut self, context: &ActionContext) -> Vec<ActionAnswer> {
+        self.act_set.lock().expect(POISON_MSG).call_all(context)
     }
 }

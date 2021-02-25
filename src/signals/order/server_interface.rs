@@ -215,7 +215,8 @@ impl MqttInterface {
                                         stt.end_decoding().await?, 
                                         signal_event.clone(),
                                         &context,
-                                        stt.lang()
+                                        stt.lang(),
+                                        satellite
                                     ).await {
 
                                         error!("Actions processing had an error: {}", e);
@@ -300,8 +301,8 @@ impl MqttInterfaceOutput {
         Ok(Self{client})
     }
 
-    pub fn answer(&mut self, input: &str, lang: &LanguageIdentifier, to: String) -> Result<()> {
-        self.client.lock().expect(POISON_MSG).push((SendData::String((input.into(), lang.to_owned())), to));
+    pub fn answer(&mut self, input: String, lang: &LanguageIdentifier, to: String) -> Result<()> {
+        self.client.lock().expect(POISON_MSG).push((SendData::String((input, lang.to_owned())), to));
         Ok(())
     }
 

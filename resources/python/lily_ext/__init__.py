@@ -298,11 +298,20 @@ def translate(trans_name: str, dict_args: Dict[str, Any]):
 
     return what_to_say
 
-def answer(output: str, context: Dict[str, str]):
+def answer(output: str, context: Dict[str, str]) -> Optional[_lily_impl.ActionAnswer]:
     """'output' will be returned for it to be shown directly to the user or
     voiced by the TTS engine according to what was originally used"""
     uuid = context["__lily_data_satellite"]
     if _lily_impl.has_cap(uuid, 'voice'):
-        _lily_impl._say(uuid, output, context["__lily_data_lang"])
+        return _lily_impl.ActionAnswer.text(output)
     else:
         _lily_impl.log_error(f"Satellite '{uuid}' doesn't implement 'voice' capapbility, answer can't be sent")
+        return None
+
+def answer_audio_file(file: str, context: Dict[str, Any]) -> Optional[_lily_impl.ActionAnswer]:
+    uuid = context["__lily_data_satellite"]
+    if _lily_impl.has_cap(uuid, 'voice'):
+        return _lily_impl.ActionAnswer.load_audio(file)
+    else:
+        _lily_impl.log_error(f"Satellite '{uuid}' doesn't implement 'voice', audio can't be sent")
+        return None

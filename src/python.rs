@@ -222,13 +222,11 @@ pub fn python_has_module_path(module_path: &Path) -> Result<bool> {
 #[pymodule]
 fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add("__doc__", "Internal implementations of Lily's Python functions")?;
-    m.add("_say", wrap_pyfunction!(python_say, m)?)?;
     m.add("_negotiate_lang", wrap_pyfunction!(negotiate_lang, m)?)?;
     m.add("log_error", wrap_pyfunction!(log_error, m)?)?;
     m.add("log_warn", wrap_pyfunction!(log_warn, m)?)?;
     m.add("log_info", wrap_pyfunction!(log_info, m)?)?;
     m.add("_get_curr_lily_package", wrap_pyfunction!(get_current_package, m)?)?;
-    m.add("_play_file", wrap_pyfunction!(play_file, m)?)?;
     m.add("conf", wrap_pyfunction!(get_conf_string, m)?)?;
     m.add("has_cap", wrap_pyfunction!(client_has_cap,m)?)?;
     m.add_class::<crate::actions::PyActionSet>()?;
@@ -236,19 +234,7 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
     Ok(())
 }
 
-#[pyfunction]
-fn python_say(py: Python, uuid: &str, text: &str, lang: &str) -> PyResult<PyObject> {
-    MSG_OUTPUT. with::<_,PyResult<()>>(|m|{match *m.borrow_mut() {
-            Some(ref mut output) => {
-                let lang_id = lang.parse().py_excep::<PyAttributeError>()?;
-                output.answer(text, &lang_id, uuid.to_string()).py_excep::<PyAttributeError>()?;
-            }
-            _=>{}
-        };
-        Ok(())
-    })?;
-    Ok(py.None())
-}
+
 
 #[pyfunction]
 fn get_current_package( ) -> PyResult<String> {
@@ -292,31 +278,6 @@ fn log_error(python: Python, text: &str) -> PyResult<PyObject>  {
     log::error!("{}", text);
 
     Ok(python.None())
-}
-
-#[pyfunction]
-fn play_file(py: Python, uuid: &str, input: &str) -> PyResult<PyObject> {
-    MSG_OUTPUT.with::<_, PyResult<()>>(|m|{match *m.borrow_mut() {
-            Some(ref mut output) => {
-                let mut f = File::open(&input)?;
-                let mut buffer = vec![0; fs::metadata(&input)?.len() as usize];
-                f.read(&mut buffer)?;
-
-                output.send_audio(Audio::new_encoded(buffer), uuid.to_string()).py_excep::<PyAttributeError>()?;
-            }
-            _=>{}
-        };
-
-        Ok(())
-    })?;
-    Ok(py.None())
-    /*let mut play_dev = PlayDevice::new().map_err(|err|PyErr::new::<PyOSError, _>(format!("Couldn't obtain play stream, reason: {:?}", err)))?;
-    if let Err(err) = play_dev.play_file(input) {
-        Err(PyErr::new::<PyOSError, _>(format!("Couldn't play file \"{}\": {}",input, err)))
-    }
-    else {
-        Ok(py.None())
-    }*/
 }
 
 #[pyfunction]

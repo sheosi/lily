@@ -1,6 +1,6 @@
 import datetime
 from typing import Any, Dict
-from lily_ext import action, translate, answer
+from lily_ext import action, translate, answer, answer_audio_file
 import _lily_impl
 
 @action(name="say_date_time")
@@ -16,28 +16,20 @@ class SayTime:
 class BaseAnswers:
     def trigger_action(self, context):
         if context["intent"] == "say_hello":
-            answer("$say_hello_i18n", context)
+            return answer(translate("$say_hello_i18n", context), context)
         if context["intent"] == "say_name":
-            answer("$say_name", context)
+            return answer(translate("$say_name", context), context)
         if context["intent"] == "repeat":
-            answer("$$say_repeat", context)
+            return answer(translate("$say_repeat", context), context)
         
 @action(name="event_handling")
-class EventHandling:
-    @staticmethod
-    def send_audio(file: str, context: Dict[str, Any]):
-        uuid = context["__lily_data_satellite"]
-        if _lily_impl.has_cap(uuid, 'voice'):
-            _lily_impl._play_file(uuid, file)
-        else:
-            _lily_impl.log_error(f"Satellite '{uuid}' doesn't implement 'voice', audio can't be sent")
-            
+class EventHandling:            
     def trigger_action(self, context):
         if context["event"] == "lily_start":
-            answer("$lily_start", context)
+            return answer(translate("$lily_start", context), context)
         if context["event"] == "init_reco":
-            self.send_audio("sounds/beep.ogg",context)
+            return answer_audio_file("sounds/beep.ogg",context)
         if context["event"] == "unrecognized":
-            answer("$lily_unknown", context)
+            return answer(translate("$lily_unknown", context), context)
         if context["event"] == "empty_reco":
-            self.send_audio("sounds/end_recognition.ogg", context)
+            return answer_audio_file("sounds/end_recognition.ogg", context)

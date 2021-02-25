@@ -133,10 +133,10 @@ class {}:
     def __init__(self):
         pass
 
-    def trigger_action(self, args, context):
-        pass
-
-    ", skill_name.to_lowercase())?;
+    def trigger_action(self, context):
+        if context[\"intent\"] == \"example\":
+            answer(\"$example_translation_say\", context)
+    ", first_upper(skill_name.to_lowercase()))?;
 
     // Create translation
     let trans_path = pkg_path.join("translations");
@@ -160,11 +160,10 @@ class {}:
     samples: \"Say hello to {{$friend_name}}\"
     entities:
         friend_name:
-        kind:
-            data:
-            - Alex
-            - John
-        example: Alex
+            kind:
+                data:
+                    - Alex
+                    - John
     action: default_action
 ")?;
 

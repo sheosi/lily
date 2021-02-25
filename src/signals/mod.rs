@@ -17,7 +17,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{ActionSet, ActionContext, SharedActionSet};
+use crate::actions::{ActionAnswer, ActionContext, ActionSet, SharedActionSet};
 use crate::config::Config;
 
 // Other crates
@@ -43,7 +43,7 @@ impl SignalEvent {
         self.event_map.add_mapping(event_name, act_set)
     }
 
-    pub fn call(&mut self, event_name: &str, mut context: ActionContext) {
+    pub fn call(&mut self, event_name: &str, mut context: ActionContext) -> Option<Vec<ActionAnswer>> {
         context.set("type".to_string(), "event".to_string());
         context.set("event".to_string(), "event_name".to_string());
         self.event_map.call_mapping(event_name, &context)
@@ -65,9 +65,12 @@ impl ActMap {
         *action_entry = act_set;
     }
 
-    pub fn call_mapping(&mut self, act_name: &str, context: &ActionContext) {
+    pub fn call_mapping(&mut self, act_name: &str, context: &ActionContext) -> Option<Vec<ActionAnswer>>{
         if let Some(action_set) = self.map.get_mut(act_name) {
-            action_set.call_all(context, ||{act_name.into()});
+            Some(action_set.call_all(context, ||{act_name.into()}))
+        }
+        else {
+            None
         }
     }
 }

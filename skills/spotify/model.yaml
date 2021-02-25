@@ -1,0 +1,10 @@
+play_song:
+    samples: "Say hello to {$friend_name}"
+    entities:
+        friend_name:
+            kind:
+                data:
+                    - Alex
+                    - John
+    action: default_action
+
