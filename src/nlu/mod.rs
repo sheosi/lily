@@ -27,14 +27,15 @@ mod rasa;
 pub use self::rasa::*;
 
 pub trait NluManager {
-    type NluType: Nlu + Debug;
+    type NluType: Nlu + Debug + Send;
     fn ready_lang(&mut self, lang: &LanguageIdentifier) -> Result<()>;
 
     fn add_intent(&mut self, order_name: &str, phrases: Vec<NluUtterance>);
     fn add_entity(&mut self, name:&str, def: EntityDef);
+    fn add_entity_value(&mut self, name: &str, value: String) -> Result<()>;
 
     // Consume the struct so that we can reuse memory
-    fn train(self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<Self::NluType>;
+    fn train(&self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<Self::NluType>;
 }
 
 pub trait NluManagerStatic {
@@ -54,7 +55,7 @@ pub trait NluManagerConf {
     fn get_paths() -> (PathBuf, PathBuf);
 }
 
-#[derive(Debug)]
+#[derive(Clone,Debug)]
 pub enum NluUtterance{
     Direct(String),
     WithEntities {text: String, entities: HashMap<String, EntityInstance>}

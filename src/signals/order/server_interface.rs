@@ -149,7 +149,7 @@ impl MqttInterface {
     }
 
 
-    pub async fn interface_loop<M: NluManager + NluManagerConf + NluManagerStatic + Debug> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &ActionContext, order: &mut SignalOrder<M>) -> Result<()> {
+    pub async fn interface_loop<M: NluManager + NluManagerConf + NluManagerStatic + Debug + Send + 'static> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &ActionContext, order: &mut SignalOrder<M>) -> Result<()> {
         let ibm_data = config.stt.ibm.clone();
         let mqtt_conf = ConnectionConfResolved::from(
             config.mqtt.clone(),

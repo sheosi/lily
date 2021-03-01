@@ -1,9 +1,10 @@
 // Standard library
 use std::{cell::{Ref, RefCell}, unimplemented};
 use std::collections::HashMap;
+use std::mem::replace;
 use std::path::Path;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, mpsc::Receiver};
 
 // This crate
 use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry, PythonAction};
@@ -11,6 +12,7 @@ use crate::collections::GlobalReg;
 use crate::python::add_py_folder;
 use crate::queries::{LocalQueryRegistry, PythonQuery, QueryRegistry};
 use crate::signals::{Hook, IntentData, LocalSignalRegistry, new_signal_order, PythonSignal, SignalRegistry, SignalRegistryShared, Timer, PollQuery};
+use crate::signals::order::EntityAddValueRequest;
 use crate::nlu::EntityDef;
 use crate::vars::{SKILLS_PATH_ERR_MSG, PYTHON_SDK_PATH};
 
@@ -193,10 +195,10 @@ impl HalfBakedDoubleError {
 }
 
 
-pub fn load_skills(path: &Path, curr_lang: &Vec<LanguageIdentifier>) -> Result<SignalRegistry> {
-    let loaders: Vec<Box<dyn Loader>> = vec![
+pub fn load_skills(path: &Path, curr_lang: &Vec<LanguageIdentifier>, consumer: Receiver<EntityAddValueRequest>) -> Result<SignalRegistry> {
+    let mut loaders: Vec<Box<dyn Loader>> = vec![
         Box::new(PythonLoader::new()),
-        Box::new(EmbeddedLoader::new())
+        Box::new(EmbeddedLoader::new(consumer))
     ];
 
     let global_sigreg = Rc::new(RefCell::new(SignalRegistry::new()));
@@ -208,7 +210,7 @@ pub fn load_skills(path: &Path, curr_lang: &Vec<LanguageIdentifier>) -> Result<S
     let global_queryreg = Rc::new(RefCell::new(QueryRegistry::new()));
     let base_queryreg = LocalQueryRegistry::new(global_queryreg.clone());
 
-    for loader in &loaders {
+    for loader in &mut loaders {
         loader.init_base(global_sigreg.clone(), global_actreg.clone(), curr_lang.to_owned())?;
     }
 
@@ -276,7 +278,7 @@ pub fn load_skills(path: &Path, curr_lang: &Vec<LanguageIdentifier>) -> Result<S
 }
 
 trait Loader {
-    fn init_base(&self, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<()>;
+    fn init_base(&mut self, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<()>;
     fn load_code(&self, skill_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry, base_quereg: &LocalQueryRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry, LocalQueryRegistry)> ;
 }
 
@@ -325,7 +327,7 @@ impl PythonLoader {
 }
 
 impl Loader for PythonLoader {
-    fn init_base(&self, _glob_sigreg: SignalRegistryShared, _glob_actreg: ActionRegistryShared, _lang: Vec<LanguageIdentifier>) -> Result<()> {
+    fn init_base(&mut self, _glob_sigreg: SignalRegistryShared, _glob_actreg: ActionRegistryShared, _lang: Vec<LanguageIdentifier>) -> Result<()> {
         // Get GIL
         let gil = Python::acquire_gil();
         let py = gil.python();
@@ -354,18 +356,20 @@ impl PythonLoader {
 }
 
 struct EmbeddedLoader {
+    consumer: Option<Receiver<EntityAddValueRequest>>
 }
 
 impl EmbeddedLoader {
-    fn new() -> Self {
-        Self{}
+    fn new(consumer: Receiver<EntityAddValueRequest>) -> Self {
+        Self{consumer: Some(consumer)}
     }
 }
 
 impl Loader for EmbeddedLoader {
-    fn init_base(&self, glob_sigreg: SignalRegistryShared, _glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<()> {
+    fn init_base(&mut self, glob_sigreg: SignalRegistryShared, _glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<()> {
         let mut mut_sigreg = glob_sigreg.borrow_mut();
-        mut_sigreg.insert("order".into(), Rc::new(RefCell::new(new_signal_order(lang))))?;
+        let consumer = replace(&mut self.consumer, None).expect("Consumer already consumed");
+        mut_sigreg.insert("order".into(), Rc::new(RefCell::new(new_signal_order(lang, consumer))))?;
         mut_sigreg.insert("private__poll_query".into(), Rc::new(RefCell::new(PollQuery::new())))?;
         mut_sigreg.insert("timer".into(), Rc::new(RefCell::new(Timer::new())))?;
 

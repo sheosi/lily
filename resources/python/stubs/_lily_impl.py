@@ -38,6 +38,10 @@ def has_cap(client: str, cap: str) -> bool:
     """Returns True if the 'client' has declared that supports 'cap'"""
     return False
 
+def add_entity_value(entity: str, value: str, langs: Optional[List[str]]):
+    """Dynamically adds a value to an entity, the NLU will be recompiled"""
+    ...
+
 class PyActionSet:
     """Represents an set of actions related to a signal"""
 

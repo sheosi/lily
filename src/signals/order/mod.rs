@@ -3,7 +3,8 @@ pub mod server_interface;
 // Standard library
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
-use std::sync::{Arc, Mutex};
+use std::mem::replace;
+use std::sync::{Arc, Mutex, mpsc};
 
 // This crate
 use crate::actions::{ActionAnswer, ActionContext, ActionSet, MainAnswer};
@@ -18,8 +19,10 @@ use self::server_interface::{MqttInterface, MSG_OUTPUT};
 // Other crates
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
+use lazy_static::lazy_static;
 use log::{info, error, warn};
 use serde::{Deserialize, Deserializer, de::{self, SeqAccess, Visitor}, Serialize};
+use tokio::{select, task::spawn_blocking};
 use unic_langid::LanguageIdentifier;
 
 #[cfg(not(feature = "devel_rasa_nlu"))]
@@ -27,6 +30,10 @@ use crate::nlu::SnipsNluManager;
 
 #[cfg(feature = "devel_rasa_nlu")]
 use crate::nlu::RasaNluManager;
+
+lazy_static! {
+    pub static ref ENTITY_ADD_CHANNEL: Mutex<Option<mpsc::Sender<EntityAddValueRequest>>> =  Mutex::new(None);
+}
 
 #[derive(Debug, Clone, Deserialize)]
 struct YamlEntityDef {
@@ -52,7 +59,6 @@ enum OrderData {
     Direct(String),
     WithEntities{text: String, entities: HashMap<String, OrderEntity>}
 }
-
 
 
 #[derive(Clone, Debug, Serialize)]
@@ -159,7 +165,7 @@ fn empty_map() -> HashMap<String, SlotData> {
     HashMap::new()
 }
 
-fn add_intent_to_nlu<N: NluManager + NluManagerStatic + NluManagerConf>(
+fn add_intent_to_nlu<N: NluManager + NluManagerStatic + NluManagerConf + Send>(
     nlu_man: &mut HashMap<LanguageIdentifier, NluState<N>>,
     sig_arg: IntentData,
     intent_name: &str,
@@ -238,61 +244,58 @@ fn add_intent_to_nlu<N: NluManager + NluManagerStatic + NluManagerConf>(
 
 
 #[derive(Debug)]
-enum NluState<M: NluManager + NluManagerStatic + NluManagerConf> {
-    Training(M), Done(M::NluType), InProcess
+pub struct NluState<M: NluManager + NluManagerStatic + NluManagerConf + Send> {
+    manager: M,
+    nlu: Option<M::NluType>
 }
 
-impl<M: NluManager + NluManagerStatic + NluManagerConf> NluState<M> {
+impl<M: NluManager + NluManagerStatic + NluManagerConf + Send> NluState<M> {
     fn get_mut_nlu_man(&mut self) -> &mut M {
-        match self {
-            NluState::Training(m) => {m},
-            NluState::Done(_)=> {panic!("Can't get Nlu Manager when the NLU it's already trained")},
-            NluState::InProcess => {panic!("Can't call this while training the NLU")}
-        }
+        &mut self.manager
+    }
+
+    fn new(manager: M) -> Self {
+        Self {manager, nlu: None}
     }
 }
 
 #[derive(Debug)]
-pub struct SignalOrder<M: NluManager + NluManagerStatic + NluManagerConf + Debug> {
+pub struct SignalOrder<M: NluManager + NluManagerStatic + NluManagerConf + Debug + Send> {
     intent_map: ActMap,
-    nlu: HashMap<LanguageIdentifier, NluState<M>>,
+    nlu: Arc<Mutex<HashMap<LanguageIdentifier, NluState<M>>>>,
     demangled_names: HashMap<String, String>,
+    dyn_entities: Option<mpsc::Receiver<EntityAddValueRequest>>,
     langs: Vec<LanguageIdentifier>
 }
 
-impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug> SignalOrder<M> {
-    pub fn new(langs: Vec<LanguageIdentifier>) -> Self {
+impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> SignalOrder<M> {
+    pub fn new(langs: Vec<LanguageIdentifier>, consumer: mpsc::Receiver<EntityAddValueRequest>) -> Self {
         let mut managers = HashMap::new();
         for lang in &langs {
-            managers.insert(lang.to_owned(), NluState::Training(M::new()));
+            managers.insert(lang.to_owned(), NluState::new(M::new()));
         }
         SignalOrder {
             intent_map: ActMap::new(),
-            nlu: managers,
+            nlu: Arc::new(Mutex::new(managers)),
             demangled_names: HashMap::new(),
+            dyn_entities: Some(consumer),
             langs
         }
     }
 
-    pub fn end_loading(&mut self) -> Result<()> {
-        for lang in &self.langs {
+    pub fn end_loading(nlu: Arc<Mutex<HashMap<LanguageIdentifier, NluState<M>>>>,langs: &Vec<LanguageIdentifier>) -> Result<()> {
+        for lang in langs {
             let (train_path, model_path) = M::get_paths();
             let err = || {anyhow!("Received language '{}' has not been registered", lang.to_string())};
-            let val  = match self.nlu.insert(lang.clone(), NluState::InProcess).ok_or_else(err)? {
-                NluState::Training(mut nlu_man) => {
-                    if M::is_lang_compatible(lang) {
-                        nlu_man.ready_lang(lang)?;
-                        NluState::Done(nlu_man.train(&train_path, &model_path.join("main_model.json"), lang)?)
-                    }
-                    else {
-                        Err(anyhow!("{} NLU is not compatible with the selected language", M::name()))?
-                    }
-                }
-                _ => {
-                    panic!("Called end_loading twice");
-                }
-            };
-            self.nlu.insert(lang.to_owned(), val);
+            let mut m = nlu.lock().expect(POISON_MSG);
+            let nlu  = m.get_mut(lang).ok_or_else(err)?;
+            if M::is_lang_compatible(lang) {
+                nlu.manager.ready_lang(lang)?;
+                nlu.nlu = Some(nlu.manager.train(&train_path, &model_path.join("main_model.json"), lang)?);
+            }
+            else {
+                Err(anyhow!("{} NLU is not compatible with the selected language", M::name()))?
+            }
 
             info!("Initted Nlu");
         }
@@ -307,35 +310,30 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug> SignalOrder<M> {
 
                 if !decode_res.hypothesis.is_empty() {
                     const ERR_MSG: &str = "Received language to the NLU was not registered";
-                    match self.nlu.get_mut(&lang).expect(ERR_MSG) {
-                        NluState::Done(ref mut nlu) => {
-                            let result = nlu.parse(&decode_res.hypothesis).await.map_err(|err|anyhow!("Failed to parse: {:?}", err))?;
-                            info!("{:?}", result);
+                    const NO_NLU_MSG: &str = "received_order can't be called before end_loading";
+                    let mut m = self.nlu.lock().expect(POISON_MSG);
+                    let nlu = &m.get_mut(&lang).expect(ERR_MSG).nlu.as_mut().expect(NO_NLU_MSG);
+                    let result = nlu.parse(&decode_res.hypothesis).await.map_err(|err|anyhow!("Failed to parse: {:?}", err))?;
+                    info!("{:?}", result);
 
-                            // Do action if at least we are 80% confident on
-                            // what we got
-                            if result.confidence >= MIN_SCORE_FOR_ACTION {
-                                if let Some(intent_name) = result.name {
-                                    info!("Let's call an action");
-                                    let mut slots_context = add_slots(base_context,result.slots);
-                                    slots_context.set("type".to_string(), "intent".to_string());
-                                    slots_context.set("intent".to_string(), self.demangle(&intent_name).to_string());
-                                    let answers = self.intent_map.call_mapping(&intent_name, &slots_context);
-                                    info!("Action called");
-                                    answers
-                                }
-                                else {
-                                    event_signal.lock().expect(POISON_MSG).call("unrecognized", base_context.clone())
-                                }
-                            }
-                            else {
-                                event_signal.lock().expect(POISON_MSG).call("unrecognized", base_context.clone())
-                            }
-
-                        },
-                        _ => {
-                            panic!("received_order can't be called before end_loading")
+                    // Do action if at least we are 80% confident on
+                    // what we got
+                    if result.confidence >= MIN_SCORE_FOR_ACTION {
+                        if let Some(intent_name) = result.name {
+                            info!("Let's call an action");
+                            let mut slots_context = add_slots(base_context,result.slots);
+                            slots_context.set("type".to_string(), "intent".to_string());
+                            slots_context.set("intent".to_string(), self.demangle(&intent_name).to_string());
+                            let answers = self.intent_map.call_mapping(&intent_name, &slots_context);
+                            info!("Action called");
+                            answers
                         }
+                        else {
+                            event_signal.lock().expect(POISON_MSG).call("unrecognized", base_context.clone())
+                        }
+                    }
+                    else {
+                        event_signal.lock().expect(POISON_MSG).call("unrecognized", base_context.clone())
                     }
                 }
                 else {
@@ -353,7 +351,34 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug> SignalOrder<M> {
 
     pub async fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &ActionContext, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         let mut interface = MqttInterface::new(curr_lang)?;
-        interface.interface_loop(config, signal_event, base_context, self).await
+
+        // Dyn entities data
+        let dyn_entities = replace(&mut self.dyn_entities, None).expect("Dyn_entities already consumed");
+        let shared_nlu = self.nlu.clone();
+        let curr_langs2 = curr_lang.clone();
+        
+        let a= || async move {
+            loop {
+                let request= dyn_entities.recv().unwrap();
+                let langs = if request.langs.is_empty(){
+                    curr_langs2.clone()
+                }
+                else {
+                    request.langs
+                };
+
+                let mut m = shared_nlu.lock().expect(POISON_MSG);
+                for lang in langs {
+                    let man = m.get_mut(&lang).expect("Language not registered").get_mut_nlu_man();
+                    let mangled = Self::mangle(&request.skill, &request.entity);
+                    man.add_entity_value(&mangled, request.value.clone());
+                    Self::end_loading(shared_nlu.clone(), &curr_langs2);
+                }
+            }
+        };
+        select!{
+            _ = spawn_blocking(a) => {Err(anyhow!("Dynamic entitying failed"))}
+         e = interface.interface_loop(config, signal_event, base_context, self) => {e}}
     }
 }
 
@@ -377,8 +402,7 @@ fn process_answer(ans: ActionAnswer, lang: &LanguageIdentifier, uuid: String) ->
                 MainAnswer::Text(t) => {
                     output.answer(t, lang, uuid)
                 }
-            }?;
-            
+            }?;  
         }
         _=>{}
     };
@@ -386,7 +410,7 @@ fn process_answer(ans: ActionAnswer, lang: &LanguageIdentifier, uuid: String) ->
     })
 }
 
-impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug>  SignalOrder<M> {
+impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send>  SignalOrder<M> {
     fn mangle(intent_name: &str, skill_name: &str) -> String {
         format!("__{}__{}", skill_name, intent_name)
     }
@@ -395,7 +419,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug>  SignalOrder<M> {
     }
     pub fn add_intent(&mut self, sig_arg: IntentData, intent_name: &str, skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
         let mangled = Self::mangle(intent_name, skill_name);
-        add_intent_to_nlu(&mut self.nlu, sig_arg, &mangled, skill_name, &self.langs)?;
+        add_intent_to_nlu(&mut self.nlu.lock().expect(POISON_MSG), sig_arg, &mangled, skill_name, &self.langs)?;
         self.intent_map.add_mapping(&mangled, act_set);
         self.demangled_names.insert(mangled, intent_name.to_string());
         Ok(())
@@ -403,7 +427,8 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug>  SignalOrder<M> {
 
     pub fn add_slot_type(&mut self, type_name: String, data: EntityDef) -> Result<()> {
         for lang in &self.langs {
-            let nlu_man= self.nlu.get_mut(lang).expect("Language not registered").get_mut_nlu_man();
+            let mut m = self.nlu.lock().expect(POISON_MSG);
+            let nlu_man= m.get_mut(lang).expect("Language not registered").get_mut_nlu_man();
             let trans_data = data.clone().into_translation(lang)?;
             nlu_man.add_entity(&type_name, trans_data);
         }
@@ -413,13 +438,27 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug>  SignalOrder<M> {
 
 
 #[async_trait(?Send)]
-impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug> Signal for SignalOrder<M> {
+impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> Signal for SignalOrder<M> {
     fn end_load(&mut self, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
-        self.end_loading()
+        Self::end_loading(self.nlu.clone(), &self.langs)
     }
     async fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &ActionContext, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         self.record_loop(signal_event, config, base_context, curr_lang).await
     }
+}
+
+pub struct EntityAddValueRequest {
+    pub skill: String,
+    pub entity: String,
+    pub value: String,
+    pub langs: Vec<LanguageIdentifier>,
+}
+pub fn init_dynamic_entities() -> Result<mpsc::Receiver<EntityAddValueRequest>> {
+    let (producer, consumer) = mpsc::channel();
+
+    (*ENTITY_ADD_CHANNEL.lock().expect(POISON_MSG)) = Some(producer);
+
+    Ok(consumer)
 }
 
 impl YamlEntityDef {
@@ -443,7 +482,7 @@ pub type CurrentNluManager = RasaNluManager;
 
 pub type SignalOrderCurrent = SignalOrder<CurrentNluManager>;
 
-pub fn new_signal_order(langs: Vec<LanguageIdentifier>) -> SignalOrder<CurrentNluManager> {
-    SignalOrder::new(langs)
+pub fn new_signal_order(langs: Vec<LanguageIdentifier>, consumer: mpsc::Receiver<EntityAddValueRequest>) -> SignalOrder<CurrentNluManager> {
+    SignalOrder::new(langs, consumer)
 }
 

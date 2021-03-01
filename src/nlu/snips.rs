@@ -7,6 +7,7 @@ use crate::python::python_has_module_path;
 use crate::nlu::compare_sets_and_train;
 use crate::nlu::{EntityDef, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponse, NluResponseSlot, NluUtterance};
 use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH};
+use crate::signals::StringList;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -14,6 +15,8 @@ use regex::Regex;
 use serde::Serialize;
 use snips_nlu_lib::SnipsNluEngine;
 use unic_langid::{langid, LanguageIdentifier};
+
+use super::EntityData;
 
 //// NluManager ///////////////////////////////////////////////////////////////////////////////////
 #[derive(Serialize)]
@@ -124,14 +127,14 @@ fn split_captures<'a>(re: &'a Regex, input: &'a str) ->  Vec<(&'a str, SplitCapK
 }
 
 impl SnipsNluManager {
-    fn make_train_set_json(self, lang: &LanguageIdentifier) -> Result<String> {
+    fn make_train_set_json(&self, lang: &LanguageIdentifier) -> Result<String> {
         let mut intents: HashMap<String, Intent> = HashMap::new();
-        for (name, utts) in self.intents.into_iter() {
-            let utterances: Vec<Utterance> = utts.into_iter().map(|utt| utt.into()).collect();
+        for (name, utts) in self.intents.iter() {
+            let utterances: Vec<Utterance> = utts.into_iter().map(|utt| utt.clone().into()).collect();
             intents.insert(name.to_string(), Intent{utterances});
         }
 
-        let train_set = NluTrainSet{entities: self.entities, intents, language: lang.language.to_string()};
+        let train_set = NluTrainSet{entities: self.entities.clone(), intents, language: lang.language.to_string()};
 
         // Output JSON
         Ok(serde_json::to_string(&train_set)?)
@@ -172,7 +175,15 @@ impl NluManager for SnipsNluManager {
         self.entities.insert(name.to_string(), def);
     }
 
-    fn train(self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<SnipsNlu> {
+    fn add_entity_value(&mut self, name: &str, value: String) -> Result<()> {
+        let def = self.entities.get_mut(name).ok_or_else(||{
+            anyhow!("Entity {} does not exist", name)
+        })?;
+        def.data.push(EntityData{value, synonyms: StringList::new()});
+        Ok(())
+    }
+
+    fn train(&self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<SnipsNlu> {
 
     	let train_set = self.make_train_set_json(lang)?;
 

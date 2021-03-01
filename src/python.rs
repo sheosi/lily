@@ -1,20 +1,17 @@
 use std::env;
 use std::collections::HashMap;
-use std::fs::{File, self};
-use std::io::Read;
 use std::path::Path;
 use std::process::Command;
 
 use crate::actions::ActionContext;
 use crate::skills::{call_for_skill, PYTHON_LILY_SKILL};
-use crate::signals::order::server_interface::{CAPS_MANAGER, MSG_OUTPUT};
-use crate::vars::{PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_YAML_FLOAT_MSG};
+use crate::signals::order::{server_interface::CAPS_MANAGER, ENTITY_ADD_CHANNEL, EntityAddValueRequest};
+use crate::vars::{POISON_MSG, PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_ADD_ENTITY_VALUE_MSG, NO_YAML_FLOAT_MSG};
 
 use anyhow::{anyhow, Result};
 use pyo3::{conversion::IntoPy, PyErr, Python, types::{PyBool, PyList, PyDict}, PyObject, PyResult, prelude::*, wrap_pyfunction, FromPyObject, exceptions::*};
 use pyo3::type_object::PyTypeObject;
 use fluent_langneg::negotiate::{negotiate_languages, NegotiationStrategy};
-use lily_common::audio::Audio;
 use log::info;
 use serde_yaml::Value;
 use thiserror::Error;
@@ -229,6 +226,7 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add("_get_curr_lily_package", wrap_pyfunction!(get_current_package, m)?)?;
     m.add("conf", wrap_pyfunction!(get_conf_string, m)?)?;
     m.add("has_cap", wrap_pyfunction!(client_has_cap,m)?)?;
+    m.add("add_entity_value", wrap_pyfunction!(add_entity_value,m)?)?;
     m.add_class::<crate::actions::PyActionSet>()?;
 
     Ok(())
@@ -296,6 +294,28 @@ fn get_conf_string(py: Python, conf_name: &str) -> PyResult<PyObject> {
 fn client_has_cap(client: &str, cap: &str) -> PyResult<bool> {
     CAPS_MANAGER.with(|c| c.borrow().has_cap(client, cap));
     Ok(true)
+}
+
+#[pyfunction]
+fn add_entity_value(entity_name: String, value: String, langs: Option<Vec<String>>) -> PyResult<()> {
+    // Transform all languages into their LanguageIdentifier forms
+    let langs = langs.unwrap_or(Vec::new());
+    let langs: Result<Vec<_>,_> = langs.into_iter().map(|l|l.parse()).collect();
+    let langs = langs.py_excep::<PyValueError>()?;
+
+    // Get channel and ready request
+    let mut m = ENTITY_ADD_CHANNEL.lock().expect(POISON_MSG);
+    let channel = m.as_mut().ok_or_else(||PyErr::new::<PyOSError, _>(NO_ADD_ENTITY_VALUE_MSG))?;
+    let request = EntityAddValueRequest{
+        skill: get_current_package()?,
+        entity: entity_name,
+        value: value,
+        langs
+    };
+
+    // Send request
+    channel.send(request).py_excep::<PyOSError>()?;
+    Ok(())
 }
 
 mod sys_path {

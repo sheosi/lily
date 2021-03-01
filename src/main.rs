@@ -17,11 +17,13 @@ mod vars;
 use std::path::Path;
 use std::rc::Rc;
 
+
 // This crate
 use crate::actions::ActionContext;
 use crate::config::Config;
 use crate::skills::load_skills;
 use crate::python::{python_init, set_python_locale};
+use crate::signals::init_dynamic_entities;
 use crate::vars::SKILLS_PATH;
 
 // Other crates
@@ -77,7 +79,9 @@ pub async fn main()  -> Result<()> {
         set_python_locale(py, &curr_langs[0])?;
     }
 
-    let mut sigreg = load_skills(&Path::new(&SKILLS_PATH.resolve()), &curr_langs)?;
+    let consumer = init_dynamic_entities()?;
+
+    let mut sigreg = load_skills(&Path::new(&SKILLS_PATH.resolve()), &curr_langs, consumer)?;
     sigreg.call_loops(&config, &ActionContext::new(), &curr_langs).await?;
 
     Ok(())
