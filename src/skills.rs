@@ -105,6 +105,7 @@ pub fn load_intents(
         let yaml_path = path.join("model.yaml");
         if yaml_path.is_file() {
             #[derive(Debug, Deserialize)]
+            #[serde(untagged)]
             enum EventOrAction {
                 Event(String),
                 Action{action: String}

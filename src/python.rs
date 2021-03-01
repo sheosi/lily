@@ -228,6 +228,7 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add("has_cap", wrap_pyfunction!(client_has_cap,m)?)?;
     m.add("add_entity_value", wrap_pyfunction!(add_entity_value,m)?)?;
     m.add_class::<crate::actions::PyActionSet>()?;
+    m.add_class::<crate::actions::ActionAnswer>()?;
 
     Ok(())
 }
