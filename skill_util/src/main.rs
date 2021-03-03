@@ -15,7 +15,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter, write::FileOptions};
 
 const DEF_REPO_URL: &str = "http://lily-skills.s3-website.eu-west-3.amazonaws.com/list.json";
 const SKILLS_PATH: &str = "../skills";
-
+const CURR_LILY_VER: (u8, u8) = (0,6);
 
 #[tokio::main(flavor="current_thread")]
 async fn main() -> anyhow::Result<()> {
@@ -211,12 +211,13 @@ enum SkillUrl {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct SkillData {
-    url: SkillUrl
+    url: SkillUrl,
+    min_ver: (u8,u8)
 }
 
 impl SkillData {
-    fn new_internal(path: String) -> Self {
-        SkillData{url: SkillUrl::Internal(path)}
+    fn new_internal(path: String, min_ver: (u8, u8)) -> Self {
+        SkillData{url: SkillUrl::Internal(path), min_ver}
     }
 }
 
@@ -246,21 +247,31 @@ impl RepoData {
     async fn install(&self, skls_path: &Path, skill_name: &str) -> Result<()> {
         let http = Client::new();
         let skill_data = self.skills.get(skill_name).ok_or(RepoError::NotFound(skill_name.into()))?;
-        let skl_url = match &skill_data.url {
-            SkillUrl::Internal(repo_ref) => {
-                let mut url = self.repo_url.clone().expect("Can't perform install in a remote repo");
-                url.set_path(repo_ref);
-                url
-            }
-            SkillUrl::External(url) => Url::parse(url)?
-        };
-        let zip_data = http.get(skl_url).send().await?.bytes().await?;
-        extract_zip(zip_data, &skls_path.join(skill_name))
+        if Self::is_ver_compatible(skill_data.min_ver) {
+            let skl_url = match &skill_data.url {
+                SkillUrl::Internal(repo_ref) => {
+                    let mut url = self.repo_url.clone().expect("Can't perform install in a remote repo");
+                    url.set_path(repo_ref);
+                    url
+                }
+                SkillUrl::External(url) => Url::parse(url)?
+            };
+            let zip_data = http.get(skl_url).send().await?.bytes().await?;
+            extract_zip(zip_data, &skls_path.join(skill_name))
+        }
+        else {
+            let v = skill_data.min_ver;
+            Err(anyhow!("This version requires a newer Lily: {}.{}", v.0, v.1))
+        }
     }
 
     fn add_internal(&mut self, skill_name: &str, path:String) {
-        let skl = SkillData::new_internal(path);
+        let skl = SkillData::new_internal(path, CURR_LILY_VER);
         self.skills.insert(skill_name.to_string(), skl);
+    }
+
+    fn is_ver_compatible(ver: (u8, u8)) -> bool {
+        CURR_LILY_VER.0 >= ver.0 && CURR_LILY_VER.1 >= ver.1
     }
 }
 
