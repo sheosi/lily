@@ -34,8 +34,8 @@ recognition you need to fill `stt/ibm` and have set
 from IBM after registering an account for their online services,
 in their free plan you get a pretty good number of minutes per month.
 
-Also, this file can have map keys with the name of a package, that package will
-access that map while getting it's configuration, for example when package `home_assistant`
+Also, this file can have map keys with the name of a skill, that skill will
+access that map while getting it's configuration, for example when skill `home_assistant`
 asks for `auth_key` this is what the config must have:
 
 ```yaml

@@ -77,8 +77,8 @@ impl RefString {
 }
 
 fn extract_name(path: &Path) -> Result<Rc<String>> {
-    let os_str = path.file_name().ok_or_else(||anyhow!("Can't get package path's name"))?;
-    let skill_name_str = os_str.to_str().ok_or_else(||anyhow!("Can't transform package path name to str"))?;
+    let os_str = path.file_name().ok_or_else(||anyhow!("Can't get skill path's name"))?;
+    let skill_name_str = os_str.to_str().ok_or_else(||anyhow!("Can't transform skill path name to str"))?;
     Ok(Rc::new(skill_name_str.to_string()))
 }
 
@@ -162,13 +162,15 @@ pub fn load_intents(
                 }
             }
 
-            let sigevent = signals.get_sig_event();
-            let def_action = def_action.ok_or_else(||anyhow!("Skill contains events but no action linked"))?;
-            let action = actions.get(&def_action).ok_or_else(||anyhow!("Action '{}' does not exist", &def_action))?.borrow_mut().instance(skill_path.clone());
-            let act_set = ActionSet::create();
-            act_set.lock().unwrap().add_action(action)?;
-            for ev in evs {
-                sigevent.lock().unwrap().add(&ev, act_set.clone());
+            if !evs.is_empty() {
+                let sigevent = signals.get_sig_event();
+                let def_action = def_action.ok_or_else(||anyhow!("Skill contains events but no action linked"))?;
+                let action = actions.get(&def_action).ok_or_else(||anyhow!("Action '{}' does not exist", &def_action))?.borrow_mut().instance(skill_path.clone());
+                let act_set = ActionSet::create();
+                act_set.lock().unwrap().add_action(action)?;
+                for ev in evs {
+                    sigevent.lock().unwrap().add(&ev, act_set.clone());
+                }
             }
 
         }
@@ -258,7 +260,7 @@ pub fn load_skills(path: &Path, curr_lang: &Vec<LanguageIdentifier>, consumer: R
                     skill_sigreg.minus(&base_sigreg).remove_from_global();
                     skill_actreg.minus(&base_actreg).remove_from_global();
                     let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy();
-                    error!("Package {} had a problem, won't be available. {}", skill_name, e.source);
+                    error!("Skill {} had a problem, won't be available. {}", skill_name, e.source);
                     not_loaded.push(skill_name.into_owned());
                 },
                 _ => ()
@@ -370,7 +372,7 @@ impl Loader for EmbeddedLoader {
     fn init_base(&mut self, glob_sigreg: SignalRegistryShared, _glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<()> {
         let mut mut_sigreg = glob_sigreg.borrow_mut();
         let consumer = replace(&mut self.consumer, None).expect("Consumer already consumed");
-        mut_sigreg.insert("order".into(), Rc::new(RefCell::new(new_signal_order(lang, consumer))))?;
+        mut_sigreg.set_order(Rc::new(RefCell::new(new_signal_order(lang, consumer))))?;
         mut_sigreg.insert("private__poll_query".into(), Rc::new(RefCell::new(PollQuery::new())))?;
         mut_sigreg.insert("timer".into(), Rc::new(RefCell::new(Timer::new())))?;
 

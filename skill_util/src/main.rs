@@ -187,14 +187,14 @@ fn print_path_cute(skill_name: &str, pkg_path: &Path) -> Result<()> {
                 absolute_path.push(parent_path);
                 absolute_path
             };
-            println!("\tCreated package \"{}\" at \"{}\"", skill_name, parent_path.canonicalize()?.to_string_lossy());
+            println!("\tCreated skill \"{}\" at \"{}\"", skill_name, parent_path.canonicalize()?.to_string_lossy());
         }
         else {
-            println!("\tCreated package \"{}\"", skill_name);
+            println!("\tCreated skill \"{}\"", skill_name);
         }    
     }
     else {
-        println!("\tCreated package \"{}\"", skill_name);
+        println!("\tCreated skill \"{}\"", skill_name);
     }
 
     Ok(())

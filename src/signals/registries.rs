@@ -77,6 +77,11 @@ impl SignalRegistry {
         
     }
 
+    pub fn set_order(&mut self, sig_order: Rc<RefCell<SignalOrderCurrent>>) -> Result<()>{
+        self.order = Some(sig_order.clone());
+        self.insert("order".to_string(), sig_order)
+    }
+
     delegate!{to self.base{
         pub fn contains(&self, name: &str) -> bool;
         pub fn get_map_ref(&mut self) -> &HashMap<String,Rc<RefCell<dyn Signal>>>;
@@ -93,7 +98,7 @@ impl GlobalReg<dyn Signal> for SignalRegistry {
     }
 }
 
-// To show each package just those signals available to them
+// To show each skill just those signals available to them
 #[derive(Debug, Clone)]
 pub struct LocalSignalRegistry {
     event: SignalEventShared,

@@ -101,11 +101,15 @@ struct StringListVisitor;
 impl<'de> Visitor<'de> for StringListVisitor {
     type Value = StringList;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("Either a string or a list containing strings")
+        formatter.write_str("either a string or a list containing strings")
     }
 
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> where E: de::Error{
         Ok(StringList{data:vec![v.to_string()]})
+    }
+
+    fn visit_string<E>(self, v: String) -> Result<Self::Value, E> where E: de::Error{
+        Ok(StringList{data:vec![v]})
     }
 
     fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
@@ -124,7 +128,7 @@ impl<'de> Visitor<'de> for StringListVisitor {
 impl<'de> Deserialize<'de> for StringList {
     fn deserialize<D>(deserializer: D) -> Result<StringList, D::Error>
     where D: Deserializer<'de> {
-        deserializer.deserialize_i32(StringListVisitor)
+        deserializer.deserialize_any(StringListVisitor)
     }
 }
 
@@ -357,7 +361,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
         let shared_nlu = self.nlu.clone();
         let curr_langs2 = curr_lang.clone();
         
-        let a= || async move {
+        let a= move || {
             loop {
                 let request= dyn_entities.recv().unwrap();
                 let langs = if request.langs.is_empty(){
@@ -377,7 +381,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
             }
         };
         select!{
-            _ = spawn_blocking(a) => {Err(anyhow!("Dynamic entitying failed"))}
+            e = spawn_blocking(a) => {println!("{:?}",e.err());Err(anyhow!("Dynamic entitying failed"))}
          e = interface.interface_loop(config, signal_event, base_context, self) => {e}}
     }
 }

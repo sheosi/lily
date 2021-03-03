@@ -11,11 +11,11 @@
 #     arg1: asassas
 say_hello:
   samples: $order_say_hello
-  action: base_answer 
+  action: base_answers 
 
 say_name:
   samples: $order_say_name
-  action: base_answer
+  action: base_answers
 
 repeat:
   samples: $order_repeat
@@ -27,7 +27,7 @@ repeat:
           - $data2
 
 
-  action: base_answer
+  action: base_answers
 
 say_time:
   samples: $order_say_time

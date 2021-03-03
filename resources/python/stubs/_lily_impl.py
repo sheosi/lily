@@ -30,8 +30,8 @@ def log_error(text: str):
     """Writes into the log as error"""
     ...
 
-def _get_curr_lily_package() -> str:
-    """Returns the name of the package being executed right now"""
+def _get_curr_lily_skill() -> str:
+    """Returns the name of the skill being executed right now"""
     return ""
 
 def has_cap(client: str, cap: str) -> bool:
