@@ -347,7 +347,13 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
         };
         
         if let Some(answers) = ans {
-            answers.into_iter().map(|a|process_answer(a, lang, satellite.clone()));
+            answers.into_iter()
+            .map(|a|
+                process_answer(a, lang, satellite.clone())
+            )
+            .filter(|r|r.is_err())
+            .map(|e|e.err().unwrap())
+            .for_each(|e| error!("There was an error while handling answer: {}", e));
         }
 
         Ok(())
