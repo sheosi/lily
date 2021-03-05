@@ -45,7 +45,7 @@ impl SignalEvent {
 
     pub fn call(&mut self, event_name: &str, mut context: ActionContext) -> Option<Vec<ActionAnswer>> {
         context.set("type".to_string(), "event".to_string());
-        context.set("event".to_string(), "event_name".to_string());
+        context.set("event".to_string(), event_name.to_string());
         self.event_map.call_mapping(event_name, &context)
     }
 }

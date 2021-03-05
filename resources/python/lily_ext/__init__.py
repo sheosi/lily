@@ -216,14 +216,14 @@ def __set_translations(curr_langs_str: List[str]):
 
         bundles: Dict[str, FluentBundle] = reduce( add_to_dict, neg_langs, {})
 
-        skills_translations[_lily_impl._get_curr_lily_package()] = TransPack(bundles, default_lang)
+        skills_translations[_lily_impl._get_curr_lily_skill()] = TransPack(bundles, default_lang)
 
     else:
         _lily_impl.log_warn("Translations not present in " + os.getcwd())
 
 
 def _gen_trans_list(trans_name: str, lang: str) -> Tuple[FluentBundle, List[Any]]:
-    translations = skills_translations[_lily_impl._get_curr_lily_package()]
+    translations = skills_translations[_lily_impl._get_curr_lily_skill()]
     if lang in translations.current_langs:
         try:
             trans = translations.current_langs[lang].get_message(trans_name)

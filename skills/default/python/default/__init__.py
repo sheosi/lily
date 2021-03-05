@@ -10,7 +10,7 @@ class SayTime:
             formatstr = "$time_format"
         elif context["intent"] == "say_date":
             formatstr = "$date_format"
-        answer(datetime.datetime.now().strftime(translate(formatstr, context)), context)
+        return answer(datetime.datetime.now().strftime(translate(formatstr, context)), context)
 
 @action(name="base_answers")
 class BaseAnswers:
