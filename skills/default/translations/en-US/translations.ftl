@@ -18,7 +18,7 @@ order_say_date = What date is it
 
 date_format = Today is %A %-d of %B
 
-order_repeat = Repeat {$what_to_repeat}
+order_repeat = Repeat {what_to_repeat}
 data1 = garage
 data2 = room
 
