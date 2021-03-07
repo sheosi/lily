@@ -223,7 +223,7 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add("log_error", wrap_pyfunction!(log_error, m)?)?;
     m.add("log_warn", wrap_pyfunction!(log_warn, m)?)?;
     m.add("log_info", wrap_pyfunction!(log_info, m)?)?;
-    m.add("_get_curr_lily_package", wrap_pyfunction!(get_current_package, m)?)?;
+    m.add("_get_curr_lily_skill", wrap_pyfunction!(get_current_skill, m)?)?;
     m.add("conf", wrap_pyfunction!(get_conf_string, m)?)?;
     m.add("has_cap", wrap_pyfunction!(client_has_cap,m)?)?;
     m.add("add_entity_value", wrap_pyfunction!(add_entity_value,m)?)?;
@@ -236,7 +236,7 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
 
 
 #[pyfunction]
-fn get_current_package( ) -> PyResult<String> {
+fn get_current_skill( ) -> PyResult<String> {
     PYTHON_LILY_SKILL.with(|n|
         Ok(n.borrow().clone())
     )
@@ -308,7 +308,7 @@ fn add_entity_value(entity_name: String, value: String, langs: Option<Vec<String
     let mut m = ENTITY_ADD_CHANNEL.lock().expect(POISON_MSG);
     let channel = m.as_mut().ok_or_else(||PyErr::new::<PyOSError, _>(NO_ADD_ENTITY_VALUE_MSG))?;
     let request = EntityAddValueRequest{
-        skill: get_current_package()?,
+        skill: get_current_skill()?,
         entity: entity_name,
         value: value,
         langs
