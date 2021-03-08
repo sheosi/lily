@@ -26,7 +26,7 @@ order_say_date = Que dia és
 
 date_format = Hoy es %A %-d de %B
 
-order_repeat = Repite {$what_to_repeat}
+order_repeat = Repite ($what_to_repeat)
 data1 = garaje
 data2 = cuarto
 
