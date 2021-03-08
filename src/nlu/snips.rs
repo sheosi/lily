@@ -67,7 +67,7 @@ enum SplitCapKind {
 impl Into<Utterance> for NluUtterance {
     fn into(self) -> Utterance {
         // Capture "{something}" but ignore "\{something}", "something}" will also be ignored
-        let re = Regex::new(r"[^\\]\{\s*\([^}]+)\s*\}").expect("Error on regex");
+        let re = Regex::new(r"[^\\]\{\s*([^}]+)\s*\}").expect("Error on regex");
 
         // Prepare data
         match self {
