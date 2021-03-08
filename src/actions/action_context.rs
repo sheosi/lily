@@ -174,6 +174,21 @@ impl ActionContextItemsView {
 
 }
 
+#[pyproto]
+impl PyIterProtocol for  ActionContextItemsView {
+    fn __iter__(slf: PyRef<Self>) -> PyResult<Py<ActionContextItemsIterator>> {
+        Py::new(slf.py(),ActionContextItemsIterator::new(slf.inner.clone()))
+    }
+}
+
+#[pyproto]
+impl PySequenceProtocol for ActionContextItemsView {
+    fn __contains__(&self, k: &str) -> bool {
+        self.inner.lock().expect(POISON_MSG).contains_key(k)
+    }
+}
+
+
 #[pyclass]
 struct ActionContextValuesView {
     inner: Arc<Mutex<HashMap<String, String>>>,
@@ -229,12 +244,6 @@ impl ActionContextKeysView {
 
 }
 
-#[pyproto]
-impl PySequenceProtocol for ActionContextItemsView {
-    fn __contains__(&self, k: &str) -> bool {
-        self.inner.lock().expect(POISON_MSG).contains_key(k)
-    }
-}
 #[pyclass]
 #[derive(Clone)]
 pub struct ActionContext {
