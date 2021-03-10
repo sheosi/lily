@@ -20,7 +20,7 @@ use self::server_interface::{MqttInterface, MSG_OUTPUT};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
-use log::{info, error, warn};
+use log::{debug, info, error, warn};
 use serde::{Deserialize, Deserializer, de::{self, SeqAccess, Visitor}, Serialize, Serializer, ser::SerializeSeq};
 use tokio::{select, task::spawn_blocking};
 use unic_langid::LanguageIdentifier;
