@@ -21,7 +21,7 @@ use super::EntityData;
 //// NluManager ///////////////////////////////////////////////////////////////////////////////////
 #[derive(Serialize)]
 struct NluTrainSet {
-    entities: HashMap<String, EntityDef>,
+    entities: HashMap<String, SnipsEntityDef>,
     intents: HashMap<String, Intent>,
     language: String
 }
@@ -50,13 +50,30 @@ struct UtteranceData {
 #[derive(Serialize)]
 pub struct EntityValue {
     value: String,
-    synonnyms: String
+    synonnyms: Vec<String>
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct SnipsEntityDef  {
+    data: Vec<EntityData>,
+    automatically_extensible: bool,
+    use_synonyms: bool
+}
+
+impl From<EntityDef> for SnipsEntityDef {
+    fn from(other: EntityDef) -> Self {
+        Self {
+            data: other.data,
+            automatically_extensible: other.automatically_extensible,
+            use_synonyms: true
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct SnipsNluManager {
     intents: Vec<(String, Vec<NluUtterance>)>,
-    entities: HashMap<String, EntityDef>
+    entities: HashMap<String, SnipsEntityDef>
 }
 
 #[derive(Debug)]
@@ -171,7 +188,7 @@ impl NluManager for SnipsNluManager {
     }
 
     fn add_entity(&mut self, name: &str, def: EntityDef) {
-        self.entities.insert(name.to_string(), def);
+        self.entities.insert(name.to_string(), def.into());
     }
 
     fn add_entity_value(&mut self, name: &str, value: String) -> Result<()> {

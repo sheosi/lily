@@ -21,7 +21,7 @@ use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use log::{info, error, warn};
-use serde::{Deserialize, Deserializer, de::{self, SeqAccess, Visitor}, Serialize};
+use serde::{Deserialize, Deserializer, de::{self, SeqAccess, Visitor}, Serialize, Serializer, ser::SerializeSeq};
 use tokio::{select, task::spawn_blocking};
 use unic_langid::LanguageIdentifier;
 
@@ -54,7 +54,7 @@ struct OrderEntity {
 }
 
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct StringList {
     data: Vec<String>
 }
@@ -122,6 +122,19 @@ impl<'de> Deserialize<'de> for StringList {
     fn deserialize<D>(deserializer: D) -> Result<StringList, D::Error>
     where D: Deserializer<'de> {
         deserializer.deserialize_any(StringListVisitor)
+    }
+}
+
+// Serialize this as a list of strings
+impl Serialize for StringList {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,{
+        let mut seq = serializer.serialize_seq(Some(self.data.len()))?;
+        for e in &self.data {
+            seq.serialize_element(e)?;
+        }
+        seq.end()
     }
 }
 
@@ -477,7 +490,7 @@ impl YamlEntityDef {
             data.push(EntityData{value, synonyms: StringList::from_vec(translations)});
         }
 
-        Ok(EntityDef{data, automatically_extensible: true})
+        Ok(EntityDef::new(data, true))
     }
 }
 

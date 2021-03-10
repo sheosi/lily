@@ -74,7 +74,6 @@ pub struct EntityInstance {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct EntityData {
-    #[serde(rename = "text")]
     pub value: String,
     #[serde(default, alias = "synonym")]
     pub synonyms: StringList
@@ -154,16 +153,19 @@ where
     deserializer.deserialize_any(StringOrStruct(PhantomData))
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct EntityDef {
-    //Note: This was made for Snips, but Rasa is a bit different
-    // automatically_extensible don't exist. Also uses just one data
     pub data: Vec<EntityData>,
     #[serde(alias="accept_others")]
     pub automatically_extensible: bool
 }
 
+fn true_val()->bool{true}
+
 impl EntityDef {
+    pub fn new(data: Vec<EntityData>, automatically_extensible: bool) -> Self {
+        Self {data, automatically_extensible}
+    }
     pub fn into_translation(self, lang: &LanguageIdentifier) -> Result<EntityDef> {
         let data_res: Result<Vec<_>,_> = self.data.into_iter().map(|d|d.into_translation(lang)).collect();
         Ok(EntityDef {
