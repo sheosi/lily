@@ -79,7 +79,7 @@ impl SignalRegistry {
 
     pub fn set_order(&mut self, sig_order: Rc<RefCell<SignalOrderCurrent>>) -> Result<()>{
         self.order = Some(sig_order.clone());
-        self.insert("order".to_string(), sig_order)
+        self.insert("embedded".into(),"order".into(), sig_order)
     }
 
     delegate!{to self.base{
@@ -93,9 +93,10 @@ impl GlobalReg<dyn Signal> for SignalRegistry {
         self.base.remove(sig_name)
     }
 
-    fn insert(&mut self, sig_name: String, signal: Rc<RefCell<dyn Signal>>) -> Result<()> {
-        self.base.insert(sig_name, signal)
-    }
+    delegate!{to self.base{
+        fn insert(&mut self, skill_name: String, sig_name: String, signal: Rc<RefCell<dyn Signal>>) -> Result<()>;
+    }}
+    
 }
 
 // To show each skill just those signals available to them
@@ -138,7 +139,7 @@ impl LocalSignalRegistry {
 
     // Just reuse methods
     delegate! {to self.base{
-        pub fn insert(&mut self, sig_name: String, signal: Rc<RefCell<dyn Signal>>) -> Result<()>;
+        pub fn insert(&mut self, skill_name: String, sig_name: String, signal: Rc<RefCell<dyn Signal>>) -> Result<()>;
         pub fn extend_with_map(&mut self, other: HashMap<String, Rc<RefCell<dyn Signal>>>);
         pub fn remove_from_global(&self);
         pub fn get(&self, action_name: &str) -> Option<&Rc<RefCell<dyn Signal>>>;
