@@ -81,14 +81,14 @@ impl Signal for Timer {
                 TimerKind::Once(dur) => {
                     spawn(async move {
                         sleep(dur).await;
-                        actions.call_all(&base_context, ||{format!("{:?}", timer)});
+                        actions.call_all(&base_context);
                     });
                 },
                 TimerKind::Every(dur) => {
                     spawn(async move {
                         loop {
                             sleep(dur).await;
-                            actions.call_all(&base_context, ||{format!("{:?}", timer)});
+                            actions.call_all(&base_context);
                         }
                     });
                 },
@@ -96,7 +96,7 @@ impl Signal for Timer {
                     spawn( async move {
                         let dur = date.inner.signed_duration_since(Utc::now()).to_std().expect(UNEXPECTED_MSG);
                         sleep(dur).await;
-                        actions.call_all(&base_context, ||{format!("timer on date: {:?}", date)});
+                        actions.call_all(&base_context);
                     });
                 }
             }

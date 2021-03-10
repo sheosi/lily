@@ -53,13 +53,6 @@ struct OrderEntity {
     example: String
 }
 
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum OrderData {
-    Direct(String),
-    WithEntities{text: String, entities: HashMap<String, OrderEntity>}
-}
-
 
 #[derive(Clone, Debug, Serialize)]
 pub struct StringList {
@@ -367,7 +360,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
         let shared_nlu = self.nlu.clone();
         let curr_langs2 = curr_lang.clone();
         
-        let a= move || {
+        let a= move || -> Result<()> {
             loop {
                 let request= dyn_entities.recv().unwrap();
                 let langs = if request.langs.is_empty(){
@@ -381,8 +374,11 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
                 for lang in langs {
                     let man = m.get_mut(&lang).expect("Language not registered").get_mut_nlu_man();
                     let mangled = Self::mangle(&request.skill, &request.entity);
-                    man.add_entity_value(&mangled, request.value.clone());
-                    Self::end_loading(shared_nlu.clone(), &curr_langs2);
+                    if let Err(e) = man.add_entity_value(&mangled, request.value.clone()) {
+                        error!("Failed to add value to entity {}", e);
+                    }
+
+                    Self::end_loading(shared_nlu.clone(), &curr_langs2)?;
                 }
             }
         };

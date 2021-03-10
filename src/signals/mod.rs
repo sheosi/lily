@@ -67,7 +67,7 @@ impl ActMap {
 
     pub fn call_mapping(&mut self, act_name: &str, context: &ActionContext) -> Option<Vec<ActionAnswer>>{
         if let Some(action_set) = self.map.get_mut(act_name) {
-            Some(action_set.call_all(context, ||{act_name.into()}))
+            Some(action_set.call_all(context))
         }
         else {
             None

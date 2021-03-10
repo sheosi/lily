@@ -128,7 +128,9 @@ impl PythonAction {
 
                 for (name, action) in act_to_add {
                     res.insert(name.clone(), action.clone());
-                    act_reg.insert(name, action);
+                    if let Err (e) = act_reg.insert(name, action) {
+                        error!("{}", e);
+                    }
                 }
 
                 Ok(res)
@@ -232,10 +234,10 @@ impl ActionSet {
 
 // Just exists as a way of extending Arc
 pub trait SharedActionSet {
-    fn call_all<F: FnOnce()->String>(&self, context: &ActionContext, f: F) -> Vec<ActionAnswer>;
+    fn call_all(&self, context: &ActionContext) -> Vec<ActionAnswer>;
 }
 impl SharedActionSet for Arc<Mutex<ActionSet>> {
-    fn call_all<F: FnOnce()->String>(&self, context: &ActionContext, f: F) -> Vec<ActionAnswer> {
+    fn call_all(&self, context: &ActionContext) -> Vec<ActionAnswer> {
         self.lock().expect(POISON_MSG).call_all(context)
     }
 }
