@@ -217,8 +217,6 @@ pub fn load_skills(path: &Path, curr_lang: &Vec<LanguageIdentifier>, consumer: R
         loader.init_base(global_sigreg.clone(), global_actreg.clone(), curr_lang.to_owned())?;
     }
 
-    info!("SKILLS_PATH:{}", path.to_str().ok_or_else(|| anyhow!("Can't transform the skill path {:?}", path))?);
-
     let mut not_loaded = vec![];
 
     let process_skill = |entry: &Path| -> Result<(), HalfBakedDoubleError> {
@@ -297,7 +295,8 @@ impl PythonLoader {
 
         let (signal_classes, action_classes, query_classes) = add_py_folder(py, path)?;
         let mut sigreg = base_sigreg.clone();
-        match PythonSignal::extend_and_init_classes_py_local(&mut sigreg, py, skill_path, signal_classes) {
+        let name = skill_path.file_name().ok_or_else(||anyhow!("Got a skill with no name"))?.to_string_lossy();
+        match PythonSignal::extend_and_init_classes_py_local(&mut sigreg, py, name.clone().into(), skill_path, signal_classes) {
             Ok(()) =>{Ok(())}
             Err(e) => {
                 Err(e.source)
@@ -305,7 +304,7 @@ impl PythonLoader {
         }?;
 
         let mut actreg = base_actreg.clone();
-        match PythonAction::extend_and_init_classes_local(&mut actreg, py, action_classes) {
+        match PythonAction::extend_and_init_classes_local(&mut actreg, py, name.into(), action_classes) {
             Ok(()) => {Ok(())}
             Err(e) => {
                 // Also, drop all actions from this package
@@ -373,8 +372,8 @@ impl Loader for EmbeddedLoader {
         let mut mut_sigreg = glob_sigreg.borrow_mut();
         let consumer = replace(&mut self.consumer, None).expect("Consumer already consumed");
         mut_sigreg.set_order(Rc::new(RefCell::new(new_signal_order(lang, consumer))))?;
-        mut_sigreg.insert("private__poll_query".into(), Rc::new(RefCell::new(PollQuery::new())))?;
-        mut_sigreg.insert("timer".into(), Rc::new(RefCell::new(Timer::new())))?;
+        mut_sigreg.insert("embedded".into(), "private__poll_query".into(), Rc::new(RefCell::new(PollQuery::new())))?;
+        mut_sigreg.insert("embedded".into(),"timer".into(), Rc::new(RefCell::new(Timer::new())))?;
 
         Ok(())
     }

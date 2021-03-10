@@ -66,15 +66,14 @@ enum SplitCapKind {
 
 impl Into<Utterance> for NluUtterance {
     fn into(self) -> Utterance {
-        // Capture "{something}" but ignore "\{something}", "something}" will also be ignored
-        let re = Regex::new(r"[^\\]\(\s*\$([^}]+)\s*\)").expect("Error on regex");
-
         // Prepare data
         match self {
             NluUtterance::Direct(text) => {
                 Utterance{data: vec![UtteranceData{text: text.to_string(), entity: None, slot_name: None}]}
             },
-            NluUtterance::WithEntities {text, entities} => {                    
+            NluUtterance::WithEntities {text, entities} => {
+                // Capture "{something}" but ignore "\{something}", "something}" will also be ignored
+                let re = Regex::new(r"[^\\]\(\s*\$([^}]+)\s*\)").expect("Error on regex");
 
                 let construct_utt = |(text, kind):&(&str, SplitCapKind)| {
                     match kind {

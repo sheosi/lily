@@ -19,9 +19,9 @@ say_name:
 
 repeat:
   samples: $order_repeat
-  entities:
+  slots:
     what_to_repeat:
-      kind:
+      type:
         data:
           - $data1
           - $data2

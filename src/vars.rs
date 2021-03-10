@@ -36,3 +36,8 @@ pub const NO_ADD_ENTITY_VALUE_MSG: &str = "Can't add value to entity, NLU manage
 
 // Other
 pub const MIN_SCORE_FOR_ACTION: f32 = 0.3;
+
+
+pub fn mangle(intent_name: &str, skill_name: &str) -> String {
+    format!("__{}__{}", skill_name, intent_name)
+}

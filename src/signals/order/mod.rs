@@ -13,7 +13,7 @@ use crate::nlu::{EntityData, EntityDef, EntityInstance, Nlu, NluManager, NluMana
 use crate::python::{try_translate, try_translate_all};
 use crate::stt::DecodeRes;
 use crate::signals::{ActMap, Signal, SignalEventShared};
-use crate::vars::{MIN_SCORE_FOR_ACTION, POISON_MSG};
+use crate::vars::{mangle, MIN_SCORE_FOR_ACTION, POISON_MSG};
 use self::server_interface::{MqttInterface, MSG_OUTPUT};
 
 // Other crates
@@ -133,10 +133,13 @@ struct SlotData {
     slot_type: OrderKind,
     #[serde(default="false_val")]
     required: bool,
-    prompt: String,
-    reprompt: String
+    #[serde(default="none")]
+    prompt: Option<String>,
+    #[serde(default="none")]
+    reprompt: Option<String>
 }
 fn false_val() -> bool {false}
+fn none() -> Option<String> {None}
 #[derive(Debug, Deserialize)]
 pub struct IntentData {
 
@@ -373,7 +376,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
                 let mut m = shared_nlu.lock().expect(POISON_MSG);
                 for lang in langs {
                     let man = m.get_mut(&lang).expect("Language not registered").get_mut_nlu_man();
-                    let mangled = Self::mangle(&request.skill, &request.entity);
+                    let mangled = mangle(&request.skill, &request.entity);
                     if let Err(e) = man.add_entity_value(&mangled, request.value.clone()) {
                         error!("Failed to add value to entity {}", e);
                     }
@@ -417,14 +420,11 @@ fn process_answer(ans: ActionAnswer, lang: &LanguageIdentifier, uuid: String) ->
 }
 
 impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send>  SignalOrder<M> {
-    fn mangle(intent_name: &str, skill_name: &str) -> String {
-        format!("__{}__{}", skill_name, intent_name)
-    }
     fn demangle<'a>(&'a self, mangled: &str) -> &'a str {
         self.demangled_names.get(mangled).expect("Mangled name was not found")
     }
     pub fn add_intent(&mut self, sig_arg: IntentData, intent_name: &str, skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
-        let mangled = Self::mangle(intent_name, skill_name);
+        let mangled = mangle(intent_name, skill_name);
         add_intent_to_nlu(&mut self.nlu.lock().expect(POISON_MSG), sig_arg, &mangled, skill_name, &self.langs)?;
         self.intent_map.add_mapping(&mangled, act_set);
         self.demangled_names.insert(mangled, intent_name.to_string());

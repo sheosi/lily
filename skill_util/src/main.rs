@@ -143,7 +143,7 @@ class {}:
     fs::create_dir(&trans_path)?;
 
     let translations = &[
-        ("en-US", "example_translation_say = Hello there, {$friend_name}
+        ("en-US", "example_translation_say = Hello there, ($friend_name)
         ")
     ];
     for (trans_lang, trans_demo) in translations {
@@ -158,9 +158,9 @@ class {}:
     let mut model = fs::File::create(pkg_path.join("model.yaml"))?;
     write!(&mut model, "example:
     samples: \"Say hello to {{$friend_name}}\"
-    entities:
+    slots:
         friend_name:
-            kind:
+            type:
                 data:
                     - Alex
                     - John

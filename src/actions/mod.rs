@@ -96,10 +96,11 @@ impl PythonAction {
     pub fn extend_and_init_classes_local(
         act_reg: &mut LocalActionRegistry,
         py:Python,
+        skill_name: String,
         action_classes: Vec<(PyObject, PyObject)>)
         -> Result<(), HalfBakedError> {
 
-        let actions = Self::extend_and_init_classes(&mut act_reg.get_global_mut(), py, action_classes)?;
+        let actions = Self::extend_and_init_classes(&mut act_reg.get_global_mut(), py, skill_name, action_classes)?;
         act_reg.extend_with_map(actions);
         Ok(())
     }
@@ -108,6 +109,7 @@ impl PythonAction {
     fn extend_and_init_classes(
         act_reg: &mut ActionRegistry,
         python: Python,
+        skill_name: String,
         action_classes: Vec<(PyObject, PyObject)>)
         -> Result<HashMap<String, Rc<RefCell<dyn Action + Send>>>, HalfBakedError> {
 
@@ -128,7 +130,7 @@ impl PythonAction {
 
                 for (name, action) in act_to_add {
                     res.insert(name.clone(), action.clone());
-                    if let Err (e) = act_reg.insert(name, action) {
+                    if let Err (e) = act_reg.insert(skill_name.clone(),name, action) {
                         error!("{}", e);
                     }
                 }

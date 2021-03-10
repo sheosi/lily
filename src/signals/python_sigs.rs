@@ -59,7 +59,7 @@ impl PythonSignal {
         }        
     }
 
-    pub fn extend_and_init_classes_py(reg: &mut SignalRegistry, py: Python, skill_path: &Path, signal_classes: Vec<(PyObject,PyObject)>) -> Result<HashMap<String, Rc<RefCell<dyn Signal>>>, HalfBakedError> {
+    pub fn extend_and_init_classes_py(reg: &mut SignalRegistry, py: Python, skill_name: String, skill_path: &Path, signal_classes: Vec<(PyObject,PyObject)>) -> Result<HashMap<String, Rc<RefCell<dyn Signal>>>, HalfBakedError> {
         let skill_path = Arc::new(skill_path.to_owned());
     
         let process_list = || -> Result<_> {
@@ -82,7 +82,7 @@ impl PythonSignal {
                 let process = || -> Result<()> {
                     for (name, sigobj) in sig_to_add {
                         res.insert(name.clone(), sigobj.clone());
-                        reg.insert(name, sigobj)?;
+                        reg.insert(skill_name.clone(), name, sigobj)?;
                     }
                     Ok(())
                 };
@@ -106,11 +106,12 @@ impl PythonSignal {
     pub fn extend_and_init_classes_py_local(
         reg: &mut LocalSignalRegistry,
         py: Python,
+        skill_name: String,
         skill_path: &Path,
         signal_classes: Vec<(PyObject, PyObject)>
     ) -> Result<(), HalfBakedError> {
 
-        let signals = Self::extend_and_init_classes_py(&mut reg.get_global_mut(), py, skill_path, signal_classes)?;
+        let signals = Self::extend_and_init_classes_py(&mut reg.get_global_mut(), py, skill_name, skill_path, signal_classes)?;
         reg.extend_with_map(signals);
         Ok(())
     }

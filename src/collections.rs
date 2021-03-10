@@ -6,6 +6,8 @@ use std::collections::{HashMap, hash_map::{Entry, IntoIter, IterMut}};
 use std::iter::IntoIterator;
 use std::fmt;
 
+use crate::vars::mangle;
+
 // Other crates
 use anyhow::{anyhow, Result};
 use delegate::delegate;
@@ -58,17 +60,18 @@ impl<A: ?std::marker::Sized> GlobalReg<A> for BaseRegistry <A> {
         self.map.remove(sig_name);
     }
 
-    fn insert(&mut self, sig_name: String, signal: Rc<RefCell<A>>) -> Result<()> {
-        match self.map.entry(sig_name.clone()) {
-            Entry::Vacant(v) => {v.insert(signal);Ok(())}
-            Entry::Occupied(_) => {Err(anyhow!(format!("Signal {} already exists", sig_name)))}
+    fn insert(&mut self, skill_name: String, name: String, object: Rc<RefCell<A>>) -> Result<()> {
+        let mangled = mangle(&skill_name, &name);
+        match self.map.entry(mangled) {
+            Entry::Vacant(v) => {v.insert(object);Ok(())}
+            Entry::Occupied(_) => {Err(anyhow!(format!("{}: {} already exists", skill_name, name)))}
         }
     }
 }
 
 pub trait GlobalReg<A: ?std::marker::Sized> {
     fn remove(&mut self, key: &str);
-    fn insert(&mut self, key: String, value: Rc<RefCell<A>>) -> Result<()>;
+    fn insert(&mut self, skill_name: String, key: String, value: Rc<RefCell<A>>) -> Result<()>;
 }
 
 pub struct LocalBaseRegistry<A: ?std::marker::Sized, R: GlobalReg<A> + fmt::Debug> {
@@ -121,9 +124,10 @@ impl<A: ?std::marker::Sized, R: GlobalReg<A> + fmt::Debug> LocalBaseRegistry<A,R
         (*self.global_reg).borrow_mut()
     }
 
-    pub fn insert(&mut self, sig_name: String, signal: Rc<RefCell<A>>) -> Result<()> {
-        (*self.global_reg).borrow_mut().insert(sig_name.clone(), signal.clone())?;
-        self.map.insert(sig_name, signal);
+    pub fn insert(&mut self, skill_name: String, name: String, object: Rc<RefCell<A>>) -> Result<()> {
+        let mangled = mangle(&skill_name, &name);
+        (*self.global_reg).borrow_mut().insert(skill_name, name, object.clone())?;
+        self.map.insert(mangled, object);
 
         Ok(())
     }
