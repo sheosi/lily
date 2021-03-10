@@ -317,6 +317,8 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
     }
 
     pub async fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &ActionContext, lang: &LanguageIdentifier, satellite: String) -> Result<()> {
+        debug!("Heard from user: {:?}", decode_res);
+
         let ans = match decode_res {
             None => event_signal.lock().expect(POISON_MSG).call("empty_reco", base_context.clone()),
             Some(decode_res) => {
