@@ -61,7 +61,7 @@ impl<A: ?std::marker::Sized> GlobalReg<A> for BaseRegistry <A> {
     }
 
     fn insert(&mut self, skill_name: String, name: String, object: Rc<RefCell<A>>) -> Result<()> {
-        let mangled = mangle(&skill_name, &name);
+        let mangled = mangle(&skill_name,&name);
         match self.map.entry(mangled) {
             Entry::Vacant(v) => {v.insert(object);Ok(())}
             Entry::Occupied(_) => {Err(anyhow!(format!("{}: {} already exists", skill_name, name)))}

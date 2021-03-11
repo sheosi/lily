@@ -439,7 +439,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send>  SignalOrd
         self.demangled_names.get(mangled).expect("Mangled name was not found")
     }
     pub fn add_intent(&mut self, sig_arg: IntentData, intent_name: &str, skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
-        let mangled = mangle(intent_name, skill_name);
+        let mangled = mangle(skill_name, intent_name);
         add_intent_to_nlu(&mut self.nlu.lock().expect(POISON_MSG), sig_arg, &mangled, skill_name, &self.langs)?;
         self.intent_map.add_mapping(&mangled, act_set);
         self.demangled_names.insert(mangled, intent_name.to_string());
