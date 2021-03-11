@@ -9,7 +9,7 @@ use crate::actions::ActionContext;
 use crate::config::Config;
 use crate::nlu::{NluManager, NluManagerConf, NluManagerStatic};
 use crate::python::add_context_data;
-use crate::signals::{SignalEventShared, SignalOrder};
+use crate::signals::{process_answers, SignalEventShared, SignalOrder};
 use crate::stt::{SttPool, SttPoolItem, SttSet};
 use crate::tts::{Gender, TtsFactory, VoiceDescr};
 use crate::vars::POISON_MSG;
@@ -176,13 +176,11 @@ impl MqttInterface {
         };
         
         let mut tts_set = HashMap::new();
-        let mut def_lang = None;
-        for (i,lang) in self.curr_langs.iter().enumerate() {
+        let mut def_lang = self.curr_langs.get(0);
+        for lang in self.curr_langs.iter() {
             let tts = TtsFactory::load_with_prefs(lang, config.tts.prefer_online, config.tts.ibm.clone(), &voice_prefs)?;
             info!("Using tts {}", tts.get_info());
             tts_set.insert(lang, tts);
-
-            if i == 0 {def_lang = Some(lang);}
         }
 
         loop {
@@ -234,7 +232,11 @@ impl MqttInterface {
                         "lily/event" => {
                             let msg: MsgEvent = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
                             let context = add_context_data(base_context,&self.curr_langs[0], &msg.satellite);
-                            signal_event.lock().expect(POISON_MSG).call(&msg.event, context.clone());
+                            let ans = signal_event.lock().expect(POISON_MSG).call(&msg.event, context.clone());
+                            if let Err(e) = process_answers(ans,def_lang.unwrap(),msg.satellite) {
+                                error!("Occurred a problem while processing event: {}", e);
+                            }
+                            
                         }
                         "lily/disconnected" => {
                             let msg: MsgGoodbye = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;

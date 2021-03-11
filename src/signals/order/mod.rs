@@ -357,17 +357,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
             }
         };
         
-        if let Some(answers) = ans {
-            answers.into_iter()
-            .map(|a|
-                process_answer(a, lang, satellite.clone())
-            )
-            .filter(|r|r.is_err())
-            .map(|e|e.err().unwrap())
-            .for_each(|e| error!("There was an error while handling answer: {}", e));
-        }
-
-        Ok(())
+        process_answers(ans, lang, satellite.clone())
     }
 
     pub async fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &ActionContext, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
@@ -432,6 +422,23 @@ fn process_answer(ans: ActionAnswer, lang: &LanguageIdentifier, uuid: String) ->
     };
     Ok(())
     })
+}
+
+pub fn process_answers(
+    ans: Option<Vec<ActionAnswer>>,
+    lang: &LanguageIdentifier,
+    satellite: String) -> Result<()> {
+    if let Some(answers) = ans {
+        answers.into_iter()
+        .map(|a|
+            process_answer(a, lang, satellite.clone())
+        )
+        .filter(|r|r.is_err())
+        .map(|e|e.err().unwrap())
+        .for_each(|e| error!("There was an error while handling answer: {}", e));
+    }
+
+    Ok(())
 }
 
 impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send>  SignalOrder<M> {
