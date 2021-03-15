@@ -374,6 +374,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bfbf56724aa9eca8afa4fcfadeb479e722935bb2a0900c2d37e0cc477af0688"
 
 [[package]]
+name = "cmake"
+version = "0.1.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb6210b637171dfba4cda12e579ac6dc73f5165ad56133e5d72ef3131f320855"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "combine"
 version = "3.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1382,8 +1391,8 @@ dependencies = [
  "lily_common",
  "locale_config",
  "log",
+ "magnum-opus",
  "maplit",
- "opus",
  "pocketsphinx",
  "pyo3",
  "regex",
@@ -1415,8 +1424,8 @@ dependencies = [
  "cpal",
  "lazy_static",
  "log",
+ "magnum-opus",
  "ogg",
- "opus",
  "rand",
  "ringbuf",
  "rodio",
@@ -1482,6 +1491,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b823e83b2affd8f40a9ee8c29dbc56404c1e34cd2710921f2801e2cf29527afa"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "magnum-opus"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff49ad2a7313ae476b292c1e1b6bf17ad0542fc1d24880d85d455d8547a3ecc2"
+dependencies = [
+ "libc",
+ "opusic-sys",
 ]
 
 [[package]]
@@ -1916,23 +1935,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "opus"
-version = "0.2.1"
+name = "opusic-sys"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e9059a7daf1e6665eb88c4a95ca9ff393a6d276fd66e9d85191280d7e5ec18b"
+checksum = "23951048225da736a68faae3989744578857d5c49e482238f878829133cef580"
 dependencies = [
- "libc",
- "opus-sys",
-]
-
-[[package]]
-name = "opus-sys"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fad8b294f482f7972fa466b1c64d5a564e4ee6975599d80483ee4fa83f25b6ec"
-dependencies = [
- "libc",
- "pkg-config",
+ "cmake",
 ]
 
 [[package]]
@@ -3237,14 +3245,16 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1a5f475f1b9d077ea1017ecbc60890fda8e54942d680ca0b1d2b47cfa2d861b"
+checksum = "1e96bb520beab540ab664bd5a9cfeaa1fcd846fa68c830b42e2c8963071251d2"
 dependencies = [
  "futures-util",
  "log",
+ "native-tls",
  "pin-project",
  "tokio",
+ "tokio-native-tls",
  "tungstenite",
 ]
 
@@ -3335,9 +3345,9 @@ dependencies = [
 
 [[package]]
 name = "tungstenite"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ada8297e8d70872fa9a551d93250a9f407beb9f37ef86494eb20012a2ff7c24"
+checksum = "5fe8dada8c1a3aeca77d6b51a4f1314e0f4b8e438b7b1b71e3ddaca8080e4093"
 dependencies = [
  "base64 0.13.0",
  "byteorder",
@@ -3349,6 +3359,7 @@ dependencies = [
  "native-tls",
  "rand",
  "sha-1",
+ "thiserror",
  "url",
  "utf-8",
 ]

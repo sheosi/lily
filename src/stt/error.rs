@@ -7,7 +7,7 @@ pub enum SttError {
     #[error("PocketSphinx error, see log for details")]
     PocketsphinxError(#[from] pocketsphinx::Error),
 
-    #[error("Error while sending to online service")]
+    #[error("Error while sending to online service: {0}")]
     OnlineError(#[from] OnlineSttError),
 
     #[cfg(feature = "deepspeech_stt")]
@@ -59,9 +59,9 @@ pub enum OnlineSttError {
 	JsonParse(#[from] serde_json::Error),
 
 	#[error("opus encoding")]
-    OpusEncode(#[from] opus::Error),
+    OpusEncode(#[from] magnum_opus::Error),
 
-    #[error("Websocket failure")]
+    #[error("Websocket failure: {0}")]
     WebSocket(#[from] tungstenite::Error),
     
     #[error("Connection closed")]

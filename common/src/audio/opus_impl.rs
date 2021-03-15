@@ -6,7 +6,7 @@ use crate::vars::{DEFAULT_SAMPLES_PER_SECOND, LILY_VER, MAX_SAMPLES_PER_SECOND};
 
 use byteorder::{LittleEndian, ByteOrder};
 use ogg::{Packet, PacketReader, PacketWriter};
-use opus::{Decoder as OpusDec, Encoder as OpusEnc};
+use magnum_opus::{Decoder as OpusDec, Encoder as OpusEnc};
 use rand::Rng;
 
 const fn to_samples(ms: u32, channels: u8, sps: u32) -> usize {
@@ -62,8 +62,8 @@ pub fn decode_ogg_opus(data: Vec<u8>, target_sps: u32) -> Result<(Vec<i16>, Play
     let (play_data, dec_data) = check_fp(&fp)?;
 
     let chans = match play_data.channels {
-        1 => Ok(opus::Channels::Mono),
-        2 => Ok(opus::Channels::Stereo),
+        1 => Ok(magnum_opus::Channels::Mono),
+        2 => Ok(magnum_opus::Channels::Stereo),
         _ => Err(AudioError::MalformedAudio)
     }?;
 
@@ -100,7 +100,7 @@ pub fn encode_ogg_opus(audio: &Vec<i16>) -> Result<Vec<u8>, AudioError> {
     const FRAME_TIME_MS: u32 = 20;
     const NUM_CHANNELS: u8 = 1;
     const FRAME_SAMPLES: usize = to_samples(FRAME_TIME_MS, NUM_CHANNELS, DEFAULT_SAMPLES_PER_SECOND);
-    const OPUS_CHANNELS: opus::Channels = opus::Channels::Mono;
+    const OPUS_CHANNELS: magnum_opus::Channels = magnum_opus::Channels::Mono;
     const S_PS: u32 = DEFAULT_SAMPLES_PER_SECOND;
 
     // Generate the serial which is nothing but a value to identify a stream, we
@@ -111,7 +111,7 @@ pub fn encode_ogg_opus(audio: &Vec<i16>) -> Result<Vec<u8>, AudioError> {
     let mut buffer: Vec<u8> = Vec::new();
     {
         let mut packet_writer = PacketWriter::new(&mut buffer);
-        let mut opus_encoder = OpusEnc::new(S_PS, OPUS_CHANNELS, opus::Application::Audio)?;
+        let mut opus_encoder = OpusEnc::new(S_PS, OPUS_CHANNELS, magnum_opus::Application::Audio)?;
 
 
         let max = match audio.len() {
@@ -138,7 +138,7 @@ pub fn encode_ogg_opus(audio: &Vec<i16>) -> Result<Vec<u8>, AudioError> {
         LittleEndian::write_u32(&mut head[12..16], S_PS); // Write Samples per second
 
         let mut opus_tags : Vec<u8> = Vec::with_capacity(60);
-        let vendor_str = format!("{}, lily {}", opus::version(), LILY_VER);
+        let vendor_str = format!("{}, lily {}", magnum_opus::version(), LILY_VER);
         opus_tags.extend(b"OpusTags");
         opus_tags.extend(&[vendor_str.len() as u8,0,0,0]);
         opus_tags.extend(vendor_str.bytes());

@@ -9,7 +9,7 @@ use lily_common::audio::AudioRaw;
 use lily_common::vars::DEFAULT_SAMPLES_PER_SECOND;
 use maplit::hashmap;
 use reqwest::{Client, header};
-use tokio_tungstenite::{connect_async, WebSocketStream};
+use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use tokio::net::TcpStream;
 use tungstenite::Message;
 use serde::{Deserialize, Serialize};
@@ -107,7 +107,7 @@ pub struct IbmSttEngine {
 }
 
 struct WatsonSocket {
-	socket: WebSocketStream<TcpStream>
+	socket: WebSocketStream<MaybeTlsStream<TcpStream>>
 }
 
 enum WatsonOrder {

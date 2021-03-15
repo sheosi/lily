@@ -11,14 +11,14 @@ use crate::nlu::{NluManager, NluManagerConf, NluManagerStatic};
 use crate::python::add_context_data;
 use crate::signals::{process_answers, SignalEventShared, SignalOrder};
 use crate::stt::{SttPool, SttPoolItem, SttSet};
-use crate::tts::{Gender, TtsFactory, VoiceDescr};
+use crate::tts::{Gender, Tts, TtsFactory, VoiceDescr};
 use crate::vars::POISON_MSG;
 
 use anyhow::{anyhow, Result};
-use lily_common::audio::{Audio, decode_ogg_opus};
+use lily_common::audio::{Audio, AudioRaw, decode_ogg_opus};
 use lily_common::communication::*;
 use lily_common::vars::DEFAULT_SAMPLES_PER_SECOND;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use rmp_serde::{decode, encode};
 use rumqttc::{Event, Packet, QoS};
 use unic_langid::LanguageIdentifier;
@@ -71,6 +71,7 @@ impl SessionManager {
             Entry::Occupied(o) => Ok(o.into_mut()),
             Entry::Vacant(v) => {
                 let mut stt = self.sttset.guess_stt(audio).await?;
+                debug!("STT for current session: {}", stt.get_info());
                 stt.begin_decoding().await?;
                 Ok(v.insert(stt))
             }
@@ -176,12 +177,13 @@ impl MqttInterface {
         };
         
         let mut tts_set = HashMap::new();
-        let mut def_lang = self.curr_langs.get(0);
+        let def_lang = self.curr_langs.get(0);
         for lang in self.curr_langs.iter() {
             let tts = TtsFactory::load_with_prefs(lang, config.tts.prefer_online, config.tts.ibm.clone(), &voice_prefs)?;
             info!("Using tts {}", tts.get_info());
             tts_set.insert(lang, tts);
         }
+        let mut stt_audio = AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND);
 
         loop {
             let notification = eloop.poll().await?;
@@ -201,25 +203,41 @@ impl MqttInterface {
                         "lily/nlu_process" => {
                             let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
                             let (as_raw, _) = decode_ogg_opus(msg_nlu.audio, DEFAULT_SAMPLES_PER_SECOND)?;
+                            stt_audio.append_audio(&as_raw, DEFAULT_SAMPLES_PER_SECOND)?;
                             let session = sessions.session_for(msg_nlu.satellite.clone());
                             {
-                                let stt = sessions.get_stt(msg_nlu.satellite.clone(), &as_raw).await?;
+                                match sessions.get_stt(msg_nlu.satellite.clone(), &as_raw).await {
+                                    Ok(stt) => {
+                                        if let Err(e) = stt.process(&as_raw).await {
+                                            error!("Stt failed to process audio: {}", e);
+                                        }
 
-                                stt.process(&as_raw).await?;
-                                if msg_nlu.is_final {
-                                    let satellite = msg_nlu.satellite.clone();
-                                    let context = add_context_data(&base_context, stt.lang(), &satellite);
-                                    if let Err(e) = order.received_order(
-                                        stt.end_decoding().await?, 
-                                        signal_event.clone(),
-                                        &context,
-                                        stt.lang(),
-                                        satellite
-                                    ).await {
-
-                                        error!("Actions processing had an error: {}", e);
+                                        else if msg_nlu.is_final {
+                                            stt_audio.save_to_disk(std::path::Path::new("stt_audio.ogg"))?;
+                                            stt_audio.clear();
+                                            let satellite = msg_nlu.satellite.clone();
+                                            let context = add_context_data(&base_context, stt.lang(), &satellite);
+                                            match stt.end_decoding().await {
+                                                Ok(decoded)=> {
+                                                    if let Err(e) = order.received_order(
+                                                        decoded, 
+                                                        signal_event.clone(),
+                                                        &context,
+                                                        stt.lang(),
+                                                        satellite
+                                                    ).await {
+                
+                                                        error!("Actions processing had an error: {}", e);
+                                                    }
+                                                }
+                                                Err(e) => error!("Stt failed while doing final decode: {}", e)
+                                            }
+                                            
+                                        }
                                     }
-                                    
+                                    Err(e) => {
+                                        error!("Failed to obtain Stt for this session: {}", e);
+                                    }
                                 }
                             }
                             if msg_nlu.is_final {
@@ -258,16 +276,26 @@ impl MqttInterface {
                             audio
                         }
                         SendData::String((str, lang)) => {
+                            async fn synth_text(tts: &mut Box<dyn Tts>, input: &str) -> Audio {
+                                match tts.synth_text(input).await {
+                                    Ok(a) => a,
+                                    Err(e) => {
+                                        error!("Error while synthing voice: {}", e);
+                                        Audio::new_empty(DEFAULT_SAMPLES_PER_SECOND)
+                                    }
+                                }
+                            }
+
                             match tts_set.get_mut(&lang) {
                                 Some(tts) => {
-                                    tts.synth_text(&str).await?
+                                    synth_text(tts, &str).await
                                 }
                                 None => {
                                     warn!("Received answer for language {:?} not in the config or that has no TTS, using default", lang);
                                     let def = def_lang.as_ref().expect("There's no language assigned, need one at least");
                                     match tts_set.get_mut(def) {
                                         Some(tts) => {
-                                            tts.synth_text(&str).await?
+                                            synth_text(tts, &str).await
                                         }
                                         None => {
                                             warn!("Default has no tts either, sending empty audio");

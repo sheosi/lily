@@ -235,7 +235,7 @@ pub enum AudioError {
     IOError(#[from] std::io::Error),
 
     #[error("Encoding error")]
-    OpusError(#[from] opus::Error),
+    OpusError(#[from] magnum_opus::Error),
 
     #[error("Input audio was malformed")]
     MalformedAudio,

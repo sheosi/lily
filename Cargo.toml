@@ -31,7 +31,7 @@ void = "^1.0"
 #vad = "0.1.5" # Note: Had to be disabled because syntex_syntax was causing problems
 pocketsphinx = "^0.6.0" # Offline Stt
 deepspeech = {version = "^0.9", optional = true} # More correct and better (also slower) Stt
-opus = "^0.2" # Still used to propagate errors
+magnum-opus = "^0.3" # Still used to propagate errors
 
 snips-nlu-lib = { git = "https://github.com/snipsco/snips-nlu-rs", branch = "master" } # NLU
 snips-nlu-ontology = { git = "https://github.com/snipsco/snips-nlu-ontology", tag = "0.67.1"  } # NLU-related things
@@ -49,8 +49,8 @@ google_translate_tts = {version = "0.1.2", optional = true} # Format TTS URLs
 reqwest = {version = "^0.11", features = ["default-tls", "json"]} # HTTP client
 url = "^2.1"
 base64 = "^0.13" # For sending data to the online TTS and STT
-tungstenite = "^0.12" # Web sockets for online STT (0.10 because of compatibility with tokio-tungstenite)
-tokio-tungstenite = "^0.13"
+tungstenite = {version = "^0.13", features = ["native-tls"]} # Web sockets for online STT, each version needs to be compatible with tokio-tungstenite
+tokio-tungstenite = {version = "^0.14", features = ["native-tls"]}
 
 chrono = "^0.4"
 
