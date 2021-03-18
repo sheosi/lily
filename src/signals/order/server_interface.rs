@@ -202,7 +202,7 @@ impl MqttInterface {
                         }
                         "lily/nlu_process" => {
                             let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
-                            let (as_raw, _) = decode_ogg_opus(msg_nlu.audio, DEFAULT_SAMPLES_PER_SECOND)?;
+                            let (as_raw, _, _) = decode_ogg_opus(msg_nlu.audio, DEFAULT_SAMPLES_PER_SECOND)?;
                             stt_audio.append_audio(&as_raw, DEFAULT_SAMPLES_PER_SECOND)?;
                             let session = sessions.session_for(msg_nlu.satellite.clone());
                             {

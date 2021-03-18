@@ -224,7 +224,8 @@ impl AudioRaw {
     }
 
     pub fn to_ogg_opus(&self) -> Result<Vec<u8>, AudioError> {
-        encode_ogg_opus(&self.buffer)
+        let (a,_) = encode_ogg_opus(&self.buffer)?;
+        Ok(a)
     }
 }
 

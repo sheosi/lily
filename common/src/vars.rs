@@ -34,6 +34,6 @@ pub const LILY_VER: &str = "0.6";
 pub const DEFAULT_HOTWORD_SENSITIVITY: f32 = 0.43;
 pub const DEFAULT_SAMPLES_PER_SECOND: u32 = 16000;
 pub const HOTWORD_CHECK_INTERVAL_MS: u16 = 20; // Larger = less CPU, more wait time
-pub const ACTIVE_LISTENING_INTERVAL_MS: u16 = 50; // Larger = less CPU, more wait time
+pub const ACTIVE_LISTENING_INTERVAL_MS: u16 = 200; // Larger = less CPU, more wait time
 pub const RECORD_BUFFER_SIZE: usize = 32_000; // This ammounts for 2s of audio
 pub const MAX_SAMPLES_PER_SECOND: u32 = 48_000;
