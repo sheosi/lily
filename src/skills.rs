@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::mem::replace;
 use std::path::Path;
 use std::rc::Rc;
-use std::sync::{Arc, mpsc::Receiver};
+use std::sync::Arc;
 
 // This crate
 use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry, PythonAction};
@@ -21,6 +21,7 @@ use anyhow::{anyhow, Result};
 use pyo3::Python;
 use serde::Deserialize;
 use thiserror::Error;
+use tokio::sync::mpsc::Receiver;
 use log::{error, info, warn};
 use unic_langid::LanguageIdentifier;
 
