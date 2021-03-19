@@ -21,6 +21,7 @@ use lily_common::vars::DEFAULT_SAMPLES_PER_SECOND;
 use log::{debug, error, info, warn};
 use rmp_serde::{decode, encode};
 use rumqttc::{Event, Packet, QoS};
+use tokio::sync::mpsc;
 use unic_langid::LanguageIdentifier;
 
 thread_local!{
@@ -38,20 +39,41 @@ impl Session {
         Self {device}
     }
 }
-
-struct SessionManager {
-    sessions: HashMap<String, Arc<Session>>,
+struct UtteranceManager {
     curr_utt_stt: HashMap<String, SttPoolItem>,
     sttset: SttSet
 }
+impl UtteranceManager {
+    pub fn new(sttset: SttSet) -> Self {
+        Self{curr_utt_stt: HashMap::new(), sttset}
+    }
+
+    async fn get_stt(&mut self, uuid: String, audio:&[i16]) -> Result<&mut SttPoolItem> {
+        match self.curr_utt_stt.entry(uuid) {
+            Entry::Occupied(o) => Ok(o.into_mut()),
+            Entry::Vacant(v) => {
+                let mut stt = self.sttset.guess_stt(audio).await?;
+                debug!("STT for current session: {}", stt.get_info());
+                stt.begin_decoding().await?;
+                Ok(v.insert(stt))
+            }
+        }
+    }
+    fn end_utt(&mut self, uuid: &str) -> Result<()> {
+        match self.curr_utt_stt.remove(uuid)  {
+            Some(_) => {Ok(())}
+            None => {Err(anyhow!("{} had no active session", uuid))}
+        }
+    }
+}
+
+pub struct SessionManager {
+    sessions: HashMap<String, Arc<Session>>
+}
 
 impl SessionManager {
-    fn new(sttset: SttSet) -> Self {
-        Self {
-            sessions: HashMap::new(),
-            curr_utt_stt: HashMap::new(),
-            sttset
-        }
+    pub fn new() -> Self {
+        Self {sessions: HashMap::new()}
     }
 
     fn session_for(&mut self, uuid: String) -> Weak<Session> {
@@ -66,26 +88,8 @@ impl SessionManager {
         }
     }
 
-    async fn get_stt(&mut self, uuid: String, audio:&[i16]) -> Result<&mut SttPoolItem> {
-        match self.curr_utt_stt.entry(uuid) {
-            Entry::Occupied(o) => Ok(o.into_mut()),
-            Entry::Vacant(v) => {
-                let mut stt = self.sttset.guess_stt(audio).await?;
-                debug!("STT for current session: {}", stt.get_info());
-                stt.begin_decoding().await?;
-                Ok(v.insert(stt))
-            }
-        }
-    }
-
     fn end_session(&mut self, uuid: &str) -> Result<()> {
         match self.sessions.remove(uuid)  {
-            Some(_) => {Ok(())}
-            None => {Err(anyhow!("{} had no active session", uuid))}
-        }
-    }
-    fn end_utt(&mut self, uuid: &str) -> Result<()> {
-        match self.curr_utt_stt.remove(uuid)  {
             Some(_) => {Ok(())}
             None => {Err(anyhow!("{} had no active session", uuid))}
         }
@@ -133,61 +137,141 @@ impl CapsManager {
 
 pub struct MqttInterface {
     common_out: Arc<Mutex<Vec<(SendData, String)>>>,
-    curr_langs: Vec<LanguageIdentifier>
 }
 
 
+pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + Debug + Send + 'static>(
+    config: &Config,
+    mut channel: mpsc::Receiver<MsgNluVoice>,
+    signal_event: SignalEventShared,
+    curr_langs: &Vec<LanguageIdentifier>,
+    order: &mut SignalOrder<M>,
+    base_context: &ActionContext,
+    sessions: Arc<Mutex<SessionManager>>
+) -> Result<()> {
+    let mut stt_set = SttSet::new();
+    let ibm_data = config.stt.ibm.clone();
+    for lang in curr_langs {
+        let pool= SttPool::new(1, 1,lang, config.stt.prefer_online, &ibm_data).await?;
+        stt_set.add_lang(lang, pool).await?;
+    }
+    let mut utterances = UtteranceManager::new(stt_set);
+
+    
+
+    let mut stt_audio = AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND);
+
+    loop {
+        let msg_nlu = channel.recv().await.expect("Channel closed!");
+        let (as_raw, _, _) = decode_ogg_opus(msg_nlu.audio, DEFAULT_SAMPLES_PER_SECOND)?;
+        stt_audio.append_audio(&as_raw, DEFAULT_SAMPLES_PER_SECOND)?;
+        let session = sessions.lock().expect(POISON_MSG).session_for(msg_nlu.satellite.clone());
+        {
+            match utterances.get_stt(msg_nlu.satellite.clone(), &as_raw).await {
+                Ok(stt) => {
+                    if let Err(e) = stt.process(&as_raw).await {
+                        error!("Stt failed to process audio: {}", e);
+                    }
+
+                    else if msg_nlu.is_final {
+                        stt_audio.save_to_disk(std::path::Path::new("stt_audio.ogg"))?;
+                        stt_audio.clear();
+                        let satellite = msg_nlu.satellite.clone();
+                        let context = add_context_data(&base_context, stt.lang(), &satellite);
+                        match stt.end_decoding().await {
+                            Ok(decoded)=> {
+                                if let Err(e) = order.received_order(
+                                    decoded, 
+                                    signal_event.clone(),
+                                    &context,
+                                    stt.lang(),
+                                    satellite
+                                ).await {
+
+                                    error!("Actions processing had an error: {}", e);
+                                }
+                            }
+                            Err(e) => error!("Stt failed while doing final decode: {}", e)
+                        }
+                        
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to obtain Stt for this session: {}", e);
+                }
+            }
+        }
+        if msg_nlu.is_final {
+            if let Err(e) = utterances.end_utt(&msg_nlu.satellite) {
+                warn!("{}",e);
+            }
+        }
+    }
+}
+
+pub async fn on_event(
+    mut channel: mpsc::Receiver<MsgEvent>,
+    signal_event: SignalEventShared,
+    def_lang: Option<&LanguageIdentifier>,
+    base_context: &ActionContext,
+) -> Result<()> {
+    let def_lang = def_lang.unwrap();
+    loop {
+        let msg = channel.recv().await.expect("Channel closed!");
+        let context = add_context_data(base_context, &def_lang, &msg.satellite);
+        let ans = signal_event.lock().expect(POISON_MSG).call(&msg.event, context.clone());
+        if let Err(e) = process_answers(ans,&def_lang,msg.satellite) {
+            error!("Occurred a problem while processing event: {}", e);
+        }
+    }
+}
+
 impl MqttInterface {
-    pub fn new(curr_langs: &Vec<LanguageIdentifier>) -> Result<Self> {
+    pub fn new() -> Result<Self> {
         let common_out = Arc::new(Mutex::new(vec![]));
         let output = MqttInterfaceOutput::create(common_out.clone())?;
         MSG_OUTPUT.with(|a|a.replace(Some(output)));
 
-        Ok(Self {
-            common_out,
-            curr_langs: curr_langs.to_owned(),
-        })
+        Ok(Self {common_out})
     }
 
 
-    pub async fn interface_loop<M: NluManager + NluManagerConf + NluManagerStatic + Debug + Send + 'static> (&mut self, config: &Config, signal_event: SignalEventShared, base_context: &ActionContext, order: &mut SignalOrder<M>) -> Result<()> {
-        let ibm_data = config.stt.ibm.clone();
+    pub async fn interface_loop (
+        &mut self,
+        config: &Config,
+        curr_langs: &Vec<LanguageIdentifier>,
+        def_lang: Option<&LanguageIdentifier>,
+        sessions: Arc<Mutex<SessionManager>>,
+        channel_nlu: mpsc::Sender<MsgNluVoice>,
+        channel_event: mpsc::Sender<MsgEvent>,
+    ) -> Result<()> {
+            
         let mqtt_conf = ConnectionConfResolved::from(
             config.mqtt.clone(),
             || "lily-server".into()
         );
         let (client, mut eloop) = make_mqtt_conn(&mqtt_conf, None)?;
+
+        let voice_prefs: VoiceDescr = VoiceDescr {
+            gender:if config.tts.prefer_male{Gender::Male}else{Gender::Female}
+        };
+
+        let mut tts_set = HashMap::new();
+        for lang in curr_langs {
+            let tts = TtsFactory::load_with_prefs(lang, config.tts.prefer_online, config.tts.ibm.clone(), &voice_prefs)?;
+            info!("Using tts {}", tts.get_info());
+            tts_set.insert(lang, tts);
+        }
        
 
         client.subscribe("lily/new_satellite", QoS::AtMostOnce).await?;
         client.subscribe("lily/nlu_process", QoS::AtMostOnce).await?;
         client.subscribe("lily/event", QoS::AtMostOnce).await?;
         client.subscribe("lily/disconnected", QoS::ExactlyOnce).await?;
-
-        let mut stt_set = SttSet::new();
-        for lang in &self.curr_langs {
-            let pool= SttPool::new(1, 1,lang, config.stt.prefer_online, &ibm_data).await?;
-            stt_set.add_lang(lang, pool).await?;
-        }
-        let mut sessions = SessionManager::new(stt_set);
         
-
-        let voice_prefs: VoiceDescr = VoiceDescr {
-            gender:if config.tts.prefer_male{Gender::Male}else{Gender::Female}
-        };
-        
-        let mut tts_set = HashMap::new();
-        let def_lang = self.curr_langs.get(0);
-        for lang in self.curr_langs.iter() {
-            let tts = TtsFactory::load_with_prefs(lang, config.tts.prefer_online, config.tts.ibm.clone(), &voice_prefs)?;
-            info!("Using tts {}", tts.get_info());
-            tts_set.insert(lang, tts);
-        }
-        let mut stt_audio = AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND);
-
         loop {
             let notification = eloop.poll().await?;
-            println!("Notification = {:?}", notification);
+            //println!("Notification = {:?}", notification);
             match notification {
                 Event::Incoming(Packet::Publish(pub_msg)) => {
                     match pub_msg.topic.as_str() {
@@ -202,59 +286,11 @@ impl MqttInterface {
                         }
                         "lily/nlu_process" => {
                             let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
-                            let (as_raw, _, _) = decode_ogg_opus(msg_nlu.audio, DEFAULT_SAMPLES_PER_SECOND)?;
-                            stt_audio.append_audio(&as_raw, DEFAULT_SAMPLES_PER_SECOND)?;
-                            let session = sessions.session_for(msg_nlu.satellite.clone());
-                            {
-                                match sessions.get_stt(msg_nlu.satellite.clone(), &as_raw).await {
-                                    Ok(stt) => {
-                                        if let Err(e) = stt.process(&as_raw).await {
-                                            error!("Stt failed to process audio: {}", e);
-                                        }
-
-                                        else if msg_nlu.is_final {
-                                            stt_audio.save_to_disk(std::path::Path::new("stt_audio.ogg"))?;
-                                            stt_audio.clear();
-                                            let satellite = msg_nlu.satellite.clone();
-                                            let context = add_context_data(&base_context, stt.lang(), &satellite);
-                                            match stt.end_decoding().await {
-                                                Ok(decoded)=> {
-                                                    if let Err(e) = order.received_order(
-                                                        decoded, 
-                                                        signal_event.clone(),
-                                                        &context,
-                                                        stt.lang(),
-                                                        satellite
-                                                    ).await {
-                
-                                                        error!("Actions processing had an error: {}", e);
-                                                    }
-                                                }
-                                                Err(e) => error!("Stt failed while doing final decode: {}", e)
-                                            }
-                                            
-                                        }
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to obtain Stt for this session: {}", e);
-                                    }
-                                }
-                            }
-                            if msg_nlu.is_final {
-                                if let Err(e) = sessions.end_utt(&msg_nlu.satellite) {
-                                    warn!("{}",e);
-                                }
-                            }
-                            
+                            channel_nlu.send(msg_nlu).await?;
                         }
                         "lily/event" => {
                             let msg: MsgEvent = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
-                            let context = add_context_data(base_context,&self.curr_langs[0], &msg.satellite);
-                            let ans = signal_event.lock().expect(POISON_MSG).call(&msg.event, context.clone());
-                            if let Err(e) = process_answers(ans,def_lang.unwrap(),msg.satellite) {
-                                error!("Occurred a problem while processing event: {}", e);
-                            }
-                            
+                            channel_event.send(msg).await?;
                         }
                         "lily/disconnected" => {
                             let msg: MsgGoodbye = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
@@ -307,7 +343,7 @@ impl MqttInterface {
                         }
                     };
 
-                    if let Err(e) = sessions.end_session(&uuid_str) {
+                    if let Err(e) = sessions.lock().expect("POISON_MSG").end_session(&uuid_str) {
                         warn!("{}",e);
                     }
                     let msg_pack = encode::to_vec(&MsgAnswerVoice{data: audio_data.into_encoded()?})?;

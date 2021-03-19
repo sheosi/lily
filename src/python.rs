@@ -315,7 +315,7 @@ fn add_entity_value(entity_name: String, value: String, langs: Option<Vec<String
     };
 
     // Send request
-    channel.send(request).py_excep::<PyOSError>()?;
+    channel.blocking_send(request).py_excep::<PyOSError>()?;
     Ok(())
 }
 

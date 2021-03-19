@@ -11,7 +11,7 @@ pub struct MsgAnswerVoice {
     pub data: Vec<u8>
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct MsgNluVoice {
     pub audio: Vec<u8>,
     pub is_final: bool,
@@ -25,7 +25,7 @@ pub struct MsgWelcome {
     pub satellite: String,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct MsgEvent {
     pub satellite: String,
     pub event: String

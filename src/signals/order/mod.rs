@@ -4,7 +4,7 @@ pub mod server_interface;
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::mem::replace;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::actions::{ActionAnswer, ActionContext, ActionSet, MainAnswer};
@@ -14,7 +14,7 @@ use crate::python::{try_translate, try_translate_all};
 use crate::stt::DecodeRes;
 use crate::signals::{ActMap, Signal, SignalEventShared};
 use crate::vars::{mangle, MIN_SCORE_FOR_ACTION, POISON_MSG};
-use self::server_interface::{MqttInterface, MSG_OUTPUT};
+use self::server_interface::{MqttInterface, MSG_OUTPUT, on_event, on_nlu_request, SessionManager};
 
 // Other crates
 use anyhow::{Result, anyhow};
@@ -22,7 +22,7 @@ use async_trait::async_trait;
 use lazy_static::lazy_static;
 use log::{debug, info, error, warn};
 use serde::{Deserialize, Deserializer, de::{self, SeqAccess, Visitor}, Serialize, Serializer, ser::SerializeSeq};
-use tokio::{select, task::spawn_blocking};
+use tokio::{select, sync::mpsc, task::spawn_blocking};
 use unic_langid::LanguageIdentifier;
 
 #[cfg(not(feature = "devel_rasa_nlu"))]
@@ -360,19 +360,23 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
         process_answers(ans, lang, satellite.clone())
     }
 
-    pub async fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &ActionContext, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
-        let mut interface = MqttInterface::new(curr_lang)?;
+    pub async fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &ActionContext, curr_langs: &Vec<LanguageIdentifier>) -> Result<()> {
+        let mut interface = MqttInterface::new()?;
 
         // Dyn entities data
-        let dyn_entities = replace(&mut self.dyn_entities, None).expect("Dyn_entities already consumed");
-        let shared_nlu = self.nlu.clone();
-        let curr_langs2 = curr_lang.clone();
         
-        let a= move || -> Result<()> {
+        let shared_nlu = self.nlu.clone();
+        let curr_langs2 = curr_langs.clone();
+        
+        async fn on_dyn_entity<M: NluManager + NluManagerConf + NluManagerStatic + Debug + Send + 'static>(
+            mut channel: mpsc::Receiver<EntityAddValueRequest>,
+            shared_nlu: Arc<Mutex<HashMap<LanguageIdentifier, NluState<M>>>>,
+            curr_langs: Vec<LanguageIdentifier>,
+        ) -> Result<()> {
             loop {
-                let request= dyn_entities.recv().unwrap();
+                let request= channel.recv().await.unwrap();
                 let langs = if request.langs.is_empty(){
-                    curr_langs2.clone()
+                    curr_langs.clone()
                 }
                 else {
                     request.langs
@@ -386,13 +390,26 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
                         error!("Failed to add value to entity {}", e);
                     }
 
-                    Self::end_loading(shared_nlu.clone(), &curr_langs2)?;
+                    SignalOrder::end_loading(shared_nlu.clone(), &curr_langs)?;
                 }
             }
+            Ok(())
         };
+        let (nlu_sender, nlu_receiver) = tokio::sync::mpsc::channel(100);
+        let (event_sender, event_receiver) = tokio::sync::mpsc::channel(100);
+        let sessions = Arc::new(Mutex::new(SessionManager::new()));
+        let def_lang = curr_langs.get(0);
+        let dyn_ent_fut = on_dyn_entity(
+             replace(&mut self.dyn_entities, None).expect("Dyn_entities already consumed"),
+             shared_nlu.clone(),
+             curr_langs.clone()
+        );
         select!{
-            e = spawn_blocking(a) => {println!("{:?}",e.err());Err(anyhow!("Dynamic entitying failed"))}
-         e = interface.interface_loop(config, signal_event, base_context, self) => {e}}
+            e = dyn_ent_fut => {Err(anyhow!("Dynamic entitying failed: {:?}",e))}
+            e = interface.interface_loop(config, curr_langs, def_lang, sessions.clone(), nlu_sender, event_sender) => {e}
+            e = on_nlu_request(config, nlu_receiver, signal_event.clone(), curr_langs, self, base_context, sessions) => {Err(anyhow!("Nlu request failed: {:?}", e))}
+            e = on_event(event_receiver, signal_event, def_lang, base_context) => {Err(anyhow!("Event handling failed: {:?}", e))}
+        }
     }
 }
 
@@ -482,7 +499,7 @@ pub struct EntityAddValueRequest {
     pub langs: Vec<LanguageIdentifier>,
 }
 pub fn init_dynamic_entities() -> Result<mpsc::Receiver<EntityAddValueRequest>> {
-    let (producer, consumer) = mpsc::channel();
+    let (producer, consumer) = mpsc::channel(100);
 
     (*ENTITY_ADD_CHANNEL.lock().expect(POISON_MSG)) = Some(producer);
 
