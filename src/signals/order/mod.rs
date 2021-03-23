@@ -22,7 +22,7 @@ use async_trait::async_trait;
 use lazy_static::lazy_static;
 use log::{debug, info, error, warn};
 use serde::{Deserialize, Deserializer, de::{self, SeqAccess, Visitor}, Serialize, Serializer, ser::SerializeSeq};
-use tokio::{select, sync::mpsc, task::spawn_blocking};
+use tokio::{select, sync::mpsc};
 use unic_langid::LanguageIdentifier;
 
 #[cfg(not(feature = "devel_rasa_nlu"))]
@@ -365,9 +365,6 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
 
         // Dyn entities data
         
-        let shared_nlu = self.nlu.clone();
-        let curr_langs2 = curr_langs.clone();
-        
         async fn on_dyn_entity<M: NluManager + NluManagerConf + NluManagerStatic + Debug + Send + 'static>(
             mut channel: mpsc::Receiver<EntityAddValueRequest>,
             shared_nlu: Arc<Mutex<HashMap<LanguageIdentifier, NluState<M>>>>,
@@ -401,7 +398,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
         let def_lang = curr_langs.get(0);
         let dyn_ent_fut = on_dyn_entity(
              replace(&mut self.dyn_entities, None).expect("Dyn_entities already consumed"),
-             shared_nlu.clone(),
+             self.nlu.clone(),
              curr_langs.clone()
         );
         select!{

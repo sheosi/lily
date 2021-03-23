@@ -19,7 +19,7 @@ use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 use log::warn;
 use thiserror::Error;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct AudioEncoded {
     data: Vec<u8>
 }
@@ -42,7 +42,7 @@ impl AudioEncoded {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 enum Data {
     Raw(AudioRaw),
     Encoded(AudioEncoded)
@@ -87,7 +87,7 @@ impl Data {
 }
 
 // Just some and audio dummy for now
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Audio {
     buffer: Data
 }

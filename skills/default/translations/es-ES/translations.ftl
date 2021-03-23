@@ -14,7 +14,7 @@ order_say_name = Dime tu nombre
 
 say_name = Mi nombre es lily
 
-order_say_time = Qué hora es
+order_say_time = Que hora es
 .a_1 = Dime la hora
 
 time_format = Son las %H y %M

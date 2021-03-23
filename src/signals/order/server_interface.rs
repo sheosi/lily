@@ -1,9 +1,7 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, hash_map::Entry};
 use std::fmt::Debug;
-use std::mem::replace;
 use std::sync::{Arc, Mutex, Weak};
-use std::ops::DerefMut;
 
 use crate::actions::ActionContext;
 use crate::config::Config;
@@ -20,8 +18,8 @@ use lily_common::communication::*;
 use lily_common::vars::DEFAULT_SAMPLES_PER_SECOND;
 use log::{debug, error, info, warn};
 use rmp_serde::{decode, encode};
-use rumqttc::{Event, Packet, QoS};
-use tokio::sync::mpsc;
+use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
+use tokio::{try_join, sync::mpsc};
 use unic_langid::LanguageIdentifier;
 
 thread_local!{
@@ -136,7 +134,7 @@ impl CapsManager {
 }
 
 pub struct MqttInterface {
-    common_out: Arc<Mutex<Vec<(SendData, String)>>>,
+    common_out: mpsc::Receiver<(SendData, String)>
 }
 
 
@@ -228,8 +226,8 @@ pub async fn on_event(
 
 impl MqttInterface {
     pub fn new() -> Result<Self> {
-        let common_out = Arc::new(Mutex::new(vec![]));
-        let output = MqttInterfaceOutput::create(common_out.clone())?;
+        let (sender, common_out) = mpsc::channel(100);
+        let output = MqttInterfaceOutput::create(sender)?;
         MSG_OUTPUT.with(|a|a.replace(Some(output)));
 
         Ok(Self {common_out})
@@ -250,7 +248,12 @@ impl MqttInterface {
             config.mqtt.clone(),
             || "lily-server".into()
         );
-        let (client, mut eloop) = make_mqtt_conn(&mqtt_conf, None)?;
+        let (client_raw, eloop) = make_mqtt_conn(&mqtt_conf, None)?;
+        client_raw.subscribe("lily/new_satellite", QoS::AtMostOnce).await?;
+        client_raw.subscribe("lily/nlu_process", QoS::AtMostOnce).await?;
+        client_raw.subscribe("lily/event", QoS::AtMostOnce).await?;
+        client_raw.subscribe("lily/disconnected", QoS::ExactlyOnce).await?;
+        let client = Arc::new(Mutex::new(client_raw));
 
         let voice_prefs: VoiceDescr = VoiceDescr {
             gender:if config.tts.prefer_male{Gender::Male}else{Gender::Female}
@@ -263,117 +266,145 @@ impl MqttInterface {
             tts_set.insert(lang, tts);
         }
        
-
-        client.subscribe("lily/new_satellite", QoS::AtMostOnce).await?;
-        client.subscribe("lily/nlu_process", QoS::AtMostOnce).await?;
-        client.subscribe("lily/event", QoS::AtMostOnce).await?;
-        client.subscribe("lily/disconnected", QoS::ExactlyOnce).await?;
-        
-        loop {
-            let notification = eloop.poll().await?;
-            //println!("Notification = {:?}", notification);
-            match notification {
-                Event::Incoming(Packet::Publish(pub_msg)) => {
-                    match pub_msg.topic.as_str() {
-                        "lily/new_satellite" => {
-                            info!("New satellite incoming");
-                            let input :MsgNewSatellite = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
-                            let uuid2 = &input.uuid;
-                            let caps = input.caps;
-                            CAPS_MANAGER.with(|c| c.borrow_mut().add_client(&uuid2, caps));
-                            let output = encode::to_vec(&MsgWelcome{conf:config.to_client_conf(), satellite: input.uuid})?;
-                            client.publish("lily/satellite_welcome", QoS::AtMostOnce, false, output).await?
-                        }
-                        "lily/nlu_process" => {
-                            let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
-                            channel_nlu.send(msg_nlu).await?;
-                        }
-                        "lily/event" => {
-                            let msg: MsgEvent = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
-                            channel_event.send(msg).await?;
-                        }
-                        "lily/disconnected" => {
-                            let msg: MsgGoodbye = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
-                            if let Err(e) = CAPS_MANAGER.with(|c|c.borrow_mut().disconnected(&msg.satellite)) {
-                                warn!("{}",&e.to_string())
+        async fn handle_in(
+            mut eloop: EventLoop,
+            client: Arc<Mutex<AsyncClient>>,
+            config: &Config,
+            channel_nlu: mpsc::Sender<MsgNluVoice>,
+            channel_event: mpsc::Sender<MsgEvent>,
+        ) -> Result<()> {
+            loop {
+                let notification = eloop.poll().await?;
+                //println!("Notification = {:?}", notification);
+                match notification {
+                    Event::Incoming(Packet::Publish(pub_msg)) => {
+                        match pub_msg.topic.as_str() {
+                            "lily/new_satellite" => {
+                                info!("New satellite incoming");
+                                let input :MsgNewSatellite = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
+                                let uuid2 = &input.uuid;
+                                let caps = input.caps;
+                                CAPS_MANAGER.with(|c| c.borrow_mut().add_client(&uuid2, caps));
+                                let output = encode::to_vec(&MsgWelcome{conf:config.to_client_conf(), satellite: input.uuid})?;
+                                client.lock().expect(POISON_MSG).publish("lily/satellite_welcome", QoS::AtMostOnce, false, output).await?
                             }
-                        }
-                        _ => {}
-                    }
-                }
-                _ => {}
-            }
-            {
-                let msg_vec = replace(self.common_out.lock().expect(POISON_MSG).deref_mut(), Vec::new());
-                for (msg_data, uuid_str) in msg_vec {
-
-                    let audio_data = match msg_data {
-                        SendData::Audio(audio) => {
-                            audio
-                        }
-                        SendData::String((str, lang)) => {
-                            async fn synth_text(tts: &mut Box<dyn Tts>, input: &str) -> Audio {
-                                match tts.synth_text(input).await {
-                                    Ok(a) => a,
-                                    Err(e) => {
-                                        error!("Error while synthing voice: {}", e);
-                                        Audio::new_empty(DEFAULT_SAMPLES_PER_SECOND)
-                                    }
+                            "lily/nlu_process" => {
+                                let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
+                                channel_nlu.send(msg_nlu).await?;
+                            }
+                            "lily/event" => {
+                                let msg: MsgEvent = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
+                                channel_event.send(msg).await?;
+                            }
+                            "lily/disconnected" => {
+                                let msg: MsgGoodbye = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
+                                if let Err(e) = CAPS_MANAGER.with(|c|c.borrow_mut().disconnected(&msg.satellite)) {
+                                    warn!("{}",&e.to_string())
                                 }
                             }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        };
+            
+        async fn process_out(
+            msg_data: SendData,
+            uuid_str: String,
+            tts_set: &mut HashMap<&LanguageIdentifier, Box<dyn Tts>>,
+            def_lang: Option<&LanguageIdentifier>,
+            sessions: &Arc<Mutex<SessionManager>>,
+            client: &Arc<Mutex<AsyncClient>>
+        ) -> Result<()> {
+            let audio_data = match msg_data {
+                SendData::Audio(audio) => {
+                    audio
+                }
+                SendData::String((str, lang)) => {
+                    async fn synth_text(tts: &mut Box<dyn Tts>, input: &str) -> Audio {
+                        match tts.synth_text(input).await {
+                            Ok(a) => a,
+                            Err(e) => {
+                                error!("Error while synthing voice: {}", e);
+                                Audio::new_empty(DEFAULT_SAMPLES_PER_SECOND)
+                            }
+                        }
+                    }
 
-                            match tts_set.get_mut(&lang) {
+                    match tts_set.get_mut(&lang) {
+                        Some(tts) => {
+                            synth_text(tts, &str).await
+                        }
+                        None => {
+                            warn!("Received answer for language {:?} not in the config or that has no TTS, using default", lang);
+                            let def = def_lang.expect("There's no language assigned, need one at least");
+                            match tts_set.get_mut(def) {
                                 Some(tts) => {
                                     synth_text(tts, &str).await
                                 }
                                 None => {
-                                    warn!("Received answer for language {:?} not in the config or that has no TTS, using default", lang);
-                                    let def = def_lang.as_ref().expect("There's no language assigned, need one at least");
-                                    match tts_set.get_mut(def) {
-                                        Some(tts) => {
-                                            synth_text(tts, &str).await
-                                        }
-                                        None => {
-                                            warn!("Default has no tts either, sending empty audio");
-                                            Audio::new_empty(DEFAULT_SAMPLES_PER_SECOND)
-                                        }
-                                    } 
+                                    warn!("Default has no tts either, sending empty audio");
+                                    Audio::new_empty(DEFAULT_SAMPLES_PER_SECOND)
                                 }
-                            }
+                            } 
                         }
-                    };
-
-                    if let Err(e) = sessions.lock().expect("POISON_MSG").end_session(&uuid_str) {
-                        warn!("{}",e);
                     }
-                    let msg_pack = encode::to_vec(&MsgAnswerVoice{data: audio_data.into_encoded()?})?;
-                    client.publish(format!("lily/{}/say_msg", uuid_str), QoS::AtMostOnce, false, msg_pack).await?;
                 }
+            };
+
+            if let Err(e) = sessions.lock().expect("POISON_MSG").end_session(&uuid_str) {
+                warn!("{}",e);
             }
+            let msg_pack = encode::to_vec(&MsgAnswerVoice{data: audio_data.into_encoded()?})?;
+            client.lock().expect(POISON_MSG).publish(&format!("lily/{}/say_msg", uuid_str), QoS::AtMostOnce, false, msg_pack).await?;
+            Ok(())
         }
+
+        async fn handle_out(
+            common_out: &mut mpsc::Receiver<(SendData, String)>,
+            tts_set: &mut HashMap<&LanguageIdentifier, Box<dyn Tts>>,
+            def_lang: Option<&LanguageIdentifier>,
+            sessions: Arc<Mutex<SessionManager>>,
+            client: Arc<Mutex<AsyncClient>>
+        ) -> Result<()> {
+            loop {
+                let (msg_data, uuid_str) = common_out.recv().await.expect("Out channel broken");
+                process_out(msg_data, uuid_str, tts_set, def_lang.clone(), &sessions, &client).await?;
+            }
+        };
+
+        let i = handle_in(eloop, client.clone(), config, channel_nlu, channel_event);
+        let o = handle_out(&mut self.common_out, &mut tts_set, def_lang, sessions, client);
+        try_join!(i, o)?;
+                
+        Ok(())
     }
 }
 
+
+#[derive(Debug)]
 enum SendData {
     String((String, LanguageIdentifier)),
     Audio(Audio)
 }
 pub struct MqttInterfaceOutput {
-    client: Arc<Mutex<Vec<(SendData, String)>>>
+    client: mpsc::Sender<(SendData, String)>
 }
 
 impl MqttInterfaceOutput {
-    fn create(client: Arc<Mutex<Vec<(SendData, String)>>>) -> Result<Self> {
+    fn create(client: mpsc::Sender<(SendData, String)>) -> Result<Self> {
         Ok(Self{client})
     }
 
     pub fn answer(&mut self, input: String, lang: &LanguageIdentifier, to: String) -> Result<()> {
-        self.client.lock().expect(POISON_MSG).push((SendData::String((input, lang.to_owned())), to));
+        self.client.try_send((SendData::String((input, lang.to_owned())), to)).unwrap();
         Ok(())
     }
 
     pub fn send_audio(&mut self, audio: Audio, to: String) -> Result<()> {
-        self.client.lock().expect(POISON_MSG).push((SendData::Audio(audio), to));
+        self.client.try_send((SendData::Audio(audio), to)).unwrap();
         Ok(())
     }
 }
