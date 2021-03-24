@@ -276,27 +276,17 @@ def _translate_impl(trans_name: str, dict_args: Dict[str, Any], lang: str):
 
 
 def translate_all(trans_name: str, dict_args: Dict[str, Any]):
-    """If 'trans_name' starts with a '$' then it will translated using
-    'dict_args' as context variables for them to be used inside Fluent.
-    Returns a list with all possible alternatives for this translation"""
+    """Translate using 'dict_args' as context variables for them to be used
+    inside Fluent. Returns a list with all possible alternatives for this
+    translation"""
 
-    if trans_name[0] == '$':
-        what_to_say = _translate_all_impl(trans_name[1:], dict_args, dict_args["__lily_data_lang"])
-    else:
-        what_to_say = [trans_name]
-
-    return what_to_say
+    return _translate_all_impl(trans_name, dict_args, dict_args["__lily_data_lang"])
 
 def translate(trans_name: str, dict_args: Dict[str, Any]):
-    """If 'trans_name' starts with a '$' then it will translated using
-    'dict_args' as context variables for them to be used inside Fluent.
-    If multiple alternatives exist returns one at random."""
-    if trans_name[0] == '$':
-        what_to_say = _translate_impl(trans_name[1:], dict_args, dict_args["__lily_data_lang"])
-    else:
-        what_to_say = trans_name
+    """Translate using 'dict_args' as context variables for them to be used
+    inside Fluent. If multiple alternatives exist returns one at random."""
 
-    return what_to_say
+    return _translate_impl(trans_name, dict_args, dict_args["__lily_data_lang"])
 
 def answer(output: str, context: Dict[str, str]) -> Optional[_lily_impl.ActionAnswer]:
     """'output' will be returned for it to be shown directly to the user or
