@@ -101,9 +101,10 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn first_upper(mut input: String) -> String {
-    let mut new = input.split_off(1).to_uppercase();
-    new.push_str(&input);
-    new
+    let tail = input.split_off(1);
+    let mut head = input.to_uppercase();
+    head.push_str(&tail);
+    head
 }
 
 fn do_init(pkg_path_str: &str) -> Result<()> {
