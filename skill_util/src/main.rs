@@ -312,18 +312,18 @@ fn extract_zip(zip: Bytes, out_path: &Path) -> Result<()> {
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
         let file_path = out_path.join(file.name());
-        if file.name().ends_with("/") {
-            fs::create_dir_all(file.name())?;
+        if file.name().ends_with("/") { // Is a directory
+            fs::create_dir_all(&file_path)?;
         }
-        else {
+        else { // Is a file
             if let Some(p) = file_path.parent() {
                 if !p.exists() {
                     fs::create_dir_all(p)?;
                 }
             }
+            let mut outfile = fs::File::create(&file_path)?;
+            io::copy(&mut file, &mut outfile )?;
         }
-        let mut outfile = fs::File::create(&file_path)?;
-        io::copy(&mut file, &mut outfile )?;
 
         #[cfg(unix)]
         {

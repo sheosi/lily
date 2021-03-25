@@ -43,7 +43,7 @@ And you'll be good to go.
 
 *On Debian:*
 ```shell
-sudo apt install libssldev libasound2-dev libpocketsphinx-dev libsphinxbase-dev python3-all-dev libopus-dev clang libgsl-dev
+sudo apt install libssl-dev libasound2-dev libpocketsphinx-dev libsphinxbase-dev python3-all-dev libopus-dev clang libgsl-dev
 ```
 
 *Optional* dependency for feature `extra_langs_tts` (Languages not provided by Pico Tts for local Tts):
