@@ -136,7 +136,7 @@ class {}:
 
     def trigger_action(self, context):
         if context[\"intent\"] == \"example\":
-            answer(\"$example_translation_say\", context)
+            return answer(translate(\"example_translation_say\",context), context)
     ", first_upper(skill_name.to_lowercase()))?;
 
     // Create translation
@@ -158,7 +158,7 @@ class {}:
     // Skills definition file
     let mut model = fs::File::create(pkg_path.join("model.yaml"))?;
     write!(&mut model, "example:
-    samples: \"Say hello to {{$friend_name}}\"
+    samples: \"Say hello to ($friend_name)\"
     slots:
         friend_name:
             type:
