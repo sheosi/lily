@@ -14,7 +14,7 @@ from functools import reduce
 from fluent.runtime import FluentBundle, FluentResource
 
 import _lily_impl
-from _lily_impl import conf
+from _lily_impl import *
 
 # We are going to access things from the runtime
 # that one else should
