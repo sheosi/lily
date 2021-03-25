@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::env::current_dir;
-use std::fs::{self, DirEntry, File};
+use std::fs::{self, DirEntry, File, OpenOptions};
 use std::io::{self, Read, Seek, Write};
 use std::path::Path;
 
@@ -37,9 +37,19 @@ async fn main() -> anyhow::Result<()> {
                                     Arg::with_name("skill_name").required(true)
                                )
                             )
-                    .subcommand(SubCommand::with_name("prep_repo")
-                                .arg(
-                                    Arg::with_name("repo_path").required(true)
+                    .subcommand(SubCommand::with_name("repo")
+                                .subcommand(SubCommand::with_name("init")
+                                    .arg(
+                                        Arg::with_name("repo_path").required(true)
+                                    )
+                                )
+                                .subcommand(SubCommand::with_name("add_skill")
+                                    .arg(
+                                        Arg::with_name("skill_path").required(true)
+                                    )
+                                    .arg(
+                                        Arg::with_name("repo_path").required(true)
+                                    )
                                 )
                             )
                   .get_matches();
@@ -67,34 +77,43 @@ async fn main() -> anyhow::Result<()> {
             else {Err(e)?}
         }
     }
-    else if let Some(prep_data) = matches.subcommand_matches("prep_repo") {
-        let repo_path = Path::new(prep_data.value_of("repo_path").expect("Couldn't get repo path"));
-        if !repo_path.exists() {
-            fs::create_dir_all(repo_path)?;
-        }
-
-        let skills_path = Path::new(SKILLS_PATH);
-        let mut repo_data = RepoData::empty();
-        for child in skills_path.read_dir()? {
-            let child = child?.path();
-            if child.is_dir() {
-                let folder_name = child.file_name().expect("Couldn't obtain folder name").to_str().expect("Can't transform os-str into str");
-                let zip_name = format!("{}.zip", folder_name);
-                let zip_path = repo_path.join(zip_name);
-                zip_folder(&child, &zip_path)?;
-
-                let child_path = child.strip_prefix(skills_path)?.with_extension("zip");
-                repo_data.add_internal(folder_name, child_path.to_string_lossy().to_string());
+    else if let Some(repo_data) = matches.subcommand_matches("repo") {
+        if let Some(prep_data) = repo_data.subcommand_matches("init") {
+            let repo_path = Path::new(prep_data.value_of("repo_path").expect("Couldn't get repo path"));
+            if !repo_path.exists() {
+                fs::create_dir_all(repo_path)?;
             }
-        }
-        
-        // list.json
-        let writer = File::create(repo_path.join("list.json"))?;
-        serde_json::to_writer(writer, &repo_data)?;
 
-        // err404.json
-        const MSG_404: &str = "{\"error\":\"404\",\"message\":\"Resource not found\"}";
-        fs::write(repo_path.join("err404.json"), MSG_404)?;
+            let skills_path = Path::new(SKILLS_PATH);
+            let mut repo_data = RepoData::empty();
+            for child in skills_path.read_dir()? {
+                let child = child?.path();
+                if child.is_dir() {
+                    repo_data.zip_and_add_internal(&child, repo_path)?;
+                }
+            }
+            
+            // list.json
+            let writer = File::create(repo_path.join("list.json"))?;
+            serde_json::to_writer(writer, &repo_data)?;
+
+            // err404.json
+            const MSG_404: &str = "{\"error\":\"404\",\"message\":\"Resource not found\"}";
+            fs::write(repo_path.join("err404.json"), MSG_404)?;
+        }
+        else if let Some(add_data) = repo_data.subcommand_matches("add_skill") {
+            let repo_path = Path::new(add_data.value_of("repo_path").expect("Couldn't get repo path"));
+            let skill_path = Path::new(add_data.value_of("skill_path").expect("Couldn't get repo path"));
+            assert!(repo_path.exists());
+            assert!(skill_path.exists());
+            
+            let list_path = repo_path.join("list.json");
+            let list = File::open(&list_path).expect("No list.json found");
+            let mut data: RepoData = serde_json::from_reader(io::BufReader::new(list)).expect("Failed to decode");            
+            data.zip_and_add_internal(skill_path, repo_path)?;
+            let list = OpenOptions::new().write(true).open(list_path)?;
+            serde_json::to_writer(io::BufWriter::new(list), &data).unwrap();
+        }
     }
 
     Ok(())
@@ -271,6 +290,18 @@ impl RepoData {
         self.skills.insert(skill_name.to_string(), skl);
     }
 
+    fn zip_and_add_internal(&mut self, skill_path: &Path, repo_path: &Path) -> Result<()> {
+        let skill_name = skill_path.file_name().expect("Couldn't obtain folder name").to_str().expect("Can't transform os-str into str");
+        let zip_name = format!("{}.zip", skill_name);
+        let zip_path = repo_path.join(zip_name);
+        zip_folder(skill_path, &zip_path)?;
+
+        let child_path = zip_path.strip_prefix(repo_path)?;
+        self.add_internal(skill_name, child_path.to_string_lossy().to_string());
+
+        Ok(())
+    }
+
     fn is_ver_compatible(ver: (u8, u8)) -> bool {
         CURR_LILY_VER.0 >= ver.0 && CURR_LILY_VER.1 >= ver.1
     }
@@ -336,7 +367,6 @@ where
         // Some unzip tools unzip files with directory paths correctly, some do not!
         if !is_ignored {
             if path.is_file() {
-                println!("adding file {:?} as {:?} ...", path, name);
                 zip.start_file(name, options)?;
                 let mut f = File::open(path)?;
 
@@ -346,7 +376,6 @@ where
             } else if name.len() != 0 && name != IGNORED {
                 // Only if not root! Avoids path spec / warning
                 // and mapname conversion failed error on unzip
-                println!("adding dir {:?} as {:?} ...", path, name);
                 zip.add_directory(name, options)?;
                 let it = path.read_dir()?;
                 zip_folder_impl(&mut it.filter_map(|e|e.ok()), prefix, zip)?;
