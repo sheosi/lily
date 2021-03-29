@@ -28,7 +28,6 @@ futures = "^0.3"
 delegate = "^0.5" # Used for the registries using the base ones
 void = "^1.0"
 
-#vad = "0.1.5" # Note: Had to be disabled because syntex_syntax was causing problems
 pocketsphinx = "^0.6.0" # Offline Stt
 deepspeech = {version = "^0.9", optional = true} # More correct and better (also slower) Stt
 magnum-opus = "^0.3" # Still used to propagate errors

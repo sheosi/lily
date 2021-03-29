@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 rsnowboy = {git = "https://github.com/sheosi/rsnowboy", optional = true} # Hotword detector
+webrtc-vad = {version = "^0.4", optional = true}
 cpal = {version = "^0.13", optional = true} # For recording (future substitute of sphinxad)
 ringbuf = {version = "^0.2", optional = true}# Send what is recorded from the consumer to the producer
 ogg = "^0.8" # Send to web services audio and to save into disk
@@ -21,7 +22,7 @@ lazy_static = "^1.4" # We use this for the path were the data is stored
 serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
 syslog = "^5.0" # Linux log interface
 url = "^2.1"
-#rumqttc = "^0.2"
+
 rumqttc = "^0.5"
 anyhow = "^1.0" # For error handling overall in the app
 tokio = {version = "^1.1", features = ["time"], optional = true}
@@ -29,6 +30,8 @@ rand = "^0.7" # Needs to be hold of for compatibility with cbindgen
 serial_test = "^0.5"
 
 [features]
-default = ["client"]
-client = ["rsnowboy", "cpal", "ringbuf", "rodio", "tokio"]
+default = ["client", "snowboy"]
+client = ["cpal", "ringbuf", "rodio", "tokio"]
+snowboy = ["rsnowboy"]
+webrtc_vad = ["webrtc-vad"]
 unused = []

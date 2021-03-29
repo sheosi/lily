@@ -7,11 +7,13 @@ pub trait Vad {
 }
 
 
+#[cfg(feature="snowboy")]
 pub struct SnowboyVad {
 	vad: rsnowboy::SnowboyVad,
 }
 
 
+#[cfg(feature="snowboy")]
 impl SnowboyVad {
 	pub fn new(res_path: &Path) -> Result<Self, VadError> {
 		let vad = rsnowboy::SnowboyVad::new(res_path.to_str().ok_or_else(|| VadError::NotUnicode)?);
@@ -19,6 +21,7 @@ impl SnowboyVad {
 	}
 }
 
+#[cfg(feature="snowboy")]
 impl Vad for SnowboyVad {
 	fn reset(&mut self) -> Result<(), VadError> {
 		self.vad.reset();
@@ -38,11 +41,38 @@ impl Vad for SnowboyVad {
 	}
 }
 
+#[cfg(feature="webrtc_vad")]
+pub struct WebRtcVad {
+	vad: webrtc_vad::Vad
+}
+
+#[cfg(feature="webrtc_vad")]
+impl WebRtcVad {
+	pub fn new() -> Self {
+		Self {vad: webrtc_vad::Vad::new_with_rate(webrtc_vad::SampleRate::Rate16kHz)}
+	}
+}
+
+#[cfg(feature="webrtc_vad")]
+impl Vad for WebRtcVad {
+	fn reset(&mut self) -> Result<(), VadError> {
+		self.vad.reset();
+		Ok(())
+	}
+
+	fn is_someone_talking(&mut self, audio: &[i16]) -> Result<bool, VadError> {
+		self.vad.is_voice_segment(audio).map_err(|_| VadError::InvalidFrameLength)
+	}
+}
+
 #[derive(Error, Debug)]
 pub enum VadError{
 	#[error("Something happened in the Vad")]
 	Unknown,
 
 	#[error("Input was not unicode")]
-	NotUnicode
+	NotUnicode,
+
+	#[error("Invalid frame length")]
+	InvalidFrameLength,
 }

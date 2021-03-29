@@ -13,10 +13,12 @@ pub trait HotwordDetector {
     fn set_sensitivity(&mut self, value: f32);
 }
 
+#[cfg(feature="snowboy")]
 pub struct Snowboy {
     detector: rsnowboy::SnowboyDetect,
 }
 
+#[cfg(feature="snowboy")]
 impl Snowboy {
     pub fn new(model_path: &Path, res_path: &Path, sensitivity: f32) -> Result<Snowboy> {
 
@@ -36,6 +38,7 @@ impl Snowboy {
     }
 }
 
+#[cfg(feature="snowboy")]
 impl HotwordDetector for Snowboy {
     fn start_hotword_check(&mut self) -> Result<(), VadError> {
         self.detector.reset();
