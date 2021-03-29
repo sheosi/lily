@@ -1,0 +1,34 @@
+name: Rust
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install deps
+      run: sudo apt install libssl-dev libasound2-dev libpocketsphinx-dev libsphinxbase-dev python3-all-dev libopus-dev clang libgsl-dev
+    - name: Cache
+      uses: actions/cache@v2.1.4
+      with:
+        # A list of files, directories, and wildcard patterns to cache and restore
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        # An explicit key for restoring and saving the cache
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
