@@ -1,9 +1,6 @@
 # lily
 
-***Note: This could be called the 'dev' branch so things might be rough***
-
-This branch contains the new lily code for multiple client, with an architecture
-of client/server using MQTT + MsgPack.
+***Note: This is the old branch were Lily is just a single executable doing everything (listening, actions and NLU/TTS/STT) ***
 
 A local open-source voice assistant with an NLU
 
