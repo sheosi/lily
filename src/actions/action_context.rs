@@ -6,21 +6,37 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use crate::vars::{POISON_MSG, UNEXPECTED_MSG};
 
 // Other crates
-use pyo3::{Py, PyAny, PyErr, PyIterProtocol, PyRef, PyRefMut, PyResult, Python, exceptions::*, types::{PyDict, PyIterator, PyTuple, PyType}};
-use pyo3::prelude::{pyclass, pymethods, pyproto};
+use pyo3::{IntoPy, Py, PyAny, PyErr, PyIterProtocol, PyObject, PyRef, PyRefMut, PyResult, Python, exceptions::*, types::{PyDict, PyIterator, PyTuple, PyType}};
+use pyo3::prelude::{FromPyObject, pyclass, pymethods, pyproto};
 use pyo3::class::PyObjectProtocol;
 use pyo3::mapping::PyMappingProtocol;
 use pyo3::sequence::PySequenceProtocol;
 
 
+#[derive(Clone, Debug, FromPyObject, PartialEq)]
+pub enum ContextElement {
+    String(String),
+    Dict(ActionContext)
+}
+
+impl IntoPy<PyObject> for ContextElement {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            ContextElement::String(str)=>{str.into_py(py)},
+            ContextElement::Dict(c) =>{c.into_py(py)}
+        }
+    }
+}
+
+
 struct BaseIterator {
-    inner: Arc<Mutex<HashMap<String,String>>>,
+    inner: Arc<Mutex<HashMap<String, ContextElement>>>,
     count: usize,
     reversed: bool
 }
 
 impl BaseIterator {
-    fn new(inner: Arc<Mutex<HashMap<String,String>>>) -> Self {
+    fn new(inner: Arc<Mutex<HashMap<String, ContextElement>>>) -> Self {
         Self {
             inner,
             count: 0,
@@ -28,7 +44,7 @@ impl BaseIterator {
         }
     }
 
-    fn reversed(inner: Arc<Mutex<HashMap<String,String>>>) -> Self {
+    fn reversed(inner: Arc<Mutex<HashMap<String, ContextElement>>>) -> Self {
         Self {
             count: inner.lock().expect(POISON_MSG).len(),
             inner: inner.clone(),
@@ -46,7 +62,7 @@ impl BaseIterator {
         self.count = if self.reversed{self.count -1} else{self.count + 1};
         old_count
     }
-    fn get_inner(&self) -> MutexGuard<HashMap<String,String>> {
+    fn get_inner(&self) -> MutexGuard<HashMap<String, ContextElement>> {
         self.inner.lock().expect(POISON_MSG)
     }
 }
@@ -58,11 +74,11 @@ pub struct ActionContextItemsIterator {
 }
 
 impl ActionContextItemsIterator {
-    fn new(inner: Arc<Mutex<HashMap<String,String>>>)-> Self {
+    fn new(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
         Self { base: BaseIterator::new(inner)}
     }
 
-    fn reversed(inner: Arc<Mutex<HashMap<String,String>>>)-> Self {
+    fn reversed(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
         Self { base: BaseIterator::reversed(inner)}
     }
 }
@@ -74,10 +90,10 @@ impl PyIterProtocol for ActionContextItemsIterator {
     }
 
     
-    fn __next__(mut slf: PyRefMut<Self>) -> Option<(String, String)> {
+    fn __next__(mut slf: PyRefMut<Self>) -> Option<(String, PyObject)> {
         if !slf.base.is_end(){
             let count = slf.base.count();
-            slf.base.get_inner().iter().nth(count).map(|(a,b)|(a.into(), b.into()))
+            slf.base.get_inner().iter().nth(count).map(|(a,b)|{(a.into(), b.clone().into_py(slf.py()))})
         }
         else {None}
     }
@@ -89,11 +105,11 @@ struct ActionContextValuesIterator {
 }
 
 impl ActionContextValuesIterator {
-    fn new(inner: Arc<Mutex<HashMap<String,String>>>)-> Self {
+    fn new(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
         Self { base: BaseIterator::new(inner)}
     }
 
-    fn reversed(inner: Arc<Mutex<HashMap<String,String>>>)-> Self {
+    fn reversed(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
         Self { base: BaseIterator::reversed(inner)}
     }
 }
@@ -105,10 +121,10 @@ impl PyIterProtocol for ActionContextValuesIterator {
     }
 
     
-    fn __next__(mut slf: PyRefMut<Self>) -> Option<String> {
+    fn __next__(mut slf: PyRefMut<Self>) -> Option<PyObject> {
         if !slf.base.is_end(){
             let count = slf.base.count();
-            slf.base.get_inner().values().nth(count).map(|a|a.into())
+            slf.base.get_inner().values().nth(count).map(|a|a.clone().into_py(slf.py()))
         }
         else {None}
     }
@@ -120,11 +136,11 @@ struct ActionContextKeysIterator {
 }
 
 impl ActionContextKeysIterator {
-    fn new(inner: Arc<Mutex<HashMap<String,String>>>)-> Self {
+    fn new(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
         Self { base: BaseIterator::new(inner)}
     }
 
-    fn reversed(inner: Arc<Mutex<HashMap<String,String>>>)-> Self {
+    fn reversed(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
         Self { base: BaseIterator::reversed(inner)}
     }
 }
@@ -148,7 +164,7 @@ impl PyIterProtocol for ActionContextKeysIterator {
 
 #[pyclass]
 struct ActionContextItemsView {
-    inner: Arc<Mutex<HashMap<String, String>>>,
+    inner: Arc<Mutex<HashMap<String, ContextElement>>>,
 }
 
 impl ActionContextItemsView {
@@ -191,7 +207,7 @@ impl PySequenceProtocol for ActionContextItemsView {
 
 #[pyclass]
 struct ActionContextValuesView {
-    inner: Arc<Mutex<HashMap<String, String>>>,
+    inner: Arc<Mutex<HashMap<String, ContextElement>>>,
 }
 
 impl ActionContextValuesView {
@@ -219,7 +235,7 @@ impl ActionContextValuesView {
 
 #[pyclass]
 struct ActionContextKeysView {
-    inner: Arc<Mutex<HashMap<String, String>>>,
+    inner: Arc<Mutex<HashMap<String, ContextElement>>>,
 }
 
 impl ActionContextKeysView {
@@ -245,9 +261,9 @@ impl ActionContextKeysView {
 }
 
 #[pyclass]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ActionContext {
-    map: Arc<Mutex<HashMap<String, String>>>,
+    map: Arc<Mutex<HashMap<String, ContextElement>>>,
 }
 
 impl ActionContext {
@@ -255,8 +271,23 @@ impl ActionContext {
         Self{map: Arc::new(Mutex::new(HashMap::new()))}
     }
 
-    pub fn set(&mut self, key: String, value: String) {
+    pub fn set(&mut self, key: String, value: ContextElement) {
         self.map.lock().expect(POISON_MSG).insert(key, value);
+    }
+
+    pub fn set_str(&mut self, key: String, value: String) {
+        self.map.lock().expect(POISON_MSG).insert(key, ContextElement::String(value));
+    }
+
+    pub fn set_dict(&mut self, key: String, value: ActionContext) {
+        self.map.lock().expect(POISON_MSG).insert(key, ContextElement::Dict(value));
+    }
+
+}
+
+impl PartialEq for ActionContext {
+    fn eq(&self, other: &Self) -> bool {
+        *self.map.lock().unwrap() == *other.map.lock().unwrap()
     }
 }
 
@@ -269,7 +300,7 @@ impl PyMappingProtocol for ActionContext {
         Ok(())
     }
 
-    fn __getitem__(&self, key: &str) -> PyResult<String> {
+    fn __getitem__(&self, key: &str) -> PyResult<ContextElement> {
         self.get(key).ok_or(PyErr::new::<PyAttributeError, _>(
             format!("Key: {} was not found in context", key)
         ))
@@ -279,7 +310,7 @@ impl PyMappingProtocol for ActionContext {
         self.map.lock().expect(POISON_MSG).len()
     }
 
-    fn __setitem__(&mut self, key: String, item: String) {
+    fn __setitem__(&mut self, key: String, item: ContextElement) {
         self.set(key,item);
     }
 }
@@ -315,12 +346,12 @@ impl PyIterProtocol for  ActionContext {
 impl ActionContext {
     // classmethods
     #[classmethod]
-    fn fromkeys(_cls: &&PyType, py:Python, iterable: &PyAny, value: &str) -> PyResult<ActionContext> {
+    fn fromkeys(_cls: &&PyType, py:Python, iterable: &PyAny, value: ContextElement) -> PyResult<ActionContext> {
         let mut map = HashMap::new();
         let it = PyIterator::from_object(py,iterable.call_method("__iter__", (), None)?)?;
         for key in it {
             let key: String = key?.extract()?;
-            map.insert(key,value.to_owned());
+            map.insert(key,value.clone());
         }
 
         Ok(Self {map: Arc::new(Mutex::new(map))})
@@ -349,8 +380,8 @@ impl ActionContext {
         Self{map: Arc::new(Mutex::new(self.map.lock().expect(POISON_MSG).clone()))}
     }
 
-    pub fn get(&self, key: &str) -> Option<String> {
-        self.map.lock().expect(POISON_MSG).get(key).map(|a|a.into())
+    pub fn get(&self, key: &str) -> Option<ContextElement> {
+        self.map.lock().expect(POISON_MSG).get(key).map(|a|a.clone())
     }
 
     pub fn has_key(&self, k: &str) -> bool {
@@ -366,7 +397,7 @@ impl ActionContext {
     }
 
     #[args(default = "None")]
-    fn pop(&self, key: &str, default: Option<&str>) -> PyResult<String> {
+    fn pop(&self, key: &str, default: Option<ContextElement>) -> PyResult<ContextElement> {
         match self.map.lock().expect(POISON_MSG).remove(key) {
             Some(val) => Ok(val.into()),
             None => match default {
@@ -376,7 +407,7 @@ impl ActionContext {
         }
     }
 
-    fn popitem(&mut self) -> PyResult<(String, String)> {
+    fn popitem(&mut self) -> PyResult<(String, ContextElement)> {
         match self.map.lock().expect(POISON_MSG).keys().last() {
             Some(k) => {
                 Ok(self.map.lock().expect(POISON_MSG).remove_entry(k).expect(UNEXPECTED_MSG))
@@ -385,18 +416,18 @@ impl ActionContext {
         }        
     }
 
-    fn setdefault(&mut self, key:&str, default: &str) -> String {
+    fn setdefault(&mut self, key:&str, default: ContextElement) -> ContextElement {
         match self.get(key) {
             Some(s) => s.into(),
-            None => {self.set(key.into(), default.into());default.into()}
+            None => {self.set(key.into(), default.clone().into());default.into()}
         }
     }
 
     fn update(&mut self, args: &PyTuple, kwargs: Option<&PyDict>) -> PyResult<()>{
-        fn extend(map: &mut HashMap<String, String>, dict: &PyDict) -> PyResult<()> {
+        fn extend(map: &mut HashMap<String, ContextElement>, dict: &PyDict) -> PyResult<()> {
             for (key, value) in dict {
                 let key: String = key.extract()?;
-                let value: String = value.extract()?;
+                let value: ContextElement = value.extract()?;
 
                 map.insert(key, value);
             }

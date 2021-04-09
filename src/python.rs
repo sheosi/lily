@@ -350,15 +350,6 @@ pub fn set_python_locale(py: Python, lang_id: &LanguageIdentifier) -> Result<()>
     Ok(())
 }
 
-pub fn add_context_data(dict: &ActionContext, lang: &LanguageIdentifier, client: &str) -> ActionContext {
-    
-    let mut new = dict.copy();
-    new.set("__lily_data_lang".into(), lang.to_string());
-    new.set("__lily_data_satellite".into(), client.to_string());
-
-    new
-}
-
 /**  Utilities ****************************************************************/
 
 // Transforms any error into a python exception

@@ -8,7 +8,7 @@ from pathlib import Path
 import random
 import inspect
 from sys import version_info
-from typing import Any, Dict, get_type_hints, Mapping, List, Optional, Tuple
+from typing import Any, Dict, get_type_hints, Mapping, List, Optional, Tuple, Union
 from functools import reduce
 
 from fluent.runtime import FluentBundle, FluentResource
@@ -24,6 +24,9 @@ _action_classes: Dict[str, Any] = {}
 _signal_classes: Dict[str, Any] = {}
 _query_classes:  Dict[str, Any] = {}
 skills_translations = {}
+
+#ActionContext = Dict[str, Union[str, 'ActionContext']] # Recursiveness not supported by mypy
+ActionContext = Dict[str, Any]
 
 #pylint: disable=invalid-name
 class __ProtocolErrs:
@@ -121,7 +124,7 @@ def action(name: str):
     runtime and might be rejected if it doesn't conform to the ActionProtocol
     (will also be checked at compile time with mypy and Python 3.8)"""
     def inner_deco(cls: ActionProtocol):
-        
+
         if not __compare_had_errors(cls, ActionProtocol, 'Action', name):
             _action_classes[name] = cls
 
@@ -162,7 +165,8 @@ def signal(name: str):
 
 
 class QueryProtocol:
-    pass
+    """ The definition of a query. A query returns information which might be
+    consumed either directly by the user or by an action. Still to be defined."""
 
 def query(name: str):
     """Declares a class a query, it will """
@@ -197,7 +201,7 @@ class TransPack:
 def __set_translations(curr_langs_str: List[str]):
     trans_path = Path('translations')
     DEFAULT_LANG = "en-US"
-    
+
     if trans_path.is_dir():
         lang_list = []
         for lang in trans_path.iterdir():
@@ -254,7 +258,7 @@ def _gen_trans_list(trans_name: str, lang: str) -> Tuple[FluentBundle, List[Any]
 
 def _translate_all_impl(trans_name: str, dict_args: Dict[str, Any], lang: str):
     translations, all_trans = _gen_trans_list(trans_name, lang)
-    
+
 
     def extract_trans(element):
         trans, err = translations.format_pattern(element, dict_args)
@@ -280,26 +284,28 @@ def translate_all(trans_name: str, dict_args: Dict[str, Any]):
     inside Fluent. Returns a list with all possible alternatives for this
     translation"""
 
-    return _translate_all_impl(trans_name, dict_args, dict_args["__lily_data_lang"])
+    return _translate_all_impl(trans_name, dict_args, dict_args["locale"])
 
 def translate(trans_name: str, dict_args: Dict[str, Any]):
     """Translate using 'dict_args' as context variables for them to be used
     inside Fluent. If multiple alternatives exist returns one at random."""
 
-    return _translate_impl(trans_name, dict_args, dict_args["__lily_data_lang"])
+    return _translate_impl(trans_name, dict_args, dict_args["locale"])
 
-def answer(output: str, context: Dict[str, str]) -> Optional[_lily_impl.ActionAnswer]:
+def answer(output: str, context: ActionContext) -> Optional[_lily_impl.ActionAnswer]:
     """'output' will be returned for it to be shown directly to the user or
     voiced by the TTS engine according to what was originally used"""
-    uuid = context["__lily_data_satellite"]
+    uuid = context["satellite"]["uuid"]
     if _lily_impl.has_cap(uuid, 'voice'):
         return _lily_impl.ActionAnswer.text(output)
     else:
         _lily_impl.log_error(f"Satellite '{uuid}' doesn't implement 'voice' capapbility, answer can't be sent")
         return None
 
-def answer_audio_file(file: str, context: Dict[str, Any]) -> Optional[_lily_impl.ActionAnswer]:
-    uuid = context["__lily_data_satellite"]
+def answer_audio_file(file: str, context: ActionContext) -> Optional[_lily_impl.ActionAnswer]:
+    """Returns an object that can be sent for the audio file 'file' (a path
+    relative to the root of this skill) to be sent over to the satellite"""
+    uuid = context["satellite"]
     if _lily_impl.has_cap(uuid, 'voice'):
         return _lily_impl.ActionAnswer.load_audio(file)
     else:

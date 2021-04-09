@@ -336,10 +336,18 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
                     if result.confidence >= MIN_SCORE_FOR_ACTION {
                         if let Some(intent_name) = result.name {
                             info!("Let's call an action");
-                            let mut slots_context = add_slots(base_context,result.slots);
-                            slots_context.set("type".to_string(), "intent".to_string());
-                            slots_context.set("intent".to_string(), self.demangle(&intent_name).to_string());
-                            let answers = self.intent_map.call_mapping(&intent_name, &slots_context);
+
+                            let slots_data =  add_slots(&ActionContext::new(),result.slots);
+
+                            let mut intent_data = ActionContext::new();
+                            intent_data.set_str("intent".to_string(), self.demangle(&intent_name).to_string());
+                            intent_data.set_dict("slots".to_string(), slots_data);
+
+                            let mut intent_context = base_context.clone();
+                            intent_context.set_str("type".to_string(), "intent".to_string());
+                            intent_context.set_dict("intent".to_string(), intent_data);
+                            
+                            let answers = self.intent_map.call_mapping(&intent_name, &intent_context);
                             info!("Action called");
                             answers
                         }
@@ -414,7 +422,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
 fn add_slots(base_context: &ActionContext, slots: Vec<NluResponseSlot>) -> ActionContext {
     let mut result = base_context.clone();
     for slot in slots.into_iter() {
-        result.set(slot.name, slot.value);
+        result.set_str(slot.name, slot.value);
     }
 
     result

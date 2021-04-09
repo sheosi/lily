@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex, Weak};
 use crate::actions::ActionContext;
 use crate::config::Config;
 use crate::nlu::{NluManager, NluManagerConf, NluManagerStatic};
-use crate::python::add_context_data;
 use crate::signals::{process_answers, SignalEventShared, SignalOrder};
 use crate::stt::{SttPool, SttPoolItem, SttSet};
 use crate::tts::{Gender, Tts, TtsFactory, VoiceDescr};
@@ -131,6 +130,17 @@ impl CapsManager {
 
     }
 
+}
+
+pub fn add_context_data(dict: &ActionContext, lang: &LanguageIdentifier, client: &str) -> ActionContext {
+    
+    let mut new = dict.copy();
+    new.set_str("locale".into(), lang.to_string());
+    let mut satellite = ActionContext::new();
+    satellite.set_str("uuid".to_string(), client.to_string());
+    new.set_dict("satellite".into(), satellite);
+
+    new
 }
 
 pub struct MqttInterface {
