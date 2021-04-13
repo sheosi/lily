@@ -25,7 +25,7 @@ url = "^2.1"
 
 rumqttc = "^0.5"
 anyhow = "^1.0" # For error handling overall in the app
-tokio = {version = "^1.1", features = ["time"], optional = true}
+tokio = {version = "^1.5", features = ["time"], optional = true}
 rand = "^0.7" # Needs to be hold of for compatibility with cbindgen
 serial_test = "^0.5"
 
