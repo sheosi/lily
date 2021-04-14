@@ -28,6 +28,7 @@ anyhow = "^1.0" # For error handling overall in the app
 tokio = {version = "^1.1", features = ["time"], optional = true}
 rand = "^0.7" # Needs to be hold of for compatibility with cbindgen
 serial_test = "^0.5"
+dirs = "^3.0"
 
 [features]
 default = ["client", "snowboy"]

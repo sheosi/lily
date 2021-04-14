@@ -14,7 +14,6 @@ mod tts;
 mod vars;
 
 // Standard library
-use std::path::Path;
 use std::rc::Rc;
 
 
@@ -81,7 +80,7 @@ pub async fn main()  -> Result<()> {
 
     let consumer = init_dynamic_entities()?;
 
-    let mut sigreg = load_skills(&Path::new(&SKILLS_PATH.resolve()), &curr_langs, consumer)?;
+    let mut sigreg = load_skills(&SKILLS_PATH.all(), &curr_langs, consumer)?;
     sigreg.call_loops(&config, &ActionContext::new(), &curr_langs).await?;
 
     Ok(())

@@ -199,7 +199,7 @@ impl HalfBakedDoubleError {
 }
 
 
-pub fn load_skills(path: &Path, curr_lang: &Vec<LanguageIdentifier>, consumer: Receiver<EntityAddValueRequest>) -> Result<SignalRegistry> {
+pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_lang: &Vec<LanguageIdentifier>, consumer: Receiver<EntityAddValueRequest>) -> Result<SignalRegistry> {
     let mut loaders: Vec<Box<dyn Loader>> = vec![
         Box::new(PythonLoader::new()),
         Box::new(EmbeddedLoader::new(consumer))
@@ -249,20 +249,21 @@ pub fn load_skills(path: &Path, curr_lang: &Vec<LanguageIdentifier>, consumer: R
         })?;
         Ok(())
     };
-
-    for entry in std::fs::read_dir(path).expect(SKILLS_PATH_ERR_MSG) {
-        let entry = entry?.path();
-        if entry.is_dir() {
-            match process_skill(&entry) {
-                Err(e) => {
-                    let (skill_sigreg, skill_actreg) = e.act_sig;
-                    skill_sigreg.minus(&base_sigreg).remove_from_global();
-                    skill_actreg.minus(&base_actreg).remove_from_global();
-                    let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy();
-                    error!("Skill {} had a problem, won't be available. {}", skill_name, e.source);
-                    not_loaded.push(skill_name.into_owned());
-                },
-                _ => ()
+    for skl_dir in path {
+        for entry in std::fs::read_dir(skl_dir).expect(SKILLS_PATH_ERR_MSG) {
+            let entry = entry?.path();
+            if entry.is_dir() {
+                match process_skill(&entry) {
+                    Err(e) => {
+                        let (skill_sigreg, skill_actreg) = e.act_sig;
+                        skill_sigreg.minus(&base_sigreg).remove_from_global();
+                        skill_actreg.minus(&base_actreg).remove_from_global();
+                        let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy();
+                        error!("Skill {} had a problem, won't be available. {}", skill_name, e.source);
+                        not_loaded.push(skill_name.into_owned());
+                    },
+                    _ => ()
+                }
             }
         }
     }

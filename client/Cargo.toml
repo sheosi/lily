@@ -17,3 +17,11 @@ log = "^0.4" # Common API for logging so we can change backend easilyp
 rumqttc = "^0.5"
 serde_yaml = "^0.8"
 uuid = {version = "^0.8.1", features=["v4", "serde"]}
+
+[package.metadata.deb]
+maintainer = "Sergio Tortosa Benedito <sertorbe@gmail.com>"
+copyright = "2021, Sergio Tortosa Benedito <sertorbe@gmail.com>"
+extended-description = """\
+Lily client."""
+section = "utility"
+priority = "optional"

@@ -7,14 +7,24 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 #[derive(Deserialize, Serialize)]
-pub struct MsgAnswerVoice {
-    pub data: Vec<u8>
+pub struct MsgAnswer {
+    #[serde(skip_serializing_if = "Option::is_none", default = "no_vec")]
+    pub audio: Option<Vec<u8>>,
+    #[serde(skip_serializing_if = "Option::is_none", default = "no_vec")]
+    pub text: Option<Vec<u8>>
 }
 
+fn no_vec() -> Option<Vec<u8>> {None}
+
 #[derive(Debug, Deserialize, Serialize)]
-pub struct MsgNluVoice {
-    pub audio: Vec<u8>,
-    pub is_final: bool,
+pub enum RequestData {
+    Audio{data: Vec<u8>, is_final: bool},
+    Text(String)
+}
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MsgRequest {
+    #[serde(flatten)]
+    pub data: RequestData,
     pub satellite: String,
 }
 

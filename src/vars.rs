@@ -1,21 +1,26 @@
-use lily_common::vars::PathRef;
+use lily_common::vars::{MultipathRef, PathRef};
 
 // Paths
-#[cfg(not(feature = "devel_rasa_nlu"))]
-pub const NLU_ENGINE_PATH: PathRef = PathRef::new("resources/nlu/engine");
-#[cfg(not(feature = "devel_rasa_nlu"))]
-pub const NLU_TRAIN_SET_PATH: PathRef = PathRef::new("resources/nlu/train-set.json");
-#[cfg(feature = "devel_rasa_nlu")]
-pub const NLU_RASA_PATH: PathRef = PathRef::new("resources/nlu/rasa/");
-pub const STT_DATA_PATH: PathRef = PathRef::new("resources/stt");
+pub const STT_DATA_PATH: PathRef = PathRef::own("stt");
 #[cfg(feature = "deepspeech_stt")]
-pub const DEEPSPEECH_DATA_PATH: PathRef = PathRef::new("resources/stt/deepspeech");
-pub const PICO_DATA_PATH: PathRef = PathRef::new("resources/tts");
-pub const PYTHON_SDK_PATH: PathRef = PathRef::new("resources/python");
-pub const MAIN_CONF_PATH: PathRef = PathRef::new("conf.yaml");
-pub const PS_LOG_PATH: PathRef = PathRef::new("resources/stt/pocketsphinx.log");
-pub const PYTHON_VIRTUALENV: PathRef = PathRef::new("resources/python/env");
-pub const SKILLS_PATH: PathRef = PathRef::new("skills");
+pub const DEEPSPEECH_DATA_PATH: PathRef = PathRef::own("stt/deepspeech");
+pub const PICO_DATA_PATH: PathRef = PathRef::own("tts");
+pub const PYTHON_SDK_PATH: PathRef = PathRef::own("python");
+
+#[cfg(not(feature = "devel_rasa_nlu"))]
+pub const NLU_ENGINE_PATH: PathRef = PathRef::user_cfg("data/nlu/engine");
+#[cfg(not(feature = "devel_rasa_nlu"))]
+pub const NLU_TRAIN_SET_PATH: PathRef = PathRef::user_cfg("data/nlu/train-set.json");
+#[cfg(feature = "devel_rasa_nlu")]
+pub const NLU_RASA_PATH: PathRef = PathRef::user_cfg("data/nlu/rasa");
+
+pub const PS_LOG_PATH: PathRef = PathRef::user_cfg("pocketsphinx.log");
+pub const MAIN_CONF_PATH: PathRef = PathRef::user_cfg("conf.yaml");
+pub const PYTHON_VIRTUALENV: PathRef = PathRef::user_cfg("data/python_env");
+pub const SKILLS_PATH: MultipathRef = MultipathRef::new(&[
+    PathRef::user_cfg("skills"),
+    PathRef::own("skills")
+]);
 
 
 // Messages
@@ -36,7 +41,6 @@ pub const NO_ADD_ENTITY_VALUE_MSG: &str = "Can't add value to entity, NLU manage
 
 // Other
 pub const MIN_SCORE_FOR_ACTION: f32 = 0.3;
-
 
 pub fn mangle(skill_name: &str, intent_name: &str) -> String {
     format!("__{}__{}", skill_name, intent_name)

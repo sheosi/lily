@@ -3,7 +3,7 @@ use std::collections::{HashMap, hash_map::Entry};
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex, Weak};
 
-use crate::actions::ActionContext;
+use crate::{actions::ActionContext, stt::DecodeRes};
 use crate::config::Config;
 use crate::nlu::{NluManager, NluManagerConf, NluManagerStatic};
 use crate::signals::{process_answers, SignalEventShared, SignalOrder};
@@ -148,9 +148,22 @@ pub struct MqttInterface {
 }
 
 
+mod language_detection {
+    use unic_langid::LanguageIdentifier;
+    //use lingua::{Language, LanguageDetector, LanguageDetectorBuilder};
+
+    /*fn id_to_lingua() -> lingua::La{
+
+    }*/
+
+    /*let languages = vec![English, French, German, Spanish];
+    let detector: LanguageDetector = LanguageDetectorBuilder::from_languages(&languages).build();
+    let detected_language: Option<Language> = detector.detect_language_of("languages are awesome");*/
+}
+
 pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + Debug + Send + 'static>(
     config: &Config,
-    mut channel: mpsc::Receiver<MsgNluVoice>,
+    mut channel: mpsc::Receiver<MsgRequest>,
     signal_event: SignalEventShared,
     curr_langs: &Vec<LanguageIdentifier>,
     order: &mut SignalOrder<M>,
@@ -171,47 +184,67 @@ pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + 
 
     loop {
         let msg_nlu = channel.recv().await.expect("Channel closed!");
-        let (as_raw, _, _) = decode_ogg_opus(msg_nlu.audio, DEFAULT_SAMPLES_PER_SECOND)?;
-        stt_audio.append_audio(&as_raw, DEFAULT_SAMPLES_PER_SECOND)?;
-        let session = sessions.lock().expect(POISON_MSG).session_for(msg_nlu.satellite.clone());
-        {
-            match utterances.get_stt(msg_nlu.satellite.clone(), &as_raw).await {
-                Ok(stt) => {
-                    if let Err(e) = stt.process(&as_raw).await {
-                        error!("Stt failed to process audio: {}", e);
-                    }
+        match msg_nlu.data {
+            RequestData::Text(text) => {
+                let lang = &curr_langs[0];
+                let context = add_context_data(&base_context, lang, &msg_nlu.satellite);
+                let decoded = Some(DecodeRes{hypothesis: text, confidence: 1.0});
 
-                    else if msg_nlu.is_final {
-                        stt_audio.save_to_disk(std::path::Path::new("stt_audio.ogg"))?;
-                        stt_audio.clear();
-                        let satellite = msg_nlu.satellite.clone();
-                        let context = add_context_data(&base_context, stt.lang(), &satellite);
-                        match stt.end_decoding().await {
-                            Ok(decoded)=> {
-                                if let Err(e) = order.received_order(
-                                    decoded, 
-                                    signal_event.clone(),
-                                    &context,
-                                    stt.lang(),
-                                    satellite
-                                ).await {
+                if let Err(e) = order.received_order(
+                    decoded, 
+                    signal_event.clone(),
+                    &context,
+                    lang,
+                    msg_nlu.satellite
+                ).await {
 
-                                    error!("Actions processing had an error: {}", e);
-                                }
-                            }
-                            Err(e) => error!("Stt failed while doing final decode: {}", e)
-                        }
-                        
-                    }
-                }
-                Err(e) => {
-                    error!("Failed to obtain Stt for this session: {}", e);
+                    error!("Actions processing had an error: {}", e);
                 }
             }
-        }
-        if msg_nlu.is_final {
-            if let Err(e) = utterances.end_utt(&msg_nlu.satellite) {
-                warn!("{}",e);
+            RequestData::Audio{data: audio, is_final} => {
+                let (as_raw, _, _) = decode_ogg_opus(audio, DEFAULT_SAMPLES_PER_SECOND)?;
+                stt_audio.append_audio(&as_raw, DEFAULT_SAMPLES_PER_SECOND)?;
+                let session = sessions.lock().expect(POISON_MSG).session_for(msg_nlu.satellite.clone());
+                {
+                    match utterances.get_stt(msg_nlu.satellite.clone(), &as_raw).await {
+                        Ok(stt) => {
+                            if let Err(e) = stt.process(&as_raw).await {
+                                error!("Stt failed to process audio: {}", e);
+                            }
+
+                            else if is_final {
+                                stt_audio.save_to_disk(std::path::Path::new("stt_audio.ogg"))?;
+                                stt_audio.clear();
+                                let satellite = msg_nlu.satellite.clone();
+                                let context = add_context_data(&base_context, stt.lang(), &satellite);
+                                match stt.end_decoding().await {
+                                    Ok(decoded)=> {
+                                        if let Err(e) = order.received_order(
+                                            decoded, 
+                                            signal_event.clone(),
+                                            &context,
+                                            stt.lang(),
+                                            satellite
+                                        ).await {
+
+                                            error!("Actions processing had an error: {}", e);
+                                        }
+                                    }
+                                    Err(e) => error!("Stt failed while doing final decode: {}", e)
+                                }
+                                
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to obtain Stt for this session: {}", e);
+                        }
+                    }
+                }
+                if is_final {
+                    if let Err(e) = utterances.end_utt(&msg_nlu.satellite) {
+                        warn!("{}",e);
+                    }
+                }
             }
         }
     }
@@ -250,7 +283,7 @@ impl MqttInterface {
         curr_langs: &Vec<LanguageIdentifier>,
         def_lang: Option<&LanguageIdentifier>,
         sessions: Arc<Mutex<SessionManager>>,
-        channel_nlu: mpsc::Sender<MsgNluVoice>,
+        channel_nlu: mpsc::Sender<MsgRequest>,
         channel_event: mpsc::Sender<MsgEvent>,
     ) -> Result<()> {
             
@@ -280,7 +313,7 @@ impl MqttInterface {
             mut eloop: EventLoop,
             client: Arc<Mutex<AsyncClient>>,
             config: &Config,
-            channel_nlu: mpsc::Sender<MsgNluVoice>,
+            channel_nlu: mpsc::Sender<MsgRequest>,
             channel_event: mpsc::Sender<MsgEvent>,
         ) -> Result<()> {
             loop {
@@ -299,7 +332,7 @@ impl MqttInterface {
                                 client.lock().expect(POISON_MSG).publish("lily/satellite_welcome", QoS::AtMostOnce, false, output).await?
                             }
                             "lily/nlu_process" => {
-                                let msg_nlu: MsgNluVoice = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
+                                let msg_nlu: MsgRequest = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
                                 channel_nlu.send(msg_nlu).await?;
                             }
                             "lily/event" => {
@@ -367,7 +400,7 @@ impl MqttInterface {
             if let Err(e) = sessions.lock().expect("POISON_MSG").end_session(&uuid_str) {
                 warn!("{}",e);
             }
-            let msg_pack = encode::to_vec(&MsgAnswerVoice{data: audio_data.into_encoded()?})?;
+            let msg_pack = encode::to_vec(&MsgAnswer{audio: Some(audio_data.into_encoded()?), text: None})?;
             client.lock().expect(POISON_MSG).publish(&format!("lily/{}/say_msg", uuid_str), QoS::AtMostOnce, false, msg_pack).await?;
             Ok(())
         }

@@ -43,6 +43,8 @@ espeak-ng-sys = {git = "https://github.com/sheosi/espeak-ng-sys", optional = tru
 libc = "^0.2" # Required to interface with espeak-ng-sys
 log = "^0.4" # Common API for logging so we can change backend easily
 
+#lingua = "^1.2" # Written text language detection
+
 #Cloud-based
 google_translate_tts = {version = "0.1.2", optional = true} # Format TTS URLs
 reqwest = {version = "^0.11", features = ["default-tls", "json"]} # HTTP client
@@ -74,7 +76,7 @@ members = ["client", "common", "skill_util"]
 
 [package.metadata.deb]
 maintainer = "Sergio Tortosa Benedito <sertorbe@gmail.com>"
-copyright = "2020, Sergio Tortosa Benedito <sertorbe@gmail.com>"
+copyright = "2021, Sergio Tortosa Benedito <sertorbe@gmail.com>"
 extended-description = """\
 Open source voice assistance for humans."""
 depends = "libblas3, liblapack3, liblapack-dev, libblas-dev, $auto"
