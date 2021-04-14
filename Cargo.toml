@@ -59,7 +59,7 @@ lily_common = {path = "common", default-features = false}
 
 # Localization
 unic-langid = {version="^0.9", features = ["macros"]} # For parsing Unicode Language Identifiers
-locale_config = "*" # Interact with the system locale, the * is suggestednby it's author
+locale_config = "*" # Interact with the system locale, the * is suggested by it's author
 fluent-langneg = "^0.13" # Language negotiation
 
 [features]
@@ -82,6 +82,7 @@ Open source voice assistance for humans."""
 depends = "libblas3, liblapack3, liblapack-dev, libblas-dev, $auto"
 section = "utility"
 priority = "optional"
+maintainer-scripts = "packaging/debian"
 assets = [
     ["target/release/lily", "usr/bin/", "755"],
     ["resources/python/lily_ext/__init__.py", "usr/share/lily/python/lily_ext/__init__.py", "644"],
@@ -129,11 +130,16 @@ assets = [
     ["resources/tts/it-IT_ta.bin", "usr/share/lily/tts/it-IT_ta.bin", "644"],
 
     # Default package
-    ["packages/default/python/default/__init__.py", "usr/share/lily/default/python/default/__init__.py", "644"],
-    ["packages/default/sounds/beep.ogg", "usr/share/lily/default/sounds/beep.ogg", "644"],
-    ["packages/default/sounds/end_recognition.ogg", "usr/share/lily/default/sounds/end_recognition.ogg", "644"],
-    ["packages/default/translations/en-US/translations.ftl", "usr/share/lily/default/translations/en-US/translations.ftl", "644"],
-    ["packages/default/translations/es-ES/translations.ftl", "usr/share/lily/default/translations/es-ES/translations.ftl", "644"],
-    ["packages/default/model.yaml", "usr/share/lily/default/model.yaml", "644"],
+    ["packages/default/python/default/__init__.py", "usr/share/lily/skills/default/python/default/__init__.py", "644"],
+    ["packages/default/sounds/beep.ogg", "usr/share/lily/skills/default/sounds/beep.ogg", "644"],
+    ["packages/default/sounds/end_recognition.ogg", "usr/share/lily/skills/default/sounds/end_recognition.ogg", "644"],
+    ["packages/default/translations/en-US/translations.ftl", "usr/share/lily/skills/default/translations/en-US/translations.ftl", "644"],
+    ["packages/default/translations/es-ES/translations.ftl", "usr/share/lily/skills/default/translations/es-ES/translations.ftl", "644"],
+    ["packages/default/model.yaml", "usr/share/lily/skills/default/model.yaml", "644"],
 
 ]
+
+[package.metadata.deb.systemd-files]
+units-scripts = "packaging/systemd"
+enable = false
+start = false

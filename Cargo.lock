@@ -148,22 +148,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
-name = "base_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "lily_common",
- "log",
- "rmp-serde 0.15.4",
- "rsnowboy",
- "rumqttc",
- "serde",
- "serde_yaml",
- "tokio",
- "uuid",
-]
-
-[[package]]
 name = "bindgen"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1358,6 +1342,22 @@ dependencies = [
  "url",
  "void",
  "yaml-rust",
+]
+
+[[package]]
+name = "lily-satellite"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "lily_common",
+ "log",
+ "rmp-serde 0.15.4",
+ "rsnowboy",
+ "rumqttc",
+ "serde",
+ "serde_yaml",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

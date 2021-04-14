@@ -21,6 +21,9 @@ use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
 use tokio::{try_join, sync::mpsc};
 use unic_langid::LanguageIdentifier;
 
+#[cfg(debug_assertions)]
+use lily_common::vars::PathRef;
+
 thread_local!{
     pub static MSG_OUTPUT: RefCell<Option<MqttInterfaceOutput>> = RefCell::new(None);
     pub static CAPS_MANAGER: RefCell<CapsManager> = RefCell::new(CapsManager::new());
@@ -178,9 +181,8 @@ pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + 
     }
     let mut utterances = UtteranceManager::new(stt_set);
 
-    
-
     let mut stt_audio = AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND);
+    let audio_debug_path = PathRef::own("stt_audio.ogg").resolve();
 
     loop {
         let msg_nlu = channel.recv().await.expect("Channel closed!");
@@ -203,7 +205,11 @@ pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + 
             }
             RequestData::Audio{data: audio, is_final} => {
                 let (as_raw, _, _) = decode_ogg_opus(audio, DEFAULT_SAMPLES_PER_SECOND)?;
-                stt_audio.append_audio(&as_raw, DEFAULT_SAMPLES_PER_SECOND)?;
+
+                if cfg!(debug_assertions) {
+                    stt_audio.append_audio(&as_raw, DEFAULT_SAMPLES_PER_SECOND)?;
+                }
+
                 let session = sessions.lock().expect(POISON_MSG).session_for(msg_nlu.satellite.clone());
                 {
                     match utterances.get_stt(msg_nlu.satellite.clone(), &as_raw).await {
@@ -213,8 +219,10 @@ pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + 
                             }
 
                             else if is_final {
-                                stt_audio.save_to_disk(std::path::Path::new("stt_audio.ogg"))?;
-                                stt_audio.clear();
+                                if cfg!(debug_assertions) {
+                                    stt_audio.save_to_disk(&audio_debug_path)?;
+                                    stt_audio.clear();
+                                }
                                 let satellite = msg_nlu.satellite.clone();
                                 let context = add_context_data(&base_context, stt.lang(), &satellite);
                                 match stt.end_decoding().await {

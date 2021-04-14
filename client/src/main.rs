@@ -205,12 +205,14 @@ async fn receive(
     }
 }
 
+#[cfg(debug_assertions)]
 struct DebugAudio {
     audio: AudioRaw,
     save_ms: u16,
     curr_ms: f32,
 }
 
+#[cfg(debug_assertions)]
 impl DebugAudio {
     fn new(save_ms: u16) -> Self {
         Self {
@@ -228,7 +230,7 @@ impl DebugAudio {
         if (self.curr_ms as u16) >= self.save_ms {
             println!("Save to file");
             self.audio
-                .save_to_disk(Path::new("debug.ogg"))
+                .save_to_disk(Path::new("pasive_audio.ogg"))
                 .expect("Failed to write debug file");
             self.clear();
         }
@@ -239,6 +241,21 @@ impl DebugAudio {
         self.curr_ms = 0.0;
     }
 }
+
+// Just an empty version of DebugAudio for release
+#[cfg(not(debug_assertions))]
+struct DebugAudio {
+}
+
+#[cfg(not(debug_assertions))]
+impl DebugAudio {
+    fn new(save_ms: u16) -> Self {Self {}}
+
+    fn push(&mut self, audio: &AudioRef) {}
+
+    fn clear(&mut self) {}
+}
+
 
 async fn user_listen(
     mqtt_name: &str,
@@ -287,7 +304,9 @@ async fn user_listen(
                         match r? {
                             Some(d) => {
                                 let mic_data = AudioRef::from(d);
-                                debugaudio.push(&mic_data);
+                                if cfg!(debug_assertions) {
+                                    debugaudio.push(&mic_data);
+                                }
 
                                 if pas_listener.process(mic_data)? {
                                     current_state = ProgState::ActiveListening(rec_guard);
@@ -312,25 +331,29 @@ async fn user_listen(
                 let audio = mic_data.clone().into_owned().to_ogg_opus().unwrap();
                 let (a2, _, _) =
                     lily_common::audio::decode_ogg_opus(audio, DEFAULT_SAMPLES_PER_SECOND).unwrap();
-                activeaudio
-                    .append_audio(&a2, DEFAULT_SAMPLES_PER_SECOND)
-                    .unwrap();
-                activeaudio_raw
-                    .append_audio(&mic_data.data, DEFAULT_SAMPLES_PER_SECOND)
-                    .unwrap();
+                if cfg!(debug_assertions) {
+                    activeaudio
+                        .append_audio(&a2, DEFAULT_SAMPLES_PER_SECOND)
+                        .unwrap();
+                    activeaudio_raw
+                        .append_audio(&mic_data.data, DEFAULT_SAMPLES_PER_SECOND)
+                        .unwrap();
+                }
                 match act_listener.process(mic_data)? {
                     ActiveState::NoOneTalking => {}
                     ActiveState::Hearing(data) => {
                         send_audio(mqtt_name.into(), client.clone(), data, false).await?
                     }
                     ActiveState::Done(data) => {
-                        activeaudio
-                            .save_to_disk(Path::new("active_audio.ogg"))
-                            .unwrap();
-                        activeaudio
-                            .save_to_disk(Path::new("active_audio_raw.ogg"))
-                            .unwrap();
-                        activeaudio.clear();
+                        if cfg!(debug_assertions) {
+                            activeaudio
+                                .save_to_disk(Path::new("active_audio.ogg"))
+                                .unwrap();
+                            activeaudio_raw
+                                .save_to_disk(Path::new("active_audio_raw.ogg"))
+                                .unwrap();
+                            activeaudio.clear();
+                        }
                         send_audio(mqtt_name.into(), client.clone(), data, true).await?;
 
                         current_state = ProgState::PasiveListening;

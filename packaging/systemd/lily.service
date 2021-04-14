@@ -1,0 +1,12 @@
+[Unit]
+Description=Lily
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+ExecStart=/usr/bin/lily
+
+[Install]
+WantedBy=multi-user.target

@@ -1,5 +1,5 @@
 [package]
-name = "base_client"
+name = "lily-satellite"
 version = "0.1.0"
 authors = ["sheosi <sertorbe@gmail.com>"]
 edition = "2018"
@@ -25,3 +25,16 @@ extended-description = """\
 Lily client."""
 section = "utility"
 priority = "optional"
+maintainer-scripts = "packaging/debian"
+
+assets = [
+    ["target/release/lily", "usr/bin/", "755"],
+    ["resources/hotword/common.res", "usr/bin/lily-client/hotword/", "644"],
+    ["resources/hotword/LICENSE", "usr/bin/lily-client/hotword/", "644"],
+    ["resources/hotword/lily.pmdl", "usr/bin/lily-client/hotword/", "644"]
+]
+
+[package.metadata.deb.systemd-units]
+units-scripts = "packaging/systemd"
+enable = false
+start = false

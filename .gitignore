@@ -15,19 +15,20 @@
 
 # This is generated on a per system basis
 resources/nlu
-conf.yaml
-
-# Last active listening, saved for debugging purposes
-last_speech.ogg
+resources/stt/pocketsphinx.log
 
 # Editor and IDE files for state
 *.sublime-workspace
 *.sublime-project
 .vscode/settings.json
-resources/stt/pocketsphinx.log
-client/conn_conf.yaml
-client/testout.ogg
-client/debug.ogg
-client/.vscode/launch.json
-conn_conf.yaml
 .vscode/launch.json
+client/.vscode/launch.json
+
+# Configuration
+client/conn_conf.yaml
+conf.yaml
+
+# Oggs in the root folder of each project should be ignored
+# only there for debugging purposes
+client/*.ogg
+*.ogg

@@ -26,7 +26,7 @@ pub const SKILLS_PATH: MultipathRef = MultipathRef::new(&[
 // Messages
 pub const SKILLS_PATH_ERR_MSG: &str = "Skills folder can't be read";
 pub const PYDICT_SET_ERR_MSG :&str = "Failed while assigning an entry in PyDict";
-pub const NO_YAML_FLOAT_MSG: &str = "This shouldn't happen, a Yaml was checked as a number which is not an u64 was not an f64 either";
+pub const NO_YAML_FLOAT_MSG: &str = "This shouldn't happen, a Yaml Value was checked as a number which is not an u64 was not an f64 either";
 pub const NO_COMPATIBLE_LANG_MSG: &str = "Lang negotiation failed, even though a default lang was provided";
 #[cfg(feature = "deepspeech_stt")]
 pub const ALPHA_BETA_MSG: &str = "Setting alpha and beta failed, though this shouldn't happen";
