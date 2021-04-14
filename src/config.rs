@@ -70,7 +70,7 @@ impl Config {
     
     }
 
-    pub fn get_package_path(&self, skill_name: &str, skill_path: &str) -> Option<&str> {
+    pub fn get_package_path(&self, skill_name: &str, skill_path: &str) -> Option<&serde_yaml::Value> {
         self.skills_conf.get(skill_name).and_then(|m| {
             let mut curr_map = m;
             for path_part in skill_path.split("/") {
@@ -79,8 +79,7 @@ impl Config {
                     None => return None
                 }
             }
-
-            curr_map.as_str()
+            Some(curr_map)
         })
     }
 

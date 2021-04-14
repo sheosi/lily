@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 
-use crate::actions::ActionContext;
 use crate::skills::{call_for_skill, PYTHON_LILY_SKILL};
 use crate::signals::order::{server_interface::CAPS_MANAGER, ENTITY_ADD_CHANNEL, EntityAddValueRequest};
 use crate::vars::{POISON_MSG, PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_ADD_ENTITY_VALUE_MSG, NO_YAML_FLOAT_MSG};
@@ -224,7 +223,7 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add("log_warn", wrap_pyfunction!(log_warn, m)?)?;
     m.add("log_info", wrap_pyfunction!(log_info, m)?)?;
     m.add("_get_curr_lily_skill", wrap_pyfunction!(get_current_skill, m)?)?;
-    m.add("conf", wrap_pyfunction!(get_conf_string, m)?)?;
+    m.add("conf", wrap_pyfunction!(get_conf, m)?)?;
     m.add("has_cap", wrap_pyfunction!(client_has_cap,m)?)?;
     m.add("add_entity_value", wrap_pyfunction!(add_entity_value,m)?)?;
     m.add_class::<crate::actions::PyActionSet>()?;
@@ -280,13 +279,13 @@ fn log_error(python: Python, text: &str) -> PyResult<PyObject>  {
 }
 
 #[pyfunction]
-fn get_conf_string(py: Python, conf_name: &str) -> PyResult<PyObject> {
+fn get_conf(py: Python, conf_name: &str) -> PyResult<PyObject> {
     let curr_conf = crate::config::GLOBAL_CONF.with(|c|c.borrow().clone());
     let conf_data = PYTHON_LILY_SKILL.with(|n| {
         curr_conf.get_package_path(&(&n).borrow(), conf_name)
     });
     Ok(match conf_data {
-        Some(string) => string.into_py(py),
+        Some(value) => yaml_to_python(py, value),
         None => py.None()
     })
 }

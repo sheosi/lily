@@ -9,8 +9,9 @@ and other utilities)"""
 
 from typing import Any, Dict, Iterator, Iterable, List, Optional, Tuple
 
-def conf(conf_name: str) -> str:
-    "Gets some conf value"
+def conf(conf_name: str) -> Any:
+    """Gets some conf value, can contain '/' which will be interpreted as
+    sub dictionaries"""
     ...
 
 def _negotiate_lang(input_lang: str, default: str, available: List[str]) -> List[str]:
