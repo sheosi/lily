@@ -5,7 +5,6 @@ authors = ["Sergio Tortosa <sertorbe@gmail.com>"]
 edition = "2018"
 license = "MIT"
 description = "Open source voice assistance for humans."
-readme = "README.md"
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -130,16 +129,16 @@ assets = [
     ["resources/tts/it-IT_ta.bin", "usr/share/lily/tts/it-IT_ta.bin", "644"],
 
     # Default package
-    ["packages/default/python/default/__init__.py", "usr/share/lily/skills/default/python/default/__init__.py", "644"],
-    ["packages/default/sounds/beep.ogg", "usr/share/lily/skills/default/sounds/beep.ogg", "644"],
-    ["packages/default/sounds/end_recognition.ogg", "usr/share/lily/skills/default/sounds/end_recognition.ogg", "644"],
-    ["packages/default/translations/en-US/translations.ftl", "usr/share/lily/skills/default/translations/en-US/translations.ftl", "644"],
-    ["packages/default/translations/es-ES/translations.ftl", "usr/share/lily/skills/default/translations/es-ES/translations.ftl", "644"],
-    ["packages/default/model.yaml", "usr/share/lily/skills/default/model.yaml", "644"],
+    ["skills/default/python/default/__init__.py", "usr/share/lily/skills/default/python/default/__init__.py", "644"],
+    ["skills/default/sounds/beep.ogg", "usr/share/lily/skills/default/sounds/beep.ogg", "644"],
+    ["skills/default/sounds/end_recognition.ogg", "usr/share/lily/skills/default/sounds/end_recognition.ogg", "644"],
+    ["skills/default/translations/en-US/translations.ftl", "usr/share/lily/skills/default/translations/en-US/translations.ftl", "644"],
+    ["skills/default/translations/es-ES/translations.ftl", "usr/share/lily/skills/default/translations/es-ES/translations.ftl", "644"],
+    ["skills/default/model.yaml", "usr/share/lily/skills/default/model.yaml", "644"],
 
 ]
 
-[package.metadata.deb.systemd-files]
-units-scripts = "packaging/systemd"
+[package.metadata.deb.systemd-units]
+unit-scripts = "packaging/systemd"
 enable = false
 start = false

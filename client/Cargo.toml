@@ -3,6 +3,9 @@ name = "lily-satellite"
 version = "0.1.0"
 authors = ["sheosi <sertorbe@gmail.com>"]
 edition = "2018"
+license = "MIT"
+description = "Voice-based satellite (client) for Lily"
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -28,13 +31,13 @@ priority = "optional"
 maintainer-scripts = "packaging/debian"
 
 assets = [
-    ["target/release/lily", "usr/bin/", "755"],
-    ["resources/hotword/common.res", "usr/bin/lily-client/hotword/", "644"],
-    ["resources/hotword/LICENSE", "usr/bin/lily-client/hotword/", "644"],
-    ["resources/hotword/lily.pmdl", "usr/bin/lily-client/hotword/", "644"]
+    ["target/release/lily-satellite", "usr/bin/", "755"],
+    ["resources/hotword/common.res", "usr/share/lily-satellite/hotword/", "644"],
+    ["resources/hotword/LICENSE", "usr/share/lily-satellite/hotword/", "644"],
+    ["resources/hotword/lily.pmdl", "usr/share/lily-satellite/hotword/", "644"]
 ]
 
 [package.metadata.deb.systemd-units]
-units-scripts = "packaging/systemd"
+unit-scripts = "packaging/systemd"
 enable = false
 start = false

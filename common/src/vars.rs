@@ -6,18 +6,28 @@ use std::path::Path;
 #[cfg(not(debug_assertions))]
 use dirs::data_local_dir;
 
+use std::sync::Mutex;
+
 // Paths
 #[cfg(debug_assertions)]
 lazy_static! {
     static ref ORG_PATH: PathBuf = std::env::current_dir().expect("Couldn't get current_dir").canonicalize().expect("Failed to canonicalize current_dir");
-    static ref ASSETS_PATH: PathBuf = ORG_PATH.join("resources");
-    static ref USER_DATA_PATH: PathBuf = ASSETS_PATH.clone();
+    static ref ASSETS_PATH: Mutex<PathBuf> = Mutex::new(ORG_PATH.join("resources"));
+    static ref USER_DATA_PATH: PathBuf = ORG_PATH.clone();
 }
 
 #[cfg(not(debug_assertions))]
 lazy_static! {
-    static ref ASSETS_PATH: PathBuf = Path::new("/usr/share").join(std::env!("CARGO_CRATE_NAME")).to_path_buf();
+    static ref ASSETS_PATH: Mutex<PathBuf> = Mutex::new(PathBuf::new());
     static ref USER_DATA_PATH: PathBuf = data_local_dir().expect("No home dir");
+}
+
+#[cfg(debug_assertions)]
+pub fn set_app_name(_name: &str){}
+
+#[cfg(not(debug_assertions))]
+pub fn set_app_name(name: &str) {
+    (*(*ASSETS_PATH).lock().unwrap()) = Path::new("/usr/share").join(name).to_path_buf();
 }
 
 enum PathRefKind {
@@ -40,7 +50,7 @@ impl PathRef {
     pub fn resolve(&self) -> PathBuf {
         match self.kind {
             PathRefKind::UserData => USER_DATA_PATH.join(self.path_ref),
-            PathRefKind::Own => ASSETS_PATH.join(self.path_ref)
+            PathRefKind::Own => (*ASSETS_PATH.lock().unwrap()).join(self.path_ref)
         }
     }
 }

@@ -398,13 +398,14 @@ impl ConfFile {
 
 #[tokio::main(flavor = "current_thread")]
 pub async fn main() -> anyhow::Result<()> {
-    init_log("lily-client".into());
+    init_log("lily-satellite".into());
+    set_app_name("lily-satellite");
 
     let config = ConfFile::load().unwrap_or(ConfFile::default());
     let mqtt_conn = {
         let mut old_conf = config.clone();
         let conn = ConnectionConfResolved::from(config.mqtt, || {
-            format!("lily-client-{}", Uuid::new_v4().to_string())
+            format!("lily-satellite-{}", Uuid::new_v4().to_string())
         });
 
         if old_conf.mqtt.name.is_none() {

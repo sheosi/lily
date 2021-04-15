@@ -28,6 +28,7 @@ use crate::vars::SKILLS_PATH;
 // Other crates
 use anyhow::Result;
 use lily_common::other::init_log;
+use lily_common::vars::set_app_name;
 use pyo3::Python;
 use unic_langid::LanguageIdentifier;
 
@@ -49,6 +50,7 @@ pub async fn main()  -> Result<()> {
         std::process::exit(0);
     }).expect("Error setting Ctrl-C handler");
 
+    set_app_name("lily");
     init_log("lily".into());
     python_init()?;
 

@@ -14,15 +14,12 @@ use crate::vars::POISON_MSG;
 use anyhow::{anyhow, Result};
 use lily_common::audio::{Audio, AudioRaw, decode_ogg_opus};
 use lily_common::communication::*;
-use lily_common::vars::DEFAULT_SAMPLES_PER_SECOND;
+use lily_common::vars::{DEFAULT_SAMPLES_PER_SECOND, PathRef};
 use log::{debug, error, info, warn};
 use rmp_serde::{decode, encode};
 use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
 use tokio::{try_join, sync::mpsc};
 use unic_langid::LanguageIdentifier;
-
-#[cfg(debug_assertions)]
-use lily_common::vars::PathRef;
 
 thread_local!{
     pub static MSG_OUTPUT: RefCell<Option<MqttInterfaceOutput>> = RefCell::new(None);
