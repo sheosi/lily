@@ -14,7 +14,9 @@ pub const NLU_TRAIN_SET_PATH: PathRef = PathRef::user_cfg("data/nlu/train-set.js
 #[cfg(feature = "devel_rasa_nlu")]
 pub const NLU_RASA_PATH: PathRef = PathRef::user_cfg("data/nlu/rasa");
 
-pub const PS_LOG_PATH: PathRef = PathRef::user_cfg("pocketsphinx.log");
+#[cfg(debug_assertions)]
+pub const PS_LOG_PATH: PathRef = PathRef::user_cfg("logs/pocketsphinx.log");
+
 pub const MAIN_CONF_PATH: PathRef = PathRef::user_cfg("conf.yaml");
 pub const PYTHON_VIRTUALENV: PathRef = PathRef::user_cfg("data/python_env");
 pub const SKILLS_PATH: MultipathRef = MultipathRef::new(&[

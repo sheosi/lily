@@ -13,7 +13,7 @@ use std::sync::Mutex;
 lazy_static! {
     static ref ORG_PATH: PathBuf = std::env::current_dir().expect("Couldn't get current_dir").canonicalize().expect("Failed to canonicalize current_dir");
     static ref ASSETS_PATH: Mutex<PathBuf> = Mutex::new(ORG_PATH.join("resources"));
-    static ref USER_DATA_PATH: PathBuf = ORG_PATH.clone();
+    static ref USER_DATA_PATH: PathBuf = ORG_PATH.join("debug_run");
 }
 
 #[cfg(not(debug_assertions))]

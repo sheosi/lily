@@ -16,24 +16,40 @@ impl Pocketsphinx {
         let iso_str = format!("{}-{}", lang.language, lang.region.ok_or(SttConstructionError::NoRegion)?.as_str().to_lowercase());
         let stt_path = STT_DATA_PATH.resolve();
 
-        let ps_log = PS_LOG_PATH.resolve();
-        let ps_log_str = ps_log.to_str().expect("Pocketsphinx path is not UTF-8 compatible, this is not supported");
-        let config = CmdLn::init( 
-            true,
-            &[  
-                //"pocketsphinx",
-                "-hmm",
-                stt_path.join(&iso_str).join(&iso_str).to_str_res()?,
-                "-lm",
-                stt_path.join(&iso_str).join(iso_str.to_string() + ".lm.bin").to_str_res()?,
-                "-dict",
-                stt_path.join(&iso_str).join("cmudict-".to_owned() + &iso_str + ".dict").to_str_res()?,
-                "-logfn", ps_log_str
-
-            ]
-        )?;
-        let decoder = PsDecoder::init(config);
-
+        let config = if cfg!(debug_assertions) {
+            let ps_log = PS_LOG_PATH.resolve();
+            let ps_log_str = ps_log.to_str().expect("Pocketsphinx path is not UTF-8 compatible, this is not supported");
+            CmdLn::init( 
+                true,
+                &[  
+                    //"pocketsphinx",
+                    "-hmm",
+                    stt_path.join(&iso_str).join(&iso_str).to_str_res()?,
+                    "-lm",
+                    stt_path.join(&iso_str).join(iso_str.to_string() + ".lm.bin").to_str_res()?,
+                    "-dict",
+                    stt_path.join(&iso_str).join("cmudict-".to_owned() + &iso_str + ".dict").to_str_res()?,
+                    "-logfn", ps_log_str
+                ]
+            )?
+        }
+        else {
+            CmdLn::init( 
+                true,
+                &[  
+                    //"pocketsphinx",
+                    "-hmm",
+                    stt_path.join(&iso_str).join(&iso_str).to_str_res()?,
+                    "-lm",
+                    stt_path.join(&iso_str).join(iso_str.to_string() + ".lm.bin").to_str_res()?,
+                    "-dict",
+                    stt_path.join(&iso_str).join("cmudict-".to_owned() + &iso_str + ".dict").to_str_res()?,
+                    "-logfn", "/dev/null"
+                ]
+            )?
+        };
+        
+        let decoder = PsDecoder::init(config); 
         Ok(Pocketsphinx {
             decoder
         })

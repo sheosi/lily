@@ -32,3 +32,6 @@ conf.yaml
 # only there for debugging purposes
 client/*.ogg
 *.ogg
+
+# Folder for data related to debug builds execution 
+debug_run

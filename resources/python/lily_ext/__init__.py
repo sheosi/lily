@@ -305,7 +305,7 @@ def answer(output: str, context: ActionContext) -> Optional[_lily_impl.ActionAns
 def answer_audio_file(file: str, context: ActionContext) -> Optional[_lily_impl.ActionAnswer]:
     """Returns an object that can be sent for the audio file 'file' (a path
     relative to the root of this skill) to be sent over to the satellite"""
-    uuid = context["satellite"]
+    uuid = context["satellite"]["uuid"]
     if _lily_impl.has_cap(uuid, 'voice'):
         return _lily_impl.ActionAnswer.load_audio(file)
     else:
