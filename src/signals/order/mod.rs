@@ -398,8 +398,8 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
                     SignalOrder::end_loading(shared_nlu.clone(), &curr_langs)?;
                 }
             }
-            Ok(())
-        };
+        }
+
         let (nlu_sender, nlu_receiver) = tokio::sync::mpsc::channel(100);
         let (event_sender, event_receiver) = tokio::sync::mpsc::channel(100);
         let sessions = Arc::new(Mutex::new(SessionManager::new()));

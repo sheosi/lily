@@ -37,7 +37,7 @@ mod tests {
             let audio = AudioRaw::new_raw(rec_dev.read()?.expect("No audio").to_owned(), DEFAULT_SAMPLES_PER_SECOND);
             rec_dev.stop_recording()?;
             let (opus,enc_fin_range) = encode_ogg_opus(&audio.buffer)?;
-            let (audio2,_,dec_fin_range) = decode_ogg_opus(opus, DEFAULT_SAMPLES_PER_SECOND)?;
+            let (_,_,dec_fin_range) = decode_ogg_opus(opus, DEFAULT_SAMPLES_PER_SECOND)?;
             assert_eq!(dec_fin_range, enc_fin_range);
             Ok(())
         }
@@ -53,7 +53,7 @@ mod tests {
             let audio = AudioRaw::new_raw(rec_dev.read()?.expect("No audio").to_owned(), DEFAULT_SAMPLES_PER_SECOND);
             rec_dev.stop_recording()?;
             let (opus, enc_fin_range) = encode_ogg_opus(&audio.buffer)?;
-            let (audio2, _, dec_fin_range) = decode_ogg_opus(opus, DEFAULT_SAMPLES_PER_SECOND)?;
+            let (_, _, dec_fin_range) = decode_ogg_opus(opus, DEFAULT_SAMPLES_PER_SECOND)?;
             assert_eq!(dec_fin_range, enc_fin_range);
             Ok(())
         }

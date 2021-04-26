@@ -41,10 +41,6 @@ impl<A: ?std::marker::Sized> BaseRegistry<A> {
     pub fn new() -> Self {
         Self{map: HashMap::new()}
     }
-    
-    pub fn contains(&self, name: &str) -> bool {
-        self.map.contains_key(name)
-    }
 
     pub fn iter_mut(&mut self) -> IterMut<String,Rc<RefCell<A>>> {
         self.map.iter_mut()
@@ -95,10 +91,6 @@ impl<A: ?std::marker::Sized, R: GlobalReg<A> + fmt::Debug> LocalBaseRegistry<A,R
         Self {map: HashMap::new(), global_reg}
     }
 
-    pub fn extend(&mut self, other: Self) {
-        self.map.extend(other.map)
-    }
-
     pub fn minus(&self, other: &Self) -> Self {
         let mut res = Self{
             map: HashMap::new(),
@@ -124,6 +116,7 @@ impl<A: ?std::marker::Sized, R: GlobalReg<A> + fmt::Debug> LocalBaseRegistry<A,R
         (*self.global_reg).borrow_mut()
     }
 
+    #[cfg(feature="unused")]
     pub fn insert(&mut self, skill_name: String, name: String, object: Rc<RefCell<A>>) -> Result<()> {
         let mangled = mangle(&skill_name, &name);
         (*self.global_reg).borrow_mut().insert(skill_name, name, object.clone())?;

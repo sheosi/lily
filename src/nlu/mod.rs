@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-use std::fmt::{self, Debug};
+use std::fmt::Debug;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::marker::PhantomData;
 use std::str::FromStr;
 use std::path::{Path, PathBuf};
 
@@ -11,7 +10,7 @@ use crate::signals::StringList;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use serde::{de::{self, MapAccess, Visitor}, Deserialize, Deserializer, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use unic_langid::LanguageIdentifier;
 use void::Void;
@@ -25,6 +24,13 @@ pub use self::snips::*;
 mod rasa;
 #[cfg(feature="devel_rasa_nlu")]
 pub use self::rasa::*;
+
+#[cfg(feature="unused")]
+use std::marker::PhantomData;
+#[cfg(feature="unused")]
+use std::format;
+#[cfg(feature="unused")]
+use serde::de::{MapAccess, Visitor};
 
 pub trait NluManager {
     type NluType: Nlu + Debug + Send;
@@ -109,6 +115,7 @@ impl<'de> Deserialize<'de> for EntityData {
     }
 }
 
+#[cfg(feature="unused")]
 fn string_or_struct<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
     T: Deserialize<'de> + FromStr<Err = Void>,
@@ -160,7 +167,6 @@ pub struct EntityDef {
     pub automatically_extensible: bool
 }
 
-fn true_val()->bool{true}
 
 impl EntityDef {
     pub fn new(data: Vec<EntityData>, automatically_extensible: bool) -> Self {

@@ -3,14 +3,12 @@ use std::mem::size_of;
 use std::process;
 
 use crate::audio::AudioError;
-use crate::vars::{DEFAULT_SAMPLES_PER_SECOND, LILY_VER, MAX_SAMPLES_PER_SECOND};
+use crate::vars::{DEFAULT_SAMPLES_PER_SECOND, LILY_VER};
 
 use byteorder::{LittleEndian, ByteOrder};
 use ogg::{Packet, PacketReader, PacketWriter};
 use magnum_opus::{Bitrate, Decoder as OpusDec, Encoder as OpusEnc};
 use rand::Rng;
-
-use super::Audio;
 
 const fn to_samples(ms: u32, sps: u32) -> usize {
     ((sps * ms) / 1000) as usize
@@ -32,7 +30,6 @@ by itself, this is not ready for anything more, third return is final range just
 available while testing, otherwise it is a 0*/
 pub fn decode_ogg_opus(data: Vec<u8>, target_sps: u32) -> Result<(Vec<i16>, PlayData, u32), AudioError> {
     
-    const MAX_FRAME_TIME_MS: u32 = 120;
     const MAX_NUM_CHANNELS: u8 = 2;
     const MAX_FRAME_SAMPLES: usize = 5760; // According to opus_decode docs
     const MAX_FRAME_SIZE: usize = MAX_FRAME_SAMPLES * (MAX_NUM_CHANNELS as usize); // Our buffer will be i16 so, don't convert to bytes

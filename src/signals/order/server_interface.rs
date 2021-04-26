@@ -356,7 +356,21 @@ impl MqttInterface {
                     _ => {}
                 }
             }
-        };
+        }
+
+
+        async fn handle_out(
+            common_out: &mut mpsc::Receiver<(SendData, String)>,
+            tts_set: &mut HashMap<&LanguageIdentifier, Box<dyn Tts>>,
+            def_lang: Option<&LanguageIdentifier>,
+            sessions: Arc<Mutex<SessionManager>>,
+            client: Arc<Mutex<AsyncClient>>
+        ) -> Result<()> {
+            loop {
+                let (msg_data, uuid_str) = common_out.recv().await.expect("Out channel broken");
+                process_out(msg_data, uuid_str, tts_set, def_lang.clone(), &sessions, &client).await?;
+            }
+        }
             
         async fn process_out(
             msg_data: SendData,
@@ -409,19 +423,6 @@ impl MqttInterface {
             client.lock().expect(POISON_MSG).publish(&format!("lily/{}/say_msg", uuid_str), QoS::AtMostOnce, false, msg_pack).await?;
             Ok(())
         }
-
-        async fn handle_out(
-            common_out: &mut mpsc::Receiver<(SendData, String)>,
-            tts_set: &mut HashMap<&LanguageIdentifier, Box<dyn Tts>>,
-            def_lang: Option<&LanguageIdentifier>,
-            sessions: Arc<Mutex<SessionManager>>,
-            client: Arc<Mutex<AsyncClient>>
-        ) -> Result<()> {
-            loop {
-                let (msg_data, uuid_str) = common_out.recv().await.expect("Out channel broken");
-                process_out(msg_data, uuid_str, tts_set, def_lang.clone(), &sessions, &client).await?;
-            }
-        };
 
         let i = handle_in(eloop, client.clone(), config, channel_nlu, channel_event);
         let o = handle_out(&mut self.common_out, &mut tts_set, def_lang, sessions, client);

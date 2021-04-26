@@ -150,9 +150,7 @@ impl PythonAction {
 
 impl Action for PythonAction {
     fn instance(&self, lily_skill_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        Box::new(PythonActionInstance::new(py, self.obj.clone(), lily_skill_path))
+        Box::new(PythonActionInstance::new(self.obj.clone(), lily_skill_path))
     }
 }
 
@@ -163,7 +161,7 @@ pub struct PythonActionInstance {
 }
 
 impl PythonActionInstance {
-    pub fn new (py: Python, act_obj:Py<PyAny>, lily_skill_path:Arc<PathBuf>) -> Self {
+    pub fn new (act_obj:Py<PyAny>, lily_skill_path:Arc<PathBuf>) -> Self {
         Self{obj: act_obj, lily_skill_path}
     }
 }

@@ -83,7 +83,6 @@ impl SignalRegistry {
     }
 
     delegate!{to self.base{
-        pub fn contains(&self, name: &str) -> bool;
         pub fn get_map_ref(&mut self) -> &HashMap<String,Rc<RefCell<dyn Signal>>>;
     }}
 }
@@ -116,10 +115,6 @@ impl LocalSignalRegistry {
         }
     }
 
-    pub fn extend(&mut self, other: LocalSignalRegistry) {
-        self.base.extend(other.base);
-    }
-
     pub fn minus(&self, other: &Self) -> Self{
         let new_base = self.base.minus(&other.base);
         Self { 
@@ -139,7 +134,6 @@ impl LocalSignalRegistry {
 
     // Just reuse methods
     delegate! {to self.base{
-        pub fn insert(&mut self, skill_name: String, sig_name: String, signal: Rc<RefCell<dyn Signal>>) -> Result<()>;
         pub fn extend_with_map(&mut self, other: HashMap<String, Rc<RefCell<dyn Signal>>>);
         pub fn remove_from_global(&self);
         pub fn get(&self, action_name: &str) -> Option<&Rc<RefCell<dyn Signal>>>;
