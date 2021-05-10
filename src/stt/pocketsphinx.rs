@@ -1,3 +1,5 @@
+use std::fs::create_dir_all;
+
 use crate::stt::{DecodeRes, Stt, SttConstructionError, SttError, SttInfo};
 use crate::vars::*;
 use crate::path_ext::ToStrResult;
@@ -16,10 +18,15 @@ impl Pocketsphinx {
         let iso_str = format!("{}-{}", lang.language, lang.region.ok_or(SttConstructionError::NoRegion)?.as_str().to_lowercase());
         let stt_path = STT_DATA_PATH.resolve();
 
-        let config = if cfg!(debug_assertions) {
+        let decoder = if cfg!(debug_assertions) {
             let ps_log = PS_LOG_PATH.resolve();
+            if let Err(e) = create_dir_all(ps_log.parent().expect("Expected parent of PS_LOG_PATh")) {
+                if e.kind() != std::io::ErrorKind::AlreadyExists {
+                    return Err(SttConstructionError::Unexpected);
+                }
+            }
             let ps_log_str = ps_log.to_str().expect("Pocketsphinx path is not UTF-8 compatible, this is not supported");
-            CmdLn::init( 
+            let config = CmdLn::init( 
                 true,
                 &[  
                     //"pocketsphinx",
@@ -31,10 +38,11 @@ impl Pocketsphinx {
                     stt_path.join(&iso_str).join("cmudict-".to_owned() + &iso_str + ".dict").to_str_res()?,
                     "-logfn", ps_log_str
                 ]
-            )?
+            )?;
+            PsDecoder::init(config)
         }
         else {
-            CmdLn::init( 
+            let config = CmdLn::init( 
                 true,
                 &[  
                     //"pocketsphinx",
@@ -46,10 +54,12 @@ impl Pocketsphinx {
                     stt_path.join(&iso_str).join("cmudict-".to_owned() + &iso_str + ".dict").to_str_res()?,
                     "-logfn", "/dev/null"
                 ]
-            )?
+            )?;
+
+            PsDecoder::init(config)
         };
         
-        let decoder = PsDecoder::init(config); 
+        
         Ok(Pocketsphinx {
             decoder
         })

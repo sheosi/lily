@@ -228,7 +228,6 @@ impl DebugAudio {
             .append_audio(audio.data, DEFAULT_SAMPLES_PER_SECOND)
             .expect("Wrong SPSs");
         if (self.curr_ms as u16) >= self.save_ms {
-            println!("Save to file");
             self.audio
                 .save_to_disk(Path::new("pasive_audio.ogg"))
                 .expect("Failed to write debug file");

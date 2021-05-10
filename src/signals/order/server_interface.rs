@@ -149,7 +149,7 @@ pub struct MqttInterface {
 
 
 mod language_detection {
-    use unic_langid::LanguageIdentifier;
+    // use unic_langid::LanguageIdentifier;
     //use lingua::{Language, LanguageDetector, LanguageDetectorBuilder};
 
     /*fn id_to_lingua() -> lingua::La{

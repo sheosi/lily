@@ -35,6 +35,9 @@ pub enum SttConstructionError {
     #[error("Language not compatible")]
     LangIncompatible,
 
+    #[error("Some unexpected error happened")]
+    Unexpected,
+
     #[cfg(feature = "deepspeech_stt")]
     #[error("Can't load files")]
     CantLoadFiles,
