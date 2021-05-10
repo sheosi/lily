@@ -23,9 +23,9 @@ class BaseAnswers:
             return answer(translate("say_name", context), context)
         if name == "repeat":
             return answer(translate("say_repeat", context), context)
-        
+
 @action(name="event_handling")
-class EventHandling:            
+class EventHandling:
     def trigger_action(self, context):
         name = context["event"]["name"]
         if name == "lily_start":

@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::fs::File;
+use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 use std::rc::Rc;
@@ -25,8 +25,8 @@ use uuid::Uuid;
 
 const CONN_CONF_FILE: MultipathRef = MultipathRef::new(&[
     #[cfg(debug_assertions)]
-    PathRef::own("conn_conf.yaml"),
     PathRef::user_cfg("conn_conf.yaml"),
+    PathRef::own("conn_conf.yaml"),
 ]);
 
 const SNOWBOY_DATA_PATH: PathRef = PathRef::own("hotword");
@@ -389,8 +389,18 @@ impl ConfFile {
 
     fn save(&mut self) -> anyhow::Result<()> {
         let conf_path = CONN_CONF_FILE.save_path();
+        let parent = conf_path.parent().unwrap();
+        if !parent.exists() {
+            if let Err(e) = create_dir_all(parent) {
+                if e.kind() != std::io::ErrorKind::AlreadyExists {
+                    return Err(e.into());
+                }
+            }
+        }
         let conf_file = File::create(&conf_path)?;
         let writer = BufWriter::new(&conf_file);
+        
+
         Ok(to_writer(writer, &self)?)
     }
 }
