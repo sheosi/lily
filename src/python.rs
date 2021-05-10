@@ -73,8 +73,8 @@ pub fn python_init() -> Result<()> {
     unsafe {assert!(pyo3::ffi::PyImport_AppendInittab(mod_name, Some(safe_lily_impl)) != -1);};
 
     //Make sure we have all deps
-    fn check_module_installed(pkg: &str) -> Result<()> {
-        if !python_has_module_path(&Path::new(pkg))? {
+    fn check_module_installed(pkg: &str, name_in_fs: &str) -> Result<()> {
+        if !python_has_module_path(&Path::new(name_in_fs))? {
             if !Command::new("python3")
                 .args(&["-m", "pip", "install", pkg]).status()?.success() {
                 log::warn!("Could not install mandatory Python module {}", pkg);
@@ -84,8 +84,8 @@ pub fn python_init() -> Result<()> {
         Ok(())
     }
     
-    check_module_installed("snips-nlu")?;
-    check_module_installed("fluent.runtime")?;
+    check_module_installed("snips-nlu", "snips_nlu")?;
+    check_module_installed("fluent.runtime", "fluent/runtime")?;
 
 
     
