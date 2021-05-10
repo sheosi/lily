@@ -340,7 +340,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
                             let slots_data =  add_slots(&ActionContext::new(),result.slots);
 
                             let mut intent_data = ActionContext::new();
-                            intent_data.set_str("intent".to_string(), self.demangle(&intent_name).to_string());
+                            intent_data.set_str("name".to_string(), self.demangle(&intent_name).to_string());
                             intent_data.set_dict("slots".to_string(), slots_data);
 
                             let mut intent_context = base_context.clone();

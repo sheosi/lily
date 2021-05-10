@@ -352,6 +352,7 @@ async fn user_listen(
                                 .save_to_disk(Path::new("active_audio_raw.ogg"))
                                 .unwrap();
                             activeaudio.clear();
+                            activeaudio_raw.clear();
                         }
                         send_audio(mqtt_name.into(), client.clone(), data, true).await?;
 

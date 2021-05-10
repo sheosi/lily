@@ -179,7 +179,7 @@ pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + 
     let mut utterances = UtteranceManager::new(stt_set);
 
     let mut stt_audio = AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND);
-    let audio_debug_path = PathRef::own("stt_audio.ogg").resolve();
+    let audio_debug_path = PathRef::user_cfg("stt_audio.ogg").resolve();
 
     loop {
         let msg_nlu = channel.recv().await.expect("Channel closed!");
