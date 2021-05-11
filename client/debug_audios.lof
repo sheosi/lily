@@ -1,0 +1,4 @@
+# Sort of project file for quick opening both audio debug files on audacity and comparing them
+window # an initial window command is implicit and optional
+file "active_audio.ogg"   # Audio after raw->encode->decode->encode
+file "active_audio_raw.ogg" # Audio after raw->encode

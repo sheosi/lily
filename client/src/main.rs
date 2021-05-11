@@ -30,7 +30,8 @@ const CONN_CONF_FILE: MultipathRef = MultipathRef::new(&[
 ]);
 
 const SNOWBOY_DATA_PATH: PathRef = PathRef::own("hotword");
-
+pub const HOTWORD_CHECK_INTERVAL_MS: u16 = 20; // Larger = less CPU, more wait time
+pub const ACTIVE_LISTENING_INTERVAL_MS: u16 = 50; 
 enum ProgState<'a> {
     PasiveListening,
     ActiveListening(AsyncMGuard<'a, RecDevice>),
