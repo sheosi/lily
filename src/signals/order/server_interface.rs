@@ -201,7 +201,7 @@ pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + 
                 }
             }
             RequestData::Audio{data: audio, is_final} => {
-                let (as_raw, _, _) = decode_ogg_opus(audio, DEFAULT_SAMPLES_PER_SECOND)?;
+                let (as_raw, _, _) = decode_ogg_opus::<DEFAULT_SAMPLES_PER_SECOND>(audio)?;
 
                 if cfg!(debug_assertions) {
                     stt_audio.append_audio(&as_raw, DEFAULT_SAMPLES_PER_SECOND)?;

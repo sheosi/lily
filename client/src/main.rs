@@ -330,7 +330,7 @@ async fn user_listen(
                 };
                 let audio = mic_data.clone().into_owned().to_ogg_opus().unwrap();
                 let (a2, _, _) =
-                    lily_common::audio::decode_ogg_opus(audio, DEFAULT_SAMPLES_PER_SECOND).unwrap();
+                    lily_common::audio::decode_ogg_opus::<DEFAULT_SAMPLES_PER_SECOND>(audio).unwrap();
                 if cfg!(debug_assertions) {
                     activeaudio
                         .append_audio(&a2, DEFAULT_SAMPLES_PER_SECOND)
