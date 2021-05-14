@@ -25,7 +25,8 @@ const fn to_samples<const TARGET_SPS: u32>(ms: u32) -> usize {
 // In microseconds
 const fn calc_fr_size(us: u32, channels:u8, sps:u32) -> usize {
     let samps_ms = (sps * us) as u32;
-    ((samps_ms * channels as u32 ) / 1000) as usize
+    const US_TO_MS: u32 = 10;
+    ((samps_ms * channels as u32 ) / (1000 * US_TO_MS )) as usize
 }
 
 const fn calc_sr(val:u16, org_sr: u32, dest_sr: u32) -> u16 {
@@ -134,24 +135,19 @@ pub fn decode_ogg_opus<const TARGET_SPS: u32>(data: Vec<u8>) -> Result<(Vec<i16>
 
     let mut buffer: Vec<i16> = Vec::new();
     let mut pre_skip = dec_data.pre_skip as usize;
-    let mut last_absgp = 0;
+    let mut dec_absgsp = pre_skip;
     while let Some(packet) = reader.read_packet()? {
         let mut temp_buffer = [0; MAX_FRAME_SIZE];
         let out_size = decoder.decode(&packet.data, &mut temp_buffer, false)?;
-        let absgsp = packet.absgp_page();
-        if absgsp < last_absgp {
-            return Err(AudioError::MalformedAudio);
-        }
-
-        let trimmed_end = if packet.last_in_stream() && absgsp - last_absgp < out_size as u64 {
-            calc_sr_u64((absgsp - last_absgp)/(play_data.channels as u64) , OGG_OPUS_SPS, TARGET_SPS)
+        let absgsp = calc_sr_u64(packet.absgp_page(),OGG_OPUS_SPS, TARGET_SPS) as usize;
+        dec_absgsp += out_size;
+        let trimmed_end = if packet.last_in_stream() && dec_absgsp > absgsp {
+            (dec_absgsp - absgsp)/(play_data.channels as usize)
         }
         else {
             // out_size == num of samples *per channel*
-            out_size as u64 * play_data.channels as u64
+            out_size as usize * play_data.channels as usize
         } as usize;
-        last_absgp = absgsp;
-
 
         if pre_skip < out_size {
             buffer.extend_from_slice(&temp_buffer[pre_skip..trimmed_end]);
@@ -191,7 +187,7 @@ pub fn encode_ogg_opus(audio: &Vec<i16>) -> Result<(Vec<u8>, u32), AudioError> {
     const FRAME_TIME_MS: u32 = 20;
     const FRAME_SAMPLES: usize = to_samples::<S_PS>(FRAME_TIME_MS);
     const FRAME_SIZE: usize = FRAME_SAMPLES * (NUM_CHANNELS as usize);
-    const MAX_PACKET: usize = 1500; // Could've been anything else, really
+    const MAX_PACKET: usize = 4000; // Maximum theorical recommended by Opus
 
     // Generate the serial which is nothing but a value to identify a stream, we
     // will also use the process id so that two lily implementations don't use 
@@ -254,7 +250,8 @@ pub fn encode_ogg_opus(audio: &Vec<i16>) -> Result<(Vec<u8>, u32), AudioError> {
     packet_writer.write_packet(opus_tags.into_boxed_slice(), serial, ogg::PacketWriteEndInfo::EndPage, 0)?;
 
     // Do all frames
-    for counter in 0..max{
+    // TODO: Encode also the pre-skip
+    for counter in 0..max{ // Last value of counter is max - 1 
         let pos_a: usize = calc(counter);
         let pos_b: usize = calc(counter + 1);
 
@@ -290,6 +287,7 @@ pub fn encode_ogg_opus(audio: &Vec<i16>) -> Result<(Vec<u8>, u32), AudioError> {
     // small frames, and on the last one, if needed fill with 0, since the
     // last one is going to be smaller this should be much less of a problem
     let mut last_sample = calc(max);
+    assert!(last_sample <= audio.len());
     if last_sample < audio.len() {
         const FRAMES_SIZES: [usize; 4] = [
                 calc_fr_size(25, NUM_CHANNELS, S_PS),
@@ -308,9 +306,8 @@ pub fn encode_ogg_opus(audio: &Vec<i16>) -> Result<(Vec<u8>, u32), AudioError> {
                 serial: u32,
                 abgsp: u64
             ) -> Result<(), AudioError> {
-                let mut temp_buffer = [0; FRAME_SAMPLES as usize];
-                let size = opus_encoder.encode(&in_buffer[..], temp_buffer.as_mut())?;
-                let new_buffer = temp_buffer[0..size].to_owned().into_boxed_slice();
+                let temp_buffer = opus_encoder.encode_vec(in_buffer, MAX_PACKET)?;
+                let new_buffer = temp_buffer.to_owned().into_boxed_slice();
                 packet_writer.write_packet(
                     new_buffer,
                     serial, 
@@ -346,7 +343,7 @@ pub fn encode_ogg_opus(audio: &Vec<i16>) -> Result<(Vec<u8>, u32), AudioError> {
                         &in_buffer[..],
                         &mut packet_writer,
                         serial,
-                        granule::<S_PS>(skip as usize + audio.len()/(NUM_CHANNELS as usize)),
+                        granule::<S_PS>(skip as usize + audio.len()/(NUM_CHANNELS as usize))
                     )?;
                 }
             }
