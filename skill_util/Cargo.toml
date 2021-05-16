@@ -15,5 +15,5 @@ serde = {version = "^1.0", features = ["derive"]} # Serialization framework (use
 thiserror = "^1.0" # For error handling in parts that can be made their own crate
 tokio = {version="^1.5", features = ["macros", "rt", "sync", "time"]}
 zip = "0.5"
-url = "^2.1"
+url = "^2.2"
 serde_json = "^1.0" # Needed for repo prep
