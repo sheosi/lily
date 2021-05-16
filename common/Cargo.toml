@@ -21,7 +21,7 @@ rodio = {version = "^0.13", optional = true, default-features =false, features =
 lazy_static = "^1.4" # We use this for the path were the data is stored
 serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
 syslog = "^5.0" # Linux log interface
-url = "^2.1"
+url = "^2.2"
 
 rumqttc = "^0.6"
 anyhow = "^1.0" # For error handling overall in the app
