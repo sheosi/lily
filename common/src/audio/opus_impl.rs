@@ -248,7 +248,7 @@ pub fn encode_ogg_opus(audio: &Vec<i16>) -> Result<(Vec<u8>, u32), AudioError> {
         let new_buffer =
         
         if pos_a > skip_us {
-            opus_encoder.encode_vec(&audio[pos_a..pos_b], MAX_PACKET)?.into_boxed_slice()
+            opus_encoder.encode_vec(&audio[pos_a-skip_us..pos_b-skip_us], MAX_PACKET)?.into_boxed_slice()
         }
         else {
             let mut buf = Vec::with_capacity(pos_b-pos_a);
