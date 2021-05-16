@@ -17,7 +17,7 @@ serde = {version = "^1.0", features = ["derive"]} # Serialization framework (use
 lily_common = {path = "../common"}
 anyhow = "^1.0" # For error handling overall in the app
 log = "^0.4" # Common API for logging so we can change backend easilyp
-rumqttc = "^0.5"
+rumqttc = "^0.6"
 serde_yaml = "^0.8"
 uuid = {version = "^0.8.1", features=["v4", "serde"]}
 

@@ -21,7 +21,7 @@ ctrlc = "^3.1" # To catch ctrl-c in all platforms and exit the program
 # Some async deps
 tokio = {version="^1.5", features = ["macros", "rt", "sync", "time"]}
 async-trait = "^0.1"
-rumqttc = "^0.5"
+rumqttc = "^0.6"
 rmp-serde = "^0.15"
 futures = "^0.3"
 delegate = "^0.5" # Used for the registries using the base ones
@@ -71,7 +71,6 @@ unused = []
 
 [workspace]
 members = ["client", "common", "skill_util"]
-
 
 [package.metadata.deb]
 maintainer = "Sergio Tortosa Benedito <sertorbe@gmail.com>"
