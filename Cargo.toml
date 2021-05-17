@@ -19,7 +19,7 @@ thiserror = "^1.0" # For error handling in parts that can be made their own crat
 regex = "^1.5" # To parse configuration
 ctrlc = "^3.1" # To catch ctrl-c in all platforms and exit the program
 # Some async deps
-tokio = {version="^1.5", features = ["macros", "rt", "sync", "time"]}
+tokio = {version="^1.6", features = ["macros", "rt", "sync", "time"]}
 async-trait = "^0.1"
 rumqttc = "^0.6"
 rmp-serde = "^0.15"
