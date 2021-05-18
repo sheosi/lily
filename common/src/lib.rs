@@ -10,6 +10,7 @@ pub mod vars;
 mod tests {
     
     mod opus {
+        use std::io::Cursor;
         use crate::audio::{AudioRaw, encode_ogg_opus, decode_ogg_opus,RecDevice};
         use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
         use anyhow::Result;
@@ -19,8 +20,8 @@ mod tests {
         fn dec_enc_empty() -> Result<()> {
             let audio = AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND);
             let (opus,enc_fin_range) = encode_ogg_opus(&audio.buffer)?;
-            let (audio2, _,dec_fin_range) = decode_ogg_opus::<16000>(opus)?;
-            assert_eq!(audio.buffer, audio2); // Should be the same, empty
+            let (audio2, _,dec_fin_range) = decode_ogg_opus::<_,16000>(Cursor::new(opus))?;
+            assert_eq!(audio.buffer.len(), audio2.len()); // Should be the same, empty
             assert_eq!(enc_fin_range, dec_fin_range);
 
             Ok(())
@@ -35,7 +36,7 @@ mod tests {
             let audio = AudioRaw::new_raw(rec_dev.read()?.expect("No audio").to_owned(), DEFAULT_SAMPLES_PER_SECOND);
             rec_dev.stop_recording()?;
             let (opus,enc_fin_range) = encode_ogg_opus(&audio.buffer)?;
-            let (a2,_,dec_fin_range) = decode_ogg_opus::<16000>(opus)?;
+            let (a2,_,dec_fin_range) = decode_ogg_opus::<_,16000>(Cursor::new(opus))?;
             assert_eq!(dec_fin_range, enc_fin_range);
             assert_eq!(audio.len(), a2.len());
             Ok(())
@@ -50,7 +51,7 @@ mod tests {
             let audio = AudioRaw::new_raw(rec_dev.read()?.expect("No audio").to_owned(), DEFAULT_SAMPLES_PER_SECOND);
             rec_dev.stop_recording()?;
             let (opus, enc_fin_range) = encode_ogg_opus(&audio.buffer)?;
-            let (a2, _, dec_fin_range) = decode_ogg_opus::<16000>(opus)?;
+            let (a2, _, dec_fin_range) = decode_ogg_opus::<_, 16000>(Cursor::new(opus))?;
             assert_eq!(dec_fin_range, enc_fin_range);
             assert_eq!(audio.len(), a2.len());
             Ok(())
@@ -68,9 +69,9 @@ mod tests {
             let audio = AudioRaw::new_raw(rec_dev.read()?.expect("No audio").to_owned(), DEFAULT_SAMPLES_PER_SECOND);
             rec_dev.stop_recording()?;
             let (opus, enc_fr1) = encode_ogg_opus(&audio.buffer)?;
-            let (audio2, _, dec_fr1) = decode_ogg_opus::<16000>(opus)?;
+            let (audio2, _, dec_fr1) = decode_ogg_opus::<_, 16000>(Cursor::new(opus))?;
             let (opus2, enc_fr2) = encode_ogg_opus(&audio2)?;
-            let (audio3, _, dec_fr2) = decode_ogg_opus::<16000>(opus2)?;
+            let (audio3, _, dec_fr2) = decode_ogg_opus::<_, 16000>(Cursor::new(opus2))?;
             assert_eq!(audio2.len(), audio3.len());
             assert_eq!(enc_fr1, dec_fr1);
             assert_eq!(enc_fr2, dec_fr2);

@@ -1,3 +1,4 @@
+use std::io::Cursor;
 use std::time::Duration;
 
 use crate::audio::{Audio, AudioRaw, Data, decode_ogg_opus};
@@ -54,7 +55,7 @@ impl PlayDevice  {
             },
             Data::Encoded(enc_data) => {
                 if enc_data.is_ogg_opus() {
-                    let (audio, play_data,_) = decode_ogg_opus::<MAX_SAMPLES_PER_SECOND>(enc_data.data)?;
+                    let (audio, play_data,_) = decode_ogg_opus::<_, MAX_SAMPLES_PER_SECOND>(Cursor::new(enc_data.data))?;
                     let source = rodio::buffer::SamplesBuffer::new(play_data.channels, MAX_SAMPLES_PER_SECOND, audio);
                     self.stream_handle.play_raw(source.convert_samples())?;
                 }
