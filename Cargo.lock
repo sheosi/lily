@@ -1267,6 +1267,7 @@ dependencies = [
  "log",
  "magnum-opus",
  "maplit",
+ "ogg-opus",
  "pocketsphinx",
  "pyo3",
  "regex",
@@ -1296,6 +1297,7 @@ dependencies = [
  "anyhow",
  "lily_common",
  "log",
+ "ogg-opus",
  "rmp-serde 0.15.4",
  "rsnowboy",
  "rumqttc",
@@ -1310,20 +1312,17 @@ name = "lily_common"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "byteorder",
  "cpal",
  "dirs",
  "lazy_static",
  "log",
- "magnum-opus",
- "ogg",
+ "ogg-opus",
  "rand",
  "ringbuf",
  "rodio",
  "rsnowboy",
  "rumqttc",
  "serde",
- "serial_test",
  "syslog",
  "thiserror",
  "tokio",
@@ -1737,6 +1736,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6951b4e8bf21c8193da321bcce9c9dd2e13c858fe078bf9054a288b419ae5d6e"
 dependencies = [
  "byteorder",
+]
+
+[[package]]
+name = "ogg-opus"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31cfdac7fd0b79699516801edc46f532575fce88b088aed3fb00465a9320d37e"
+dependencies = [
+ "byteorder",
+ "magnum-opus",
+ "ogg",
+ "rand",
+ "thiserror",
 ]
 
 [[package]]
@@ -2574,28 +2586,6 @@ dependencies = [
  "linked-hash-map",
  "serde",
  "yaml-rust",
-]
-
-[[package]]
-name = "serial_test"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0bccbcf40c8938196944a3da0e133e031a33f4d6b72db3bda3cc556e361905d"
-dependencies = [
- "lazy_static",
- "parking_lot",
- "serial_test_derive",
-]
-
-[[package]]
-name = "serial_test_derive"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2acd6defeddb41eb60bb468f8825d0cfd0c2a76bc03bfd235b6a1dc4f6a1ad5"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]

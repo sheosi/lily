@@ -1,9 +1,10 @@
 use std::io::Cursor;
 use std::time::Duration;
 
-use crate::audio::{Audio, AudioRaw, Data, decode_ogg_opus};
+use crate::audio::{Audio, AudioRaw, Data};
 use crate::vars::MAX_SAMPLES_PER_SECOND;
 
+use ogg_opus::decode;
 use rodio::{source::Source, OutputStream, OutputStreamHandle, StreamError};
 use thiserror::Error;
 use tokio::time::sleep;
@@ -22,7 +23,7 @@ pub enum PlayAudioError {
     #[error("Couldn't play audio, reason: {}", .0)]
     PlayError(String),
     #[error("Coudln't transform audio")]
-    AudioError(#[from]crate::audio::AudioError)
+    TransformationError(#[from]ogg_opus::Error)
 }
 
 impl From<rodio::PlayError> for PlayAudioError {
@@ -55,7 +56,7 @@ impl PlayDevice  {
             },
             Data::Encoded(enc_data) => {
                 if enc_data.is_ogg_opus() {
-                    let (audio, play_data,_) = decode_ogg_opus::<_, MAX_SAMPLES_PER_SECOND>(Cursor::new(enc_data.data))?;
+                    let (audio, play_data) = decode::<_, MAX_SAMPLES_PER_SECOND>(Cursor::new(enc_data.data))?;
                     let source = rodio::buffer::SamplesBuffer::new(play_data.channels, MAX_SAMPLES_PER_SECOND, audio);
                     self.stream_handle.play_raw(source.convert_samples())?;
                 }

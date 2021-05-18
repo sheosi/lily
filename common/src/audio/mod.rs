@@ -1,22 +1,19 @@
-mod opus_impl;
-
 #[cfg(feature = "client")]
 mod playdevice;
 #[cfg(feature = "client")]
 mod recdevice;
-
-pub use opus_impl::*;
 
 #[cfg(feature = "client")]
 pub use self::playdevice::*;
 #[cfg(feature = "client")]
 pub use self::recdevice::*;
 
-use std::io::Write;
+use std::io::{Cursor, Write};
 use std::path::Path;
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
 use log::warn;
+use ogg_opus::encode;
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
@@ -31,7 +28,7 @@ impl AudioEncoded {
 
     #[cfg(feature="client")]
     pub fn is_ogg_opus(&self) -> bool {
-        self.data.len() > 36 && self.data[28..36] == opus_impl::OPUS_MAGIC_HEADER
+        ogg_opus::is_ogg_opus(Cursor::new(&self.data))
     }
 
     pub fn get_sps(&self) -> u32 {
@@ -224,8 +221,7 @@ impl AudioRaw {
     }
 
     pub fn to_ogg_opus(&self) -> Result<Vec<u8>, AudioError> {
-        let (a,_) = encode_ogg_opus(&self.buffer)?;
-        Ok(a)
+        Ok(encode::<16000, 1>(&self.buffer)?)
     }
 }
 
@@ -235,15 +231,9 @@ pub enum AudioError {
     #[error("Io Error")]
     IOError(#[from] std::io::Error),
 
-    #[error("Encoding error")]
-    OpusError(#[from] magnum_opus::Error),
-
-    #[error("Input audio was malformed")]
-    MalformedAudio,
-
-    #[error("Failed to decode ogg")]
-    OggReadError(#[from] ogg::OggReadError),
-
     #[error("Incompatible Samples per seconds")]
-    IncompatibleSps
+    IncompatibleSps,
+
+    #[error("")]
+    OggOpusError(#[from] ogg_opus::Error)
 }

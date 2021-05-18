@@ -13,10 +13,11 @@ use crate::tts::{Gender, Tts, TtsFactory, VoiceDescr};
 use crate::vars::POISON_MSG;
 
 use anyhow::{anyhow, Result};
-use lily_common::audio::{Audio, AudioRaw, decode_ogg_opus};
+use lily_common::audio::{Audio, AudioRaw};
 use lily_common::communication::*;
 use lily_common::vars::{DEFAULT_SAMPLES_PER_SECOND, PathRef};
 use log::{debug, error, info, warn};
+use ogg_opus::decode as opus_decode;
 use rmp_serde::{decode, encode};
 use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
 use tokio::{try_join, sync::mpsc};
@@ -202,7 +203,7 @@ pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + 
                 }
             }
             RequestData::Audio{data: audio, is_final} => {
-                let (as_raw, _, _) = decode_ogg_opus::<_, DEFAULT_SAMPLES_PER_SECOND>(Cursor::new(audio))?;
+                let (as_raw, _) = opus_decode::<_, DEFAULT_SAMPLES_PER_SECOND>(Cursor::new(audio))?;
 
                 if cfg!(debug_assertions) {
                     stt_audio.append_audio(&as_raw, DEFAULT_SAMPLES_PER_SECOND)?;

@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::fs::{create_dir_all, File};
-use std::io::{BufReader, BufWriter};
+use std::io::{BufReader, Cursor, BufWriter};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -12,6 +12,7 @@ use lily_common::communication::*;
 use lily_common::other::{init_log, ConnectionConf};
 use lily_common::vars::*;
 use log::{debug, info};
+use ogg_opus::decode as opus_decode;
 use rmp_serde::{decode, encode};
 use rumqttc::{AsyncClient, Event, EventLoop, LastWill, Packet, QoS};
 use serde::{Deserialize, Serialize};
@@ -329,8 +330,8 @@ async fn user_listen(
                     None => continue,
                 };
                 let audio = mic_data.clone().into_owned().to_ogg_opus().unwrap();
-                let (a2, _, _) =
-                    lily_common::audio::decode_ogg_opus::<DEFAULT_SAMPLES_PER_SECOND>(audio).unwrap();
+                let (a2, _,) =
+                    opus_decode::<_, DEFAULT_SAMPLES_PER_SECOND>(Cursor::new(audio)).unwrap();
                 if cfg!(debug_assertions) {
                     activeaudio
                         .append_audio(&a2, DEFAULT_SAMPLES_PER_SECOND)
