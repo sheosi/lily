@@ -15,13 +15,13 @@ ogg-opus = "^0.1"
 thiserror = "^1.0" # For error handling in parts that can be made their own crate
 
 log = "^0.4" # Common API for logging so we can change backend easily
-rodio = {version = "^0.13", optional = true, default-features =false, features = ["flac", "vorbis", "wav"]} # Playback library
+rodio = {version = "^0.14", optional = true, default-features =false, features = ["flac", "vorbis", "wav"]} # Playback library
 lazy_static = "^1.4" # We use this for the path were the data is stored
 serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
 syslog = "^5.0" # Linux log interface
 url = "^2.2"
 
-rumqttc = "^0.6"
+rumqttc = "^0.7"
 anyhow = "^1.0" # For error handling overall in the app
 tokio = {version = "^1.6", features = ["time"], optional = true}
 rand = "^0.8" # Needs to be hold of for compatibility with cbindgen
