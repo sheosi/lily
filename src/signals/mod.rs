@@ -11,13 +11,11 @@ pub use self::registries::*;
 pub use self::time::*;
 
 // Standard library
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{ActionAnswer, ActionContext, ActionSet, SharedActionSet};
+use crate::actions::{ActionAnswer, ActionContext, ActionInstance, ActionSet, SharedActionSet};
 use crate::config::Config;
 
 // Other crates
@@ -26,7 +24,7 @@ use async_trait::async_trait;
 use unic_langid::LanguageIdentifier;
 
 pub type SignalEventShared = Arc<Mutex<SignalEvent>>;
-pub type SignalRegistryShared = Rc<RefCell<SignalRegistry>>;
+pub type SignalRegistryShared = Arc<Mutex<SignalRegistry>>;
 
 #[derive(Debug)]
 // A especial signal to be called by the system whenever something happens
@@ -84,8 +82,30 @@ pub trait Signal {
 }
 
 #[async_trait(?Send)]
-pub trait UserSignal {
-    fn add(&mut self, data: HashMap<String, String>, intent_name: &str, skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()>;
+pub trait UserSignal: Signal {
+    fn add(&mut self, data: HashMap<String, String>, skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()>;
 }
 
+pub struct ActSignal {
+    s: Arc<Mutex<dyn UserSignal + Send>>,
+    name: String
+}
 
+impl ActSignal {
+    pub fn new(s: Arc<Mutex<dyn UserSignal + Send>>, name: String) -> Box<Self> {
+        Box::new(Self{s, name})
+    }
+}
+
+impl ActionInstance for ActSignal {
+    fn call(&self ,_context: &ActionContext) -> Result<ActionAnswer> {
+        // TODO: In theory, Lily should ask which parameters for the signal and 
+        // which action to be executed but we can't do that right now
+        //let m = HashMap::new();
+        //self.s.lock().expect(POISON_MSG).add(m, );
+        ActionAnswer::send_text("Whenever this signals we'll say hello".into(), true)
+    }
+    fn get_name(&self) -> String {
+        self.name.clone()
+    }
+}

@@ -1,13 +1,11 @@
 // Standard library
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
-use std::rc::Rc;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::actions::{ActionContext, ActionSet, PyActionSet};
-use crate::collections::GlobalReg;
+use crate::collections::GlobalRegSend;
 use crate::config::Config;
 use crate::skills::call_for_skill;
 use crate::python::HalfBakedError;
@@ -59,7 +57,7 @@ impl PythonSignal {
         }        
     }
 
-    pub fn extend_and_init_classes_py(reg: &mut SignalRegistry, py: Python, skill_name: String, skill_path: &Path, signal_classes: Vec<(PyObject,PyObject)>) -> Result<HashMap<String, Rc<RefCell<dyn Signal>>>, HalfBakedError> {
+    pub fn extend_and_init_classes_py(reg: &mut SignalRegistry, py: Python, skill_name: String, skill_path: &Path, signal_classes: Vec<(PyObject,PyObject)>) -> Result<HashMap<String, Arc<Mutex<dyn UserSignal + Send>>>, HalfBakedError> {
         let skill_path = Arc::new(skill_path.to_owned());
     
         let process_list = || -> Result<_> {
@@ -70,7 +68,7 @@ impl PythonSignal {
                 let pyobj = val.call(py, PyTuple::empty(py), None).map_err(|py_err|
                     anyhow!("Python error while instancing signal \"{}\": {:?}", name, py_err.to_string())
                 )?;
-                let sigobj: Rc<RefCell<dyn Signal>> = Rc::new(RefCell::new(PythonSignal::new(key.clone(), pyobj, skill_path.clone())));
+                let sigobj: Arc<Mutex<dyn UserSignal + Send>> = Arc::new(Mutex::new(PythonSignal::new(key.clone(), pyobj, skill_path.clone())));
                 sig_to_add.push((name, sigobj));
             }
             Ok(sig_to_add)
@@ -139,7 +137,7 @@ impl Signal for PythonSignal {
 }
 
 impl UserSignal for PythonSignal {
-    fn add(&mut self, data: HashMap<String, String>, intent_name: &str,
+    fn add(&mut self, data: HashMap<String, String>,
         skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
 
         // Pass act_set to python so that Python signals can somehow call their respective actions
@@ -147,6 +145,6 @@ impl UserSignal for PythonSignal {
         let py = gil.python();
 
         let actset = PyActionSet::from_arc(act_set);
-        self.call_py_method(py, "add_sig_receptor", (data, intent_name, skill_name, actset), true)
+        self.call_py_method(py, "add_sig_receptor", (data, skill_name, actset), true)
     }
 }

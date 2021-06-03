@@ -1,17 +1,18 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
-use crate::collections::{BaseRegistry, LocalBaseRegistry};
+use crate::actions::{ActionAnswer, ActionContext, ActionInstance};
+use crate::collections::{BaseRegistrySend, LocalBaseRegistrySend};
 use crate::python::HalfBakedError;
+use crate::vars::POISON_MSG;
 
+use anyhow::Result;
 use pyo3::{PyObject, Python};
 
 pub type QueryData = HashMap<String, String>;
 pub type QueryResult = Vec<String>;
-pub type QueryRegistry = BaseRegistry<dyn Query>;
-pub type QueryRegistryShared = Rc<RefCell<QueryRegistry>>;
-pub type LocalQueryRegistry = LocalBaseRegistry<dyn Query, QueryRegistry>;
+pub type QueryRegistry = BaseRegistrySend<dyn Query + Send>;
+pub type LocalQueryRegistry = LocalBaseRegistrySend<dyn Query + Send, QueryRegistry>;
 
 pub trait Query {
     fn is_monitorable(&self) -> bool;
@@ -34,9 +35,9 @@ impl PythonQuery {
         PythonQuery {}
     }
 
-    pub fn extend_and_init_classes_local(act_reg: &mut LocalQueryRegistry,
-        py:Python,
-        query_classes: Vec<(PyObject, PyObject)>) -> Result<(), HalfBakedError> {
+    pub fn extend_and_init_classes_local(_act_reg: &mut LocalQueryRegistry,
+        _py:Python,
+        _query_classes: Vec<(PyObject, PyObject)>) -> Result<(), HalfBakedError> {
             Ok(())
     }
 }
@@ -59,17 +60,41 @@ impl DummyQuery {
 }
 
 impl QueryRegistry {
-    pub fn get_dummy() -> Rc<RefCell<dyn Query>> {
-        Rc::new(RefCell::new(DummyQuery::new()))
+    pub fn get_dummy() -> Arc<Mutex<dyn Query + Send>> {
+        Arc::new(Mutex::new(DummyQuery::new()))
     }
 }
-
+#[derive(Debug)]
 pub enum Condition {
     Test
 }
 
 impl Condition {
-    pub fn check(&self, _query: &Rc<RefCell<dyn Query>>) -> bool {
+    pub fn check(&self, _query: &Arc<Mutex<dyn Query + Send>>) -> bool {
         false
+    }
+}
+pub struct ActQuery {
+    q: Arc<Mutex<dyn Query + Send>>,
+    name: String
+}
+
+impl ActQuery {
+    pub fn new(q: Arc<Mutex<dyn Query + Send>>, name: String) -> Box<Self> {
+        Box::new(Self{q, name})
+    }
+}
+
+impl ActionInstance for ActQuery {
+    fn call(&self ,_context: &ActionContext) -> Result<ActionAnswer> {
+        let data = HashMap::new();
+        let a = self.q.lock().expect(POISON_MSG).execute(data).into_iter().fold("".to_string(), 
+        |g,s|format!("{} {},", g, s)
+        );
+
+        ActionAnswer::send_text(a, true)
+    }
+    fn get_name(&self) -> String {
+        self.name.clone()
     }
 }

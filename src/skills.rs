@@ -4,17 +4,17 @@ use std::collections::HashMap;
 use std::mem::replace;
 use std::path::Path;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry, PythonAction};
-use crate::collections::GlobalReg;
+use crate::collections::GlobalRegSend;
 use crate::python::add_py_folder;
-use crate::queries::{LocalQueryRegistry, PythonQuery, QueryRegistry};
-use crate::signals::{Hook, IntentData, LocalSignalRegistry, new_signal_order, PythonSignal, SignalRegistry, SignalRegistryShared, Timer, PollQuery};
+use crate::queries::{ActQuery, LocalQueryRegistry, PythonQuery, QueryRegistry};
+use crate::signals::{ActSignal, Hook, IntentData, LocalSignalRegistry, new_signal_order, PythonSignal, SignalRegistry, SignalRegistryShared, Timer};
 use crate::signals::order::EntityAddValueRequest;
 use crate::nlu::EntityDef;
-use crate::vars::{SKILLS_PATH_ERR_MSG, PYTHON_SDK_PATH};
+use crate::vars::{SKILLS_PATH_ERR_MSG, POISON_MSG, PYTHON_SDK_PATH};
 
 // Other crates
 use anyhow::{anyhow, Result};
@@ -129,7 +129,7 @@ pub fn load_intents(
 
             let sig_order = signals.get_sig_order().expect("Order signal was not initialized");
             for (type_name, data) in skilldef.types.into_iter() {
-                sig_order.borrow_mut().add_slot_type(type_name, data)?;
+                sig_order.lock().expect(POISON_MSG).add_slot_type(type_name, data)?;
             }
             
             for (intent_name, data) in skilldef.intents.into_iter() {
@@ -138,16 +138,21 @@ pub fn load_intents(
                         let action = actions.get(&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?.borrow_mut().instance(skill_path.clone());
                         let act_set = ActionSet::create();
                         act_set.lock().unwrap().add_action(action)?;
-                        sig_order.borrow_mut().add_intent(data, &intent_name, &skill_name, act_set)?;
+                        sig_order.lock().expect(POISON_MSG).add_intent(data, &intent_name, &skill_name, act_set)?;
                     },
                     Hook::Query(name) => {
-                        // TODO: Support queries
+                        // Note: Some very minimal support for queries
                         let q = queries.get(&name).ok_or_else(||anyhow!("Query '{}' does not exist", &name))?;
-                        unimplemented!();
+                        let act_set = ActionSet::create();
+                        act_set.lock().unwrap().add_action(ActQuery::new(q.clone(), name))?;
+                        sig_order.lock().expect(POISON_MSG).add_intent(data, &intent_name, &skill_name, act_set)?;
                     },
                     Hook::Signal(name) => {
-                        // TODO: Support signals
+                        // Note: Some very minimal support for signals
                         let s = signals.get(&name).ok_or_else(||anyhow!("Signal '{}' does not exist", &name))?;
+                        let act_set = ActionSet::create();
+                        act_set.lock().unwrap().add_action(ActSignal::new(s.clone(), name))?;
+                        sig_order.lock().expect(POISON_MSG).add_intent(data, &intent_name, &skill_name, act_set)?;
                         unimplemented!();
                     }
                 }
@@ -205,13 +210,13 @@ pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_lang: &Vec<LanguageIdentifier
         Box::new(EmbeddedLoader::new(consumer))
     ];
 
-    let global_sigreg = Rc::new(RefCell::new(SignalRegistry::new()));
+    let global_sigreg = Arc::new(Mutex::new(SignalRegistry::new()));
     let base_sigreg = LocalSignalRegistry::new(global_sigreg.clone());
 
     let global_actreg = Rc::new(RefCell::new(ActionRegistry::new()));
     let base_actreg = LocalActionRegistry::new(global_actreg.clone());
 
-    let global_queryreg = Rc::new(RefCell::new(QueryRegistry::new()));
+    let global_queryreg = Arc::new(Mutex::new(QueryRegistry::new()));
     let base_queryreg = LocalQueryRegistry::new(global_queryreg.clone());
 
     for loader in &mut loaders {
@@ -272,11 +277,11 @@ pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_lang: &Vec<LanguageIdentifier
         warn!("Not loaded: {}", not_loaded.join(","));
     }
 
-    global_sigreg.borrow_mut().end_load(curr_lang)?;
+    global_sigreg.lock().expect(POISON_MSG).end_load(curr_lang)?;
 
     // This is overall stupid but haven't found any other (interesting way to do it)
     // We need the variable to help lifetime analisys
-    let res = global_sigreg.borrow_mut().clone();
+    let res = global_sigreg.lock().expect(POISON_MSG).clone();
     Ok(res)
 }
 
@@ -371,11 +376,11 @@ impl EmbeddedLoader {
 
 impl Loader for EmbeddedLoader {
     fn init_base(&mut self, glob_sigreg: SignalRegistryShared, _glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<()> {
-        let mut mut_sigreg = glob_sigreg.borrow_mut();
+        let mut mut_sigreg = glob_sigreg.lock().expect(POISON_MSG);
         let consumer = replace(&mut self.consumer, None).expect("Consumer already consumed");
-        mut_sigreg.set_order(Rc::new(RefCell::new(new_signal_order(lang, consumer))))?;
-        mut_sigreg.insert("embedded".into(), "private__poll_query".into(), Rc::new(RefCell::new(PollQuery::new())))?;
-        mut_sigreg.insert("embedded".into(),"timer".into(), Rc::new(RefCell::new(Timer::new())))?;
+        mut_sigreg.set_order(Arc::new(Mutex::new(new_signal_order(lang, consumer))))?;
+        // TODO: Add poll back
+        mut_sigreg.insert("embedded".into(),"timer".into(), Arc::new(Mutex::new(Timer::new())))?;
 
         Ok(())
     }

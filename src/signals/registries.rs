@@ -1,13 +1,13 @@
 // Standard library
-use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::actions::ActionContext;
 use crate::config::Config;
-use crate::collections::{BaseRegistry, GlobalReg, LocalBaseRegistry};
-use crate::signals::{Signal, SignalEvent, SignalEventShared, SignalOrderCurrent, SignalRegistryShared};
+use crate::collections::{BaseRegistrySend, GlobalRegSend, LocalBaseRegistrySend};
+use crate::signals::poll::PollQuery;
+use crate::signals::{Signal, SignalEvent, SignalEventShared, SignalOrderCurrent, SignalRegistryShared, UserSignal};
+use crate::vars::POISON_MSG;
 
 use anyhow::Result;
 use delegate::delegate;
@@ -18,8 +18,9 @@ use unic_langid::LanguageIdentifier;
 #[derive(Debug, Clone)]
 pub struct SignalRegistry {
     event: SignalEventShared,
-    order: Option<Rc<RefCell<SignalOrderCurrent>>>,
-    base: BaseRegistry<dyn Signal>
+    order: Option<Arc<Mutex<SignalOrderCurrent>>>,
+    poll: Option<Arc<Mutex<PollQuery>>>,
+    base: BaseRegistrySend<dyn UserSignal + Send>
 }
 
 impl SignalRegistry {
@@ -28,7 +29,8 @@ impl SignalRegistry {
         Self {
             event: Arc::new(Mutex::new(SignalEvent::new())),
             order: None,
-            base: BaseRegistry::new()
+            poll: None,
+            base: BaseRegistrySend::new()
         }
     }
 
@@ -37,7 +39,7 @@ impl SignalRegistry {
         let mut to_remove = Vec::new();
 
         for (sig_name, signal) in self.base.iter_mut() {
-            if let Err(e) = signal.borrow_mut().end_load(curr_langs) {
+            if let Err(e) = signal.lock().expect(POISON_MSG).end_load(curr_langs) {
                 warn!("Signal \"{}\" had trouble in \"end_load\", will be disabled, error: {}", &sig_name, e);
 
                 to_remove.push(sig_name.to_owned());
@@ -58,18 +60,41 @@ impl SignalRegistry {
         curr_lang: &Vec<LanguageIdentifier>
     ) -> Result<()> {
         let local = LocalSet::new();
-        for (sig_name, sig) in self.base.clone() {
+
+        let spawn_on_local = |n: String, s:Arc<Mutex<dyn Signal + Send>>| {            
             let event = self.event.clone();
             let config = config.clone();
             let base_context = base_context.clone();
             let curr_lang = curr_lang.clone();
+
             local.spawn_local(async move {
 
-                let res = sig.borrow_mut().event_loop(event, &config, &base_context, &curr_lang).await;
+                let res = s.lock().expect(POISON_MSG).event_loop(event, &config, &base_context, &curr_lang).await;
                 if let Err(e) = res {
-                    error!("Signal '{}' had an error: {}", sig_name, e.to_string());
+                    error!("Signal '{}' had an error: {}", n, e.to_string());
                 }
             });
+        };
+
+        let spawn_on_local_u = |n: String, s:Arc<Mutex<dyn UserSignal + Send>>| {
+            let event = self.event.clone();
+            let config = config.clone();
+            let base_context = base_context.clone();
+            let curr_lang = curr_lang.clone();
+            
+            local.spawn_local(async move {
+
+                let res = s.lock().expect(POISON_MSG).event_loop(event, &config, &base_context, &curr_lang).await;
+                if let Err(e) = res {
+                    error!("Signal '{}' had an error: {}", n, e.to_string());
+                }
+            });
+        };
+
+        spawn_on_local("order".into(), self.order.as_ref().expect("Order signal had problems during init").clone());
+        spawn_on_local("order".into(), self.poll.as_ref().expect("Poll signal had problems during init").clone());
+        for (sig_name, sig) in self.base.clone() {
+            spawn_on_local_u(sig_name, sig);
         }
 
         local.await;
@@ -77,23 +102,24 @@ impl SignalRegistry {
         
     }
 
-    pub fn set_order(&mut self, sig_order: Rc<RefCell<SignalOrderCurrent>>) -> Result<()>{
+    pub fn set_order(&mut self, sig_order: Arc<Mutex<SignalOrderCurrent>>) -> Result<()>{
         self.order = Some(sig_order.clone());
-        self.insert("embedded".into(),"order".into(), sig_order)
+        //self.insert("embedded".into(),"order".into(), sig_order)
+        Ok(())
     }
 
     delegate!{to self.base{
-        pub fn get_map_ref(&mut self) -> &HashMap<String,Rc<RefCell<dyn Signal>>>;
+        pub fn get_map_ref(&mut self) -> &HashMap<String,Arc<Mutex<dyn UserSignal + Send>>>;
     }}
 }
 
-impl GlobalReg<dyn Signal> for SignalRegistry {
+impl GlobalRegSend<dyn UserSignal + Send> for SignalRegistry {
     fn remove(&mut self, sig_name: &str) {
         self.base.remove(sig_name)
     }
 
     delegate!{to self.base{
-        fn insert(&mut self, skill_name: String, sig_name: String, signal: Rc<RefCell<dyn Signal>>) -> Result<()>;
+        fn insert(&mut self, skill_name: String, sig_name: String, signal: Arc<Mutex<dyn UserSignal + Send>>) -> Result<()>;
     }}
     
 }
@@ -102,7 +128,7 @@ impl GlobalReg<dyn Signal> for SignalRegistry {
 #[derive(Debug, Clone)]
 pub struct LocalSignalRegistry {
     event: SignalEventShared,
-    base: LocalBaseRegistry<dyn Signal, SignalRegistry>
+    base: LocalBaseRegistrySend<dyn UserSignal + Send, SignalRegistry>
 }
 
 
@@ -110,8 +136,8 @@ impl LocalSignalRegistry {
     
     pub fn new(global_reg: SignalRegistryShared) -> Self {
         Self {
-            event: {global_reg.borrow().event.clone()},
-            base: LocalBaseRegistry::new(global_reg.clone())
+            event: {global_reg.lock().expect(POISON_MSG).event.clone()},
+            base: LocalBaseRegistrySend::new(global_reg.clone())
         }
     }
 
@@ -124,7 +150,7 @@ impl LocalSignalRegistry {
     }
 
     
-    pub fn get_sig_order(&self) -> Option<Rc<RefCell<SignalOrderCurrent>>> {
+    pub fn get_sig_order(&self) -> Option<Arc<Mutex<SignalOrderCurrent>>> {
         self.get_global_mut().order.clone()
     }
 
@@ -134,10 +160,10 @@ impl LocalSignalRegistry {
 
     // Just reuse methods
     delegate! {to self.base{
-        pub fn extend_with_map(&mut self, other: HashMap<String, Rc<RefCell<dyn Signal>>>);
+        pub fn extend_with_map(&mut self, other: HashMap<String, Arc<Mutex<dyn UserSignal + Send>>>);
         pub fn remove_from_global(&self);
-        pub fn get(&self, action_name: &str) -> Option<&Rc<RefCell<dyn Signal>>>;
-        pub fn get_global_mut(&self) -> RefMut<SignalRegistry>;
+        pub fn get(&self, action_name: &str) -> Option<&Arc<Mutex<dyn UserSignal + Send>>>;
+        pub fn get_global_mut(&self) -> MutexGuard<SignalRegistry>;
     }}
 }
 

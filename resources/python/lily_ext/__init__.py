@@ -136,7 +136,7 @@ def action(name: str):
 class SignalProtocol:
     """The definition of a signal. A signal react when some event has happened
        by activating an ActionSet"""
-    def add_sig_receptor(self, args: Dict[str, str], intent_name: str, skill_name: str, actset: _lily_impl.PyActionSet):
+    def add_sig_receptor(self, args: Dict[str, str], skill_name: str, actset: _lily_impl.PyActionSet):
         """Called by the app to add  saet of actions that should be executed in
         relation to some event"""
 

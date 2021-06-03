@@ -106,7 +106,7 @@ impl Signal for Timer {
 }
 #[async_trait(?Send)]
 impl UserSignal for Timer{
-    fn add(&mut self, data: HashMap<String,String>, _intent_name: &str, _skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
+    fn add(&mut self, data: HashMap<String,String>, _skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
         Ok(self.timers.push((Self::from_data(data)?, act_set)))
     }
 }

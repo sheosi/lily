@@ -1,5 +1,4 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::fmt;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -14,18 +13,25 @@ use async_trait::async_trait;
 use tokio::time::sleep;
 use unic_langid::LanguageIdentifier;
 
+impl std::fmt::Debug for UserTask {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt.debug_struct("SnipsNlu").finish()
+    }
+}
+
 struct UserTask {
-    query: Rc<RefCell<dyn Query>>,
+    query: Arc<Mutex<dyn Query + Send>>,
     condition: Condition,
     act_set: Arc<Mutex<ActionSet>>,
 }
 
 impl UserTask {
-    fn new(query: Rc<RefCell<dyn Query>>, act_set: Arc<Mutex<ActionSet>>) -> Self {
+    fn new(query: Arc<Mutex<dyn Query + Send>>, act_set: Arc<Mutex<ActionSet>>) -> Self {
         Self {query, act_set, condition: Condition::Test}
     }
 }
 
+#[derive(Debug)]
 pub struct PollQuery {
     tasks: Vec<UserTask>
 }
@@ -54,7 +60,7 @@ impl Signal for PollQuery {
 }
 
 impl PollQuery {
-    fn add(&mut self, query: Rc<RefCell<dyn Query>>, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
+    fn add(&mut self, query: Arc<Mutex<dyn Query + Send>>, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
         let task = UserTask::new(query, act_set);
         self.tasks.push(task);
 
