@@ -222,7 +222,6 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add("log_error", wrap_pyfunction!(log_error, m)?)?;
     m.add("log_warn", wrap_pyfunction!(log_warn, m)?)?;
     m.add("log_info", wrap_pyfunction!(log_info, m)?)?;
-    m.add("_get_curr_lily_skill", wrap_pyfunction!(get_current_skill, m)?)?;
     m.add("conf", wrap_pyfunction!(get_conf, m)?)?;
     m.add("has_cap", wrap_pyfunction!(client_has_cap,m)?)?;
     m.add("add_entity_value", wrap_pyfunction!(add_entity_value,m)?)?;
@@ -233,13 +232,6 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
 }
 
 
-
-#[pyfunction]
-fn get_current_skill( ) -> PyResult<String> {
-    PYTHON_LILY_SKILL.with(|n|
-        Ok(n.borrow().clone())
-    )
-}
 
 #[pyfunction]
 fn negotiate_lang(input_lang: Vec<String>, default: &str, available: Vec<String>) -> PyResult<Vec<String>> {
@@ -387,4 +379,10 @@ impl HalfBakedError {
 
         res
     }
+}
+
+fn get_current_skill( ) -> PyResult<String> {
+    PYTHON_LILY_SKILL.with(|n|
+        Ok(n.borrow().clone())
+    )
 }

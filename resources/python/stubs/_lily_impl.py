@@ -31,10 +31,6 @@ def log_error(text: str):
     """Writes into the log as error"""
     ...
 
-def _get_curr_lily_skill() -> str:
-    """Returns the name of the skill being executed right now"""
-    return ""
-
 def has_cap(client: str, cap: str) -> bool:
     """Returns True if the 'client' has declared that supports 'cap'"""
     return False
@@ -180,9 +176,9 @@ class ActionContextValuesView(Iterable):
 
 class ActionAnswer():
     @staticmethod
-    def load_audio(path: str)-> 'ActionAnswer':
+    def load_audio(path: str, end_session: bool = True)-> 'ActionAnswer':
         ...
 
     @staticmethod
-    def text(text: str) -> 'ActionAnswer':
+    def text(text: str, end_session: bool = True) -> 'ActionAnswer':
         ...

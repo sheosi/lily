@@ -316,7 +316,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
         Ok(())
     }
 
-    pub async fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &ActionContext, lang: &LanguageIdentifier, satellite: String) -> Result<()> {
+    pub async fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &ActionContext, lang: &LanguageIdentifier, satellite: String) -> Result<bool> {
         debug!("Heard from user: {:?}", decode_res);
 
         let ans = match decode_res {
@@ -449,18 +449,29 @@ fn process_answer(ans: ActionAnswer, lang: &LanguageIdentifier, uuid: String) ->
 pub fn process_answers(
     ans: Option<Vec<ActionAnswer>>,
     lang: &LanguageIdentifier,
-    satellite: String) -> Result<()> {
+    satellite: String) -> Result<bool> {
     if let Some(answers) = ans {
-        answers.into_iter()
-        .map(|a|
-            process_answer(a, lang, satellite.clone())
-        )
-        .filter(|r|r.is_err())
+        let (ans,errs): (Vec<_>, Vec<Result<bool>>) = answers.into_iter()
+        .map(|a|{
+            let s = a.should_end_session;
+            process_answer(a, lang, satellite.clone())?;
+            Ok(s)
+        })
+        .partition(Result::is_err);
+
+        errs.into_iter()
         .map(|e|e.err().unwrap())
         .for_each(|e| error!("There was an error while handling answer: {}", e));
+
+        // By default, the session is ended, it is kept alive as soon as someone asks not to do that
+        let s = ans.into_iter().map(|s|s.ok().unwrap()).fold(true,|a,b|{!(!a|!b)});
+        Ok(s)
+    }
+    else {
+        // Should end session?
+        Ok(true)
     }
 
-    Ok(())
 }
 
 impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send>  SignalOrder<M> {

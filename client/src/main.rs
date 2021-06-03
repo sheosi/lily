@@ -442,7 +442,9 @@ pub async fn main() -> anyhow::Result<()> {
     client
         .subscribe(&format!("lily/{}/say_msg", mqtt_conn.name), QoS::AtMostOnce)
         .await?;
-    //client.subscribe(&format!("lily/{}/session_end", mqtt_conn.name), QoS::AtMostOnce).await?;
+    client
+        .subscribe(&format!("lily/{}/session_end", mqtt_conn.name), QoS::AtMostOnce)
+        .await?;
     client
         .subscribe("lily/satellite_welcome", QoS::AtMostOnce)
         .await?;

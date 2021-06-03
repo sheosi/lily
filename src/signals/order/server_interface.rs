@@ -163,6 +163,33 @@ mod language_detection {
     let detected_language: Option<Language> = detector.detect_language_of("languages are awesome");*/
 }
 
+async fn do_received_order<M: NluManager + NluManagerConf + NluManagerStatic + Debug + Send + 'static>(
+    order: &mut SignalOrder<M>,
+    decoded: Option<DecodeRes>,
+    signal_event: SignalEventShared,
+    context: &ActionContext,
+    lang: &LanguageIdentifier,
+    satellite: String,
+    sessions: &Arc<Mutex<SessionManager>>
+) {
+    match order.received_order(
+        decoded, 
+        signal_event,
+        context,
+        lang,
+        satellite.clone()
+    ).await {
+        Ok(s_end) => {
+            if s_end {
+                if let Err(e) = sessions.lock().expect(POISON_MSG).end_session(&satellite) {
+                    error!("Failed to end session for {}: {}", &satellite, e);
+                }
+            }
+        }
+        Err(e) => {error!("Actions processing had an error: {}", e)}
+    }
+}
+
 pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + Debug + Send + 'static>(
     config: &Config,
     mut channel: mpsc::Receiver<MsgRequest>,
@@ -190,17 +217,17 @@ pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + 
                 let lang = &curr_langs[0];
                 let context = add_context_data(&base_context, lang, &msg_nlu.satellite);
                 let decoded = Some(DecodeRes{hypothesis: text, confidence: 1.0});
+                
 
-                if let Err(e) = order.received_order(
-                    decoded, 
+                do_received_order(
+                    order,
+                    decoded,
                     signal_event.clone(),
                     &context,
                     lang,
-                    msg_nlu.satellite
-                ).await {
-
-                    error!("Actions processing had an error: {}", e);
-                }
+                    msg_nlu.satellite,
+                    &sessions
+                ).await;
             }
             RequestData::Audio{data: audio, is_final} => {
                 let (as_raw, _) = opus_decode::<_, DEFAULT_SAMPLES_PER_SECOND>(Cursor::new(audio))?;
@@ -226,16 +253,15 @@ pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + 
                                 let context = add_context_data(&base_context, stt.lang(), &satellite);
                                 match stt.end_decoding().await {
                                     Ok(decoded)=> {
-                                        if let Err(e) = order.received_order(
-                                            decoded, 
+                                        do_received_order(
+                                            order,
+                                            decoded,
                                             signal_event.clone(),
                                             &context,
                                             stt.lang(),
-                                            satellite
-                                        ).await {
-
-                                            error!("Actions processing had an error: {}", e);
-                                        }
+                                            msg_nlu.satellite.clone(),
+                                            &sessions
+                                        ).await;
                                     }
                                     Err(e) => error!("Stt failed while doing final decode: {}", e)
                                 }

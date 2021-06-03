@@ -37,33 +37,36 @@ pub enum MainAnswer {
 #[pyclass]
 #[derive(Clone)]
 pub struct ActionAnswer {
-    pub answer: MainAnswer
+    pub answer: MainAnswer,
+    pub should_end_session: bool
 }
 
 
 impl ActionAnswer {
-    pub fn audio_file(path: &Path) -> Result<Self> {
+    pub fn audio_file(path: &Path, end_session: bool) -> Result<Self> {
         let mut f = File::open(path)?;
         let mut buffer = vec![0; fs::metadata(path)?.len() as usize];
         f.read(&mut buffer)?;
         let a = Audio::new_encoded(buffer);
-        Ok(Self {answer: MainAnswer::Sound(a)})
+        Ok(Self {answer: MainAnswer::Sound(a), should_end_session: end_session})
     }
 
-    pub fn send_text(text: String) -> Result<Self> {
-        Ok(Self {answer: MainAnswer::Text(text)})
+    pub fn send_text(text: String, end_session: bool) -> Result<Self> {
+        Ok(Self {answer: MainAnswer::Text(text), should_end_session: end_session})
     }
 }
 
 #[pymethods]
 impl ActionAnswer {
     #[staticmethod]
-    pub fn load_audio(path: &str) -> PyResult<Self> {
-        Self::audio_file(Path::new(path)).py_excep::<PyOSError>()
+    #[args(end_session="true")]
+    pub fn load_audio(path: &str, end_session: bool) -> PyResult<Self> {
+        Self::audio_file(Path::new(path), end_session).py_excep::<PyOSError>()
     }
     #[staticmethod]
-    pub fn text(text: String) -> PyResult<Self> {
-        Self::send_text(text).py_excep::<PyOSError>()
+    #[args(end_session="true")]
+    pub fn text(text: String, end_session: bool) -> PyResult<Self> {
+        Self::send_text(text, end_session).py_excep::<PyOSError>()
     }
 }
 
