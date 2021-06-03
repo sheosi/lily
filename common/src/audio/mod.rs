@@ -8,9 +8,12 @@ pub use self::playdevice::*;
 #[cfg(feature = "client")]
 pub use self::recdevice::*;
 
-use std::io::{Cursor, Write};
+use std::io::Write;
 use std::path::Path;
 use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
+
+#[cfg(feature = "client")]
+use std::io::Cursor;
 
 use log::warn;
 use ogg_opus::encode;
