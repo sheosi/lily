@@ -6,7 +6,8 @@ use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 // This crate
-use crate::vars::{mangle, POISON_MSG};
+use crate::exts::LockIt;
+use crate::vars::{mangle};
 
 // Other crates
 use anyhow::{anyhow, Result};
@@ -109,12 +110,12 @@ impl<A: ?std::marker::Sized, R: GlobalRegSend<A> + fmt::Debug> LocalBaseRegistry
 
     pub fn remove_from_global(&self) {
         for (sgnl,_) in &self.map {
-            self.global_reg.lock().expect(POISON_MSG).remove(sgnl);
+            self.global_reg.lock_it().remove(sgnl);
         }
     }
 
     pub fn get_global_mut(&self) -> MutexGuard<R> {
-        (*self.global_reg).lock().expect(POISON_MSG)
+        (*self.global_reg).lock_it()
     }
 
     #[cfg(feature="unused")]

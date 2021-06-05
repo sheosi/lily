@@ -3,12 +3,12 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::actions::{ActionContext, LocalActionRegistry};
+use crate::exts::LockIt;
 use crate::config::Config;
 use crate::collections::{BaseRegistrySend, GlobalRegSend, LocalBaseRegistrySend};
 use crate::queries::LocalQueryRegistry;
 use crate::signals::poll::PollQuery;
 use crate::signals::{Signal, SignalEvent, SignalEventShared, SignalOrderCurrent, SignalRegistryShared, UserSignal};
-use crate::vars::POISON_MSG;
 
 use anyhow::Result;
 use delegate::delegate;
@@ -47,7 +47,7 @@ impl SignalRegistry {
         let mut to_remove = Vec::new();
 
         for (sig_name, signal) in self.base.iter_mut() {
-            if let Err(e) = signal.lock().expect(POISON_MSG).end_load(curr_langs) {
+            if let Err(e) = signal.lock_it().end_load(curr_langs) {
                 warn!("Signal \"{}\" had trouble in \"end_load\", will be disabled, error: {}", &sig_name, e);
 
                 to_remove.push(sig_name.to_owned());
@@ -77,7 +77,7 @@ impl SignalRegistry {
 
             local.spawn_local(async move {
 
-                let res = s.lock().expect(POISON_MSG).event_loop(event, &config, &base_context, &curr_lang).await;
+                let res = s.lock_it().event_loop(event, &config, &base_context, &curr_lang).await;
                 if let Err(e) = res {
                     error!("Signal '{}' had an error: {}", n, e.to_string());
                 }
@@ -92,7 +92,7 @@ impl SignalRegistry {
             
             local.spawn_local(async move {
 
-                let res = s.lock().expect(POISON_MSG).event_loop(event, &config, &base_context, &curr_lang).await;
+                let res = s.lock_it().event_loop(event, &config, &base_context, &curr_lang).await;
                 if let Err(e) = res {
                     error!("Signal '{}' had an error: {}", n, e.to_string());
                 }
@@ -116,7 +116,7 @@ impl SignalRegistry {
     }
 
     pub fn set_poll(&mut self, sig_poll: Arc<Mutex<PollQuery>>) -> Result<()>{
-        *POLL_SIGNAL.lock().expect(POISON_MSG) = Some(sig_poll.clone());
+        *POLL_SIGNAL.lock_it() = Some(sig_poll.clone());
         self.poll = Some(sig_poll);
         Ok(())
     }
@@ -149,7 +149,7 @@ impl LocalSignalRegistry {
     
     pub fn new(global_reg: SignalRegistryShared) -> Self {
         Self {
-            event: {global_reg.lock().expect(POISON_MSG).event.clone()},
+            event: {global_reg.lock_it().event.clone()},
             base: LocalBaseRegistrySend::new(global_reg.clone())
         }
     }

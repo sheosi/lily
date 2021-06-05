@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::actions::{ActionAnswer, ActionContext, ActionInstance};
+use crate::exts::LockIt;
 use crate::collections::{BaseRegistrySend, GlobalRegSend, LocalBaseRegistrySend};
 use crate::python::HalfBakedError;
-use crate::vars::POISON_MSG;
 
 use anyhow::{anyhow, Result};
 use log::error;
@@ -122,7 +122,7 @@ impl Condition {
     pub fn check(&mut self, query: &Arc<Mutex<dyn Query + Send>>, data: QueryData) -> bool {
         match self {
             Condition::Changed(c)=>{
-                let mut q =query.lock().expect(POISON_MSG);
+                let mut q =query.lock_it();
                 match q.execute(data) {
                     Ok(v) => {
                         let res = *c.borrow() == v;
@@ -152,7 +152,7 @@ impl ActQuery {
 impl ActionInstance for ActQuery {
     fn call(&self ,_context: &ActionContext) -> Result<ActionAnswer> {
         let data = HashMap::new();
-        let a = match self.q.lock().expect(POISON_MSG).execute(data) {
+        let a = match self.q.lock_it().execute(data) {
             Ok(v)=>v.into_iter().fold("".to_string(),|g,s|format!("{} {:?},", g, s)),
             Err(_)=> "Had an error".into() // TODO: This should be translated
         };

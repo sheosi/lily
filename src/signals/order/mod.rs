@@ -9,11 +9,12 @@ use std::sync::{Arc, Mutex};
 // This crate
 use crate::actions::{ActionAnswer, ActionContext, ActionSet, MainAnswer};
 use crate::config::Config;
+use crate::exts::LockIt;
 use crate::nlu::{EntityData, EntityDef, EntityInstance, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponseSlot, NluUtterance};
 use crate::python::{try_translate, try_translate_all};
 use crate::stt::DecodeRes;
 use crate::signals::{ActMap, Signal, SignalEventShared};
-use crate::vars::{mangle, MIN_SCORE_FOR_ACTION, POISON_MSG};
+use crate::vars::{mangle, MIN_SCORE_FOR_ACTION};
 use self::server_interface::{MqttInterface, MSG_OUTPUT, on_event, on_nlu_request, SessionManager};
 
 // Other crates
@@ -300,7 +301,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
         for lang in langs {
             let (train_path, model_path) = M::get_paths();
             let err = || {anyhow!("Received language '{}' has not been registered", lang.to_string())};
-            let mut m = nlu.lock().expect(POISON_MSG);
+            let mut m = nlu.lock_it();
             let nlu  = m.get_mut(lang).ok_or_else(err)?;
             if M::is_lang_compatible(lang) {
                 nlu.manager.ready_lang(lang)?;
@@ -320,13 +321,13 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
         debug!("Heard from user: {:?}", decode_res);
 
         let ans = match decode_res {
-            None => event_signal.lock().expect(POISON_MSG).call("empty_reco", base_context.clone()),
+            None => event_signal.lock_it().call("empty_reco", base_context.clone()),
             Some(decode_res) => {
 
                 if !decode_res.hypothesis.is_empty() {
                     const ERR_MSG: &str = "Received language to the NLU was not registered";
                     const NO_NLU_MSG: &str = "received_order can't be called before end_loading";
-                    let mut m = self.nlu.lock().expect(POISON_MSG);
+                    let mut m = self.nlu.lock_it();
                     let nlu = &m.get_mut(&lang).expect(ERR_MSG).nlu.as_mut().expect(NO_NLU_MSG);
                     let result = nlu.parse(&decode_res.hypothesis).await.map_err(|err|anyhow!("Failed to parse: {:?}", err))?;
                     info!("{:?}", result);
@@ -352,15 +353,15 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
                             answers
                         }
                         else {
-                            event_signal.lock().expect(POISON_MSG).call("unrecognized", base_context.clone())
+                            event_signal.lock_it().call("unrecognized", base_context.clone())
                         }
                     }
                     else {
-                        event_signal.lock().expect(POISON_MSG).call("unrecognized", base_context.clone())
+                        event_signal.lock_it().call("unrecognized", base_context.clone())
                     }
                 }
                 else {
-                    event_signal.lock().expect(POISON_MSG).call("empty_reco", base_context.clone())
+                    event_signal.lock_it().call("empty_reco", base_context.clone())
                 }
             }
         };
@@ -387,7 +388,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
                     request.langs
                 };
 
-                let mut m = shared_nlu.lock().expect(POISON_MSG);
+                let mut m = shared_nlu.lock_it();
                 for lang in langs {
                     let man = m.get_mut(&lang).expect("Language not registered").get_mut_nlu_man();
                     let mangled = mangle(&request.skill, &request.entity);
@@ -480,7 +481,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send>  SignalOrd
     }
     pub fn add_intent(&mut self, sig_arg: IntentData, intent_name: &str, skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
         let mangled = mangle(skill_name, intent_name);
-        add_intent_to_nlu(&mut self.nlu.lock().expect(POISON_MSG), sig_arg, &mangled, skill_name, &self.langs)?;
+        add_intent_to_nlu(&mut self.nlu.lock_it(), sig_arg, &mangled, skill_name, &self.langs)?;
         self.intent_map.add_mapping(&mangled, act_set);
         self.demangled_names.insert(mangled, intent_name.to_string());
         Ok(())
@@ -488,7 +489,7 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send>  SignalOrd
 
     pub fn add_slot_type(&mut self, type_name: String, data: EntityDef) -> Result<()> {
         for lang in &self.langs {
-            let mut m = self.nlu.lock().expect(POISON_MSG);
+            let mut m = self.nlu.lock_it();
             let nlu_man= m.get_mut(lang).expect("Language not registered").get_mut_nlu_man();
             let trans_data = data.clone().into_translation(lang)?;
             nlu_man.add_entity(&type_name, trans_data);
@@ -517,7 +518,7 @@ pub struct EntityAddValueRequest {
 pub fn init_dynamic_entities() -> Result<mpsc::Receiver<EntityAddValueRequest>> {
     let (producer, consumer) = mpsc::channel(100);
 
-    (*ENTITY_ADD_CHANNEL.lock().expect(POISON_MSG)) = Some(producer);
+    (*ENTITY_ADD_CHANNEL.lock_it()) = Some(producer);
 
     Ok(consumer)
 }

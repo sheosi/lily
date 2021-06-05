@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 // This crate
-use crate::vars::{POISON_MSG, UNEXPECTED_MSG};
+use crate::exts::LockIt;
+use crate::vars::UNEXPECTED_MSG;
 
 // Other crates
 use pyo3::{IntoPy, Py, PyAny, PyErr, PyIterProtocol, PyObject, PyRef, PyRefMut, PyResult, Python, exceptions::*, types::{PyDict, PyIterator, PyTuple, PyType}};
@@ -46,7 +47,7 @@ impl BaseIterator {
 
     fn reversed(inner: Arc<Mutex<HashMap<String, ContextElement>>>) -> Self {
         Self {
-            count: inner.lock().expect(POISON_MSG).len(),
+            count: inner.lock_it().len(),
             inner: inner.clone(),
             reversed: true
         }
@@ -54,7 +55,7 @@ impl BaseIterator {
 
     fn is_end(&self) -> bool {
         if self.reversed{self.count == 0}
-        else {self.count == self.inner.lock().expect(POISON_MSG).len()}
+        else {self.count == self.inner.lock_it().len()}
     }
 
     fn count(&mut self) -> usize {
@@ -63,7 +64,7 @@ impl BaseIterator {
         old_count
     }
     fn get_inner(&self) -> MutexGuard<HashMap<String, ContextElement>> {
-        self.inner.lock().expect(POISON_MSG)
+        self.inner.lock_it()
     }
 }
 
@@ -177,7 +178,7 @@ impl ActionContextItemsView {
 #[pymethods]
 impl ActionContextItemsView {
     fn __len__(&self) -> usize {
-        self.inner.lock().expect(POISON_MSG).len()
+        self.inner.lock_it().len()
     }
     
     fn __iter__(slf: PyRef<Self>) -> PyResult<Py<ActionContextItemsIterator>> {
@@ -200,7 +201,7 @@ impl PyIterProtocol for  ActionContextItemsView {
 #[pyproto]
 impl PySequenceProtocol for ActionContextItemsView {
     fn __contains__(&self, k: &str) -> bool {
-        self.inner.lock().expect(POISON_MSG).contains_key(k)
+        self.inner.lock_it().contains_key(k)
     }
 }
 
@@ -220,7 +221,7 @@ impl ActionContextValuesView {
 #[pymethods]
 impl ActionContextValuesView {
     fn __len__(&self) -> usize {
-        self.inner.lock().expect(POISON_MSG).len()
+        self.inner.lock_it().len()
     }
     
     fn __iter__(slf: PyRef<Self>) -> PyResult<Py<ActionContextValuesIterator>> {
@@ -247,7 +248,7 @@ impl ActionContextKeysView {
 #[pymethods]
 impl ActionContextKeysView {
     fn __len__(&self) -> usize {
-        self.inner.lock().expect(POISON_MSG).len()
+        self.inner.lock_it().len()
     }
     
     fn __iter__(slf: PyRef<Self>) -> PyResult<Py<ActionContextKeysIterator>> {
@@ -272,15 +273,15 @@ impl ActionContext {
     }
 
     pub fn set(&mut self, key: String, value: ContextElement) {
-        self.map.lock().expect(POISON_MSG).insert(key, value);
+        self.map.lock_it().insert(key, value);
     }
 
     pub fn set_str(&mut self, key: String, value: String) {
-        self.map.lock().expect(POISON_MSG).insert(key, ContextElement::String(value));
+        self.map.lock_it().insert(key, ContextElement::String(value));
     }
 
     pub fn set_dict(&mut self, key: String, value: ActionContext) {
-        self.map.lock().expect(POISON_MSG).insert(key, ContextElement::Dict(value));
+        self.map.lock_it().insert(key, ContextElement::Dict(value));
     }
 
 }
@@ -294,7 +295,7 @@ impl PartialEq for ActionContext {
 #[pyproto]
 impl PyMappingProtocol for ActionContext {
     fn __delitem__(&mut self, key: &str) -> PyResult<()> {
-        self.map.lock().expect(POISON_MSG).remove(key).ok_or(PyErr::new::<PyAttributeError, _>(
+        self.map.lock_it().remove(key).ok_or(PyErr::new::<PyAttributeError, _>(
             format!("Key: {} was not found in context", key)
         ))?;
         Ok(())
@@ -307,7 +308,7 @@ impl PyMappingProtocol for ActionContext {
     }
 
     fn __len__(&self) -> usize {
-        self.map.lock().expect(POISON_MSG).len()
+        self.map.lock_it().len()
     }
 
     fn __setitem__(&mut self, key: String, item: ContextElement) {
@@ -331,7 +332,7 @@ impl PyObjectProtocol for ActionContext {
 #[pyproto]
 impl PySequenceProtocol for ActionContext {
     fn __contains__(&self, k: &str) -> bool {
-        self.map.lock().expect(POISON_MSG).contains_key(k)
+        self.map.lock_it().contains_key(k)
     }
 }
 
@@ -359,13 +360,13 @@ impl ActionContext {
 
     fn __eq__(&mut self, other: &PyAny) -> bool {
         match other.extract::<ActionContext>() {
-            Ok(c) => *self.map.lock().expect(POISON_MSG) == *c.map.lock().expect(POISON_MSG),
+            Ok(c) => *self.map.lock_it() == *c.map.lock_it(),
             Err(_) => false
         }
     }
 
     fn __lt__(&mut self, other: PyRef<ActionContext>) -> bool {
-        self.map.lock().expect(POISON_MSG).len() < other.map.lock().expect(POISON_MSG).len()
+        self.map.lock_it().len() < other.map.lock_it().len()
     }
 
     fn __reversed__(slf: PyRef<Self>) -> PyResult<Py<ActionContextItemsIterator>> {
@@ -373,19 +374,19 @@ impl ActionContext {
     }
 
     pub fn clear(&mut self) {
-        self.map.lock().expect(POISON_MSG).clear()
+        self.map.lock_it().clear()
     }
 
     pub fn copy(&self) -> Self {
-        Self{map: Arc::new(Mutex::new(self.map.lock().expect(POISON_MSG).clone()))}
+        Self{map: Arc::new(Mutex::new(self.map.lock_it().clone()))}
     }
 
     pub fn get(&self, key: &str) -> Option<ContextElement> {
-        self.map.lock().expect(POISON_MSG).get(key).map(|a|a.clone())
+        self.map.lock_it().get(key).map(|a|a.clone())
     }
 
     pub fn has_key(&self, k: &str) -> bool {
-        self.map.lock().expect(POISON_MSG).contains_key(k)
+        self.map.lock_it().contains_key(k)
     }
 
     fn items(&self) -> ActionContextItemsView {
@@ -398,7 +399,7 @@ impl ActionContext {
 
     #[args(default = "None")]
     fn pop(&self, key: &str, default: Option<ContextElement>) -> PyResult<ContextElement> {
-        match self.map.lock().expect(POISON_MSG).remove(key) {
+        match self.map.lock_it().remove(key) {
             Some(val) => Ok(val.into()),
             None => match default {
                 Some(val) => Ok(val.into()),
@@ -408,9 +409,9 @@ impl ActionContext {
     }
 
     fn popitem(&mut self) -> PyResult<(String, ContextElement)> {
-        match self.map.lock().expect(POISON_MSG).keys().last() {
+        match self.map.lock_it().keys().last() {
             Some(k) => {
-                Ok(self.map.lock().expect(POISON_MSG).remove_entry(k).expect(UNEXPECTED_MSG))
+                Ok(self.map.lock_it().remove_entry(k).expect(UNEXPECTED_MSG))
             },
             None => Err(PyErr::new::<PyKeyError, _>("Tried to 'popitem' on an empty ActionContext"))
         }        
@@ -439,7 +440,7 @@ impl ActionContext {
         }
         else if args.len() == 1 {
             match args.get_item(0).downcast::<PyDict>() {
-                Ok(dict) => {extend(&mut self.map.lock().expect(POISON_MSG),dict)?},
+                Ok(dict) => {extend(&mut self.map.lock_it(),dict)?},
                 Err(e) => {
                     Err(e)?
                 }
@@ -447,7 +448,7 @@ impl ActionContext {
         }
 
         if let Some(dict) = kwargs {
-            extend(&mut self.map.lock().expect(POISON_MSG), dict)?;
+            extend(&mut self.map.lock_it(), dict)?;
         }
 
         Ok(())

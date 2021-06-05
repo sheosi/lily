@@ -1,7 +1,7 @@
 mod actions;
 mod config;
 mod nlu;
-mod path_ext;
+mod exts;
 mod python;
 mod skills;
 mod collections;

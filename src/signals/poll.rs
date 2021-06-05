@@ -6,9 +6,9 @@ use std::time::Duration;
 
 use crate::actions::{ActionContext, ActionSet};
 use crate::config::Config;
+use crate::exts::LockIt;
 use crate::queries::{Condition, Query};
 use crate::signals::{Signal, SignalEventShared};
-use crate::vars::POISON_MSG;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -54,7 +54,7 @@ impl Signal for PollQuery {
             sleep(Duration::from_secs(30)).await;
             for task in &mut self.tasks {
                 if task.condition.check(&task.query, HashMap::new()) {
-                    task.act_set.lock().expect(POISON_MSG).call_all(base_context);
+                    task.act_set.lock_it().call_all(base_context);
                 }
             }
         }

@@ -1,5 +1,5 @@
 use crate::tts::{TtsConstructionError, VoiceDescr, TtsError, Tts, TtsInfo, TtsStatic, Gender, negotiate_langs_res};
-use crate::path_ext::ToStrResult;
+use crate::exts::ToStrResult;
 use crate::vars::{PICO_DATA_PATH, NO_COMPATIBLE_LANG_MSG};
 
 use async_trait::async_trait;

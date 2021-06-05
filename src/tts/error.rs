@@ -1,5 +1,5 @@
 use thiserror::Error;
-use crate::path_ext::NotUnicodeError;
+use crate::exts::NotUnicodeError;
 
 #[derive(Error, Debug)]
 pub enum TtsError {

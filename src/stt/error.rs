@@ -1,6 +1,6 @@
 use thiserror::Error;
 use lily_common::audio::AudioError;
-use crate::path_ext::NotUnicodeError;
+use crate::exts::NotUnicodeError;
 
 #[derive(Error, Debug)]
 pub enum SttError {

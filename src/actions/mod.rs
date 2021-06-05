@@ -12,9 +12,9 @@ use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::collections::{BaseRegistrySend, GlobalRegSend, LocalBaseRegistrySend};
+use crate::exts::LockIt;
 use crate::skills::call_for_skill;
 use crate::python::{get_inst_class_name, HalfBakedError, PyException};
-use crate::vars::POISON_MSG;
 
 // Other crates
 use anyhow::{anyhow, Result};
@@ -249,7 +249,7 @@ pub trait SharedActionSet {
 }
 impl SharedActionSet for Arc<Mutex<ActionSet>> {
     fn call_all(&self, context: &ActionContext) -> Vec<ActionAnswer> {
-        self.lock().expect(POISON_MSG).call_all(context)
+        self.lock_it().call_all(context)
     }
 }
 
@@ -267,6 +267,6 @@ impl PyActionSet {
 #[pymethods]
 impl PyActionSet {
     fn call(&mut self, context: &ActionContext) -> Vec<ActionAnswer> {
-        self.act_set.lock().expect(POISON_MSG).call_all(context)
+        self.act_set.lock_it().call_all(context)
     }
 }

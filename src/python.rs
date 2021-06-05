@@ -4,12 +4,13 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::actions::ActionSet;
+use crate::exts::LockIt;
 use crate::skills::{call_for_skill, PYTHON_LILY_SKILL, SKILL_PATH};
 use crate::signals::{
     registries::{ACT_REG, POLL_SIGNAL, QUERY_REG},
     order::{server_interface::CAPS_MANAGER, ENTITY_ADD_CHANNEL, EntityAddValueRequest}
 };
-use crate::vars::{POISON_MSG, PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_ADD_ENTITY_VALUE_MSG, NO_YAML_FLOAT_MSG};
+use crate::vars::{PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_ADD_ENTITY_VALUE_MSG, NO_YAML_FLOAT_MSG};
 
 use anyhow::{anyhow, Result};
 use pyo3::{conversion::IntoPy, PyErr, Python, types::{PyBool, PyList, PyDict}, PyObject, PyResult, prelude::*, wrap_pyfunction, FromPyObject, exceptions::*};
@@ -301,7 +302,7 @@ fn add_entity_value(entity_name: String, value: String, langs: Option<Vec<String
     let langs = langs.py_excep::<PyValueError>()?;
 
     // Get channel and ready request
-    let mut m = ENTITY_ADD_CHANNEL.lock().expect(POISON_MSG);
+    let mut m = ENTITY_ADD_CHANNEL.lock_it();
     let channel = m.as_mut().ok_or_else(||PyErr::new::<PyOSError, _>(NO_ADD_ENTITY_VALUE_MSG))?;
     let request = EntityAddValueRequest{
         skill: get_current_skill()?,
@@ -323,25 +324,25 @@ fn add_task(q_name: String, a_name: String) -> PyResult<()> {
 
     let n = get_current_skill()?;
     let skill_path = 
-        SKILL_PATH.lock().expect(POISON_MSG)
+        SKILL_PATH.lock_it()
         .get(&n).expect("A skill has no path registered").clone();
 
     let acts = {
-        let map =ACT_REG.lock().expect(POISON_MSG);
+        let map =ACT_REG.lock_it();
         let r = map
         .get(&n)
         .ok_or_else(||assertion("This skill adds no queries"))?;
 
         let action = r.get(&a_name)
         .ok_or_else(||assertion("Action does not exist"))?
-        .lock().expect(POISON_MSG)
+        .lock_it()
         .instance(skill_path);
 
         ActionSet::create(action)
     };
 
     let q = {
-        let map = QUERY_REG.lock().expect(POISON_MSG);
+        let map = QUERY_REG.lock_it();
         let r = map
         .get(&n)
         .ok_or_else(||assertion("This skill adds no skills"))?;
@@ -351,9 +352,9 @@ fn add_task(q_name: String, a_name: String) -> PyResult<()> {
         .clone()
     };
     
-    POLL_SIGNAL.lock().expect(POISON_MSG).as_ref()
+    POLL_SIGNAL.lock_it().as_ref()
     .ok_or_else(||assertion("Poll signal not available"))?
-    .lock().expect(POISON_MSG).add(q,acts).map_err(|_|assertion("Add poll failed"))?;
+    .lock_it().add(q,acts).map_err(|_|assertion("Add poll failed"))?;
     
     Ok(())
 }

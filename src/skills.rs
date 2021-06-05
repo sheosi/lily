@@ -9,13 +9,14 @@ use std::sync::{Arc, Mutex};
 // This crate
 use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry, PythonAction};
 use crate::collections::GlobalRegSend;
+use crate::exts::LockIt;
 use crate::python::add_py_folder;
 use crate::queries::{ActQuery, LocalQueryRegistry, PythonQuery, QueryRegistry};
 use crate::signals::{ActSignal, Hook, IntentData, LocalSignalRegistry, new_signal_order, poll::PollQuery, PythonSignal, SignalRegistry, SignalRegistryShared, Timer};
 use crate::signals::registries::{ACT_REG, QUERY_REG};
 use crate::signals::order::EntityAddValueRequest;
 use crate::nlu::EntityDef;
-use crate::vars::{SKILLS_PATH_ERR_MSG, POISON_MSG, PYTHON_SDK_PATH};
+use crate::vars::{SKILLS_PATH_ERR_MSG, PYTHON_SDK_PATH};
 
 // Other crates
 use anyhow::{anyhow, Result};
@@ -135,27 +136,27 @@ pub fn load_intents(
 
             let sig_order = signals.get_sig_order().expect("Order signal was not initialized");
             for (type_name, data) in skilldef.types.into_iter() {
-                sig_order.lock().expect(POISON_MSG).add_slot_type(type_name, data)?;
+                sig_order.lock_it().add_slot_type(type_name, data)?;
             }
             
             for (intent_name, data) in skilldef.intents.into_iter() {
                 match data.hook.clone() {
                     Hook::Action(name) => {
-                        let action = actions.get(&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?.lock().expect(POISON_MSG).instance(skill_path.clone());
+                        let action = actions.get(&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?.lock_it().instance(skill_path.clone());
                         let act_set = ActionSet::create(action);
-                        sig_order.lock().expect(POISON_MSG).add_intent(data, &intent_name, &skill_name, act_set)?;
+                        sig_order.lock_it().add_intent(data, &intent_name, &skill_name, act_set)?;
                     },
                     Hook::Query(name) => {
                         // Note: Some very minimal support for queries
                         let q = queries.get(&name).ok_or_else(||anyhow!("Query '{}' does not exist", &name))?;
                         let act_set = ActionSet::create(ActQuery::new(q.clone(), name));
-                        sig_order.lock().expect(POISON_MSG).add_intent(data, &intent_name, &skill_name, act_set)?;
+                        sig_order.lock_it().add_intent(data, &intent_name, &skill_name, act_set)?;
                     },
                     Hook::Signal(name) => {
                         // Note: Some very minimal support for signals
                         let s = signals.get(&name).ok_or_else(||anyhow!("Signal '{}' does not exist", &name))?;
                         let act_set = ActionSet::create(ActSignal::new(s.clone(), name));
-                        sig_order.lock().expect(POISON_MSG).add_intent(data, &intent_name, &skill_name, act_set)?;
+                        sig_order.lock_it().add_intent(data, &intent_name, &skill_name, act_set)?;
                         unimplemented!();
                     }
                 }
@@ -174,7 +175,7 @@ pub fn load_intents(
             if !evs.is_empty() {
                 let sigevent = signals.get_sig_event();
                 let def_action = def_action.ok_or_else(||anyhow!("Skill contains events but no action linked"))?;
-                let action = actions.get(&def_action).ok_or_else(||anyhow!("Action '{}' does not exist", &def_action))?.lock().expect(POISON_MSG).instance(skill_path.clone());
+                let action = actions.get(&def_action).ok_or_else(||anyhow!("Action '{}' does not exist", &def_action))?.lock_it().instance(skill_path.clone());
                 let act_set = ActionSet::create(action);
                 for ev in evs {
                     sigevent.lock().unwrap().add(&ev, act_set.clone());
@@ -243,8 +244,8 @@ pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_lang: &Vec<LanguageIdentifier
         }
 
         let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy();
-        QUERY_REG.lock().expect(POISON_MSG).insert( skill_name.to_string(), skill_queryreg.clone());
-        ACT_REG.lock().expect(POISON_MSG).insert( skill_name.to_string(), skill_actreg.clone());
+        QUERY_REG.lock_it().insert( skill_name.to_string(), skill_queryreg.clone());
+        ACT_REG.lock_it().insert( skill_name.to_string(), skill_actreg.clone());
         {
             // Get GIL
             let gil = Python::acquire_gil();
@@ -258,7 +259,7 @@ pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_lang: &Vec<LanguageIdentifier
         load_intents(&mut skill_sigreg, &skill_actreg, &skill_queryreg, &entry).map_err(|e|{
             HalfBakedDoubleError::from((skill_sigreg, skill_actreg), e)
         })?;
-        SKILL_PATH.lock().expect(POISON_MSG).insert(skill_name.into(),Arc::new(entry.into()));
+        SKILL_PATH.lock_it().insert(skill_name.into(),Arc::new(entry.into()));
         Ok(())
     };
     for skl_dir in path {
@@ -284,11 +285,11 @@ pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_lang: &Vec<LanguageIdentifier
         warn!("Not loaded: {}", not_loaded.join(","));
     }
 
-    global_sigreg.lock().expect(POISON_MSG).end_load(curr_lang)?;
+    global_sigreg.lock_it().end_load(curr_lang)?;
 
     // This is overall stupid but haven't found any other (interesting way to do it)
     // We need the variable to help lifetime analisys
-    let res = global_sigreg.lock().expect(POISON_MSG).clone();
+    let res = global_sigreg.lock_it().clone();
     Ok(res)
 }
 
@@ -383,7 +384,7 @@ impl EmbeddedLoader {
 
 impl Loader for EmbeddedLoader {
     fn init_base(&mut self, glob_sigreg: SignalRegistryShared, _glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<()> {
-        let mut mut_sigreg = glob_sigreg.lock().expect(POISON_MSG);
+        let mut mut_sigreg = glob_sigreg.lock_it();
         let consumer = replace(&mut self.consumer, None).expect("Consumer already consumed");
         mut_sigreg.set_order(Arc::new(Mutex::new(new_signal_order(lang, consumer))))?;
         mut_sigreg.set_poll(Arc::new(Mutex::new(PollQuery::new())))?;

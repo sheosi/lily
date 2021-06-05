@@ -6,11 +6,11 @@ use std::sync::{Arc, Mutex, Weak};
 
 use crate::{actions::ActionContext, stt::DecodeRes};
 use crate::config::Config;
+use crate::exts::LockIt;
 use crate::nlu::{NluManager, NluManagerConf, NluManagerStatic};
 use crate::signals::{process_answers, SignalEventShared, SignalOrder};
 use crate::stt::{SttPool, SttPoolItem, SttSet};
 use crate::tts::{Gender, Tts, TtsFactory, VoiceDescr};
-use crate::vars::POISON_MSG;
 
 use anyhow::{anyhow, Result};
 use lily_common::audio::{Audio, AudioRaw};
@@ -181,7 +181,7 @@ async fn do_received_order<M: NluManager + NluManagerConf + NluManagerStatic + D
     ).await {
         Ok(s_end) => {
             if s_end {
-                if let Err(e) = sessions.lock().expect(POISON_MSG).end_session(&satellite) {
+                if let Err(e) = sessions.lock_it().end_session(&satellite) {
                     error!("Failed to end session for {}: {}", &satellite, e);
                 }
             }
@@ -236,7 +236,7 @@ pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + 
                     stt_audio.append_audio(&as_raw, DEFAULT_SAMPLES_PER_SECOND)?;
                 }
 
-                let session = sessions.lock().expect(POISON_MSG).session_for(msg_nlu.satellite.clone());
+                let session = sessions.lock_it().session_for(msg_nlu.satellite.clone());
                 {
                     match utterances.get_stt(msg_nlu.satellite.clone(), &as_raw).await {
                         Ok(stt) => {
@@ -293,7 +293,7 @@ pub async fn on_event(
     loop {
         let msg = channel.recv().await.expect("Channel closed!");
         let context = add_context_data(base_context, &def_lang, &msg.satellite);
-        let ans = signal_event.lock().expect(POISON_MSG).call(&msg.event, context.clone());
+        let ans = signal_event.lock_it().call(&msg.event, context.clone());
         if let Err(e) = process_answers(ans,&def_lang,msg.satellite) {
             error!("Occurred a problem while processing event: {}", e);
         }
@@ -362,7 +362,7 @@ impl MqttInterface {
                                 let caps = input.caps;
                                 CAPS_MANAGER.with(|c| c.borrow_mut().add_client(&uuid2, caps));
                                 let output = encode::to_vec(&MsgWelcome{conf:config.to_client_conf(), satellite: input.uuid})?;
-                                client.lock().expect(POISON_MSG).publish("lily/satellite_welcome", QoS::AtMostOnce, false, output).await?
+                                client.lock_it().publish("lily/satellite_welcome", QoS::AtMostOnce, false, output).await?
                             }
                             "lily/nlu_process" => {
                                 let msg_nlu: MsgRequest = decode::from_read(std::io::Cursor::new(pub_msg.payload))?;
@@ -448,7 +448,7 @@ impl MqttInterface {
                 warn!("{}",e);
             }
             let msg_pack = encode::to_vec(&MsgAnswer{audio: Some(audio_data.into_encoded()?), text: None})?;
-            client.lock().expect(POISON_MSG).publish(&format!("lily/{}/say_msg", uuid_str), QoS::AtMostOnce, false, msg_pack).await?;
+            client.lock_it().publish(&format!("lily/{}/say_msg", uuid_str), QoS::AtMostOnce, false, msg_pack).await?;
             Ok(())
         }
 

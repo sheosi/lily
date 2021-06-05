@@ -102,7 +102,7 @@ impl ActionInstance for ActSignal {
         // TODO: In theory, Lily should ask which parameters for the signal and 
         // which action to be executed but we can't do that right now
         //let m = HashMap::new();
-        //self.s.lock().expect(POISON_MSG).add(m, );
+        //self.s.lock_it().add(m, );
         ActionAnswer::send_text("Whenever this signals we'll say hello".into(), true)
     }
     fn get_name(&self) -> String {

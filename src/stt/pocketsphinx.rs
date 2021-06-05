@@ -2,7 +2,7 @@ use std::fs::create_dir_all;
 
 use crate::stt::{DecodeRes, Stt, SttConstructionError, SttError, SttInfo};
 use crate::vars::*;
-use crate::path_ext::ToStrResult;
+use crate::exts::ToStrResult;
 
 use async_trait::async_trait;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
