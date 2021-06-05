@@ -1,10 +1,14 @@
-use std::env;
 use std::collections::HashMap;
+use std::env;
 use std::path::Path;
 use std::process::Command;
 
-use crate::skills::{call_for_skill, PYTHON_LILY_SKILL};
-use crate::signals::order::{server_interface::CAPS_MANAGER, ENTITY_ADD_CHANNEL, EntityAddValueRequest};
+use crate::actions::ActionSet;
+use crate::skills::{call_for_skill, PYTHON_LILY_SKILL, SKILL_PATH};
+use crate::signals::{
+    registries::{ACT_REG, POLL_SIGNAL, QUERY_REG},
+    order::{server_interface::CAPS_MANAGER, ENTITY_ADD_CHANNEL, EntityAddValueRequest}
+};
 use crate::vars::{POISON_MSG, PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_ADD_ENTITY_VALUE_MSG, NO_YAML_FLOAT_MSG};
 
 use anyhow::{anyhow, Result};
@@ -223,8 +227,9 @@ fn _lily_impl(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add("log_warn", wrap_pyfunction!(log_warn, m)?)?;
     m.add("log_info", wrap_pyfunction!(log_info, m)?)?;
     m.add("conf", wrap_pyfunction!(get_conf, m)?)?;
-    m.add("has_cap", wrap_pyfunction!(client_has_cap,m)?)?;
-    m.add("add_entity_value", wrap_pyfunction!(add_entity_value,m)?)?;
+    m.add("has_cap", wrap_pyfunction!(client_has_cap, m)?)?;
+    m.add("add_entity_value", wrap_pyfunction!(add_entity_value, m)?)?;
+    m.add("add_task", wrap_pyfunction!(add_task, m)?)?;
     m.add_class::<crate::actions::PyActionSet>()?;
     m.add_class::<crate::actions::ActionAnswer>()?;
 
@@ -307,6 +312,49 @@ fn add_entity_value(entity_name: String, value: String, langs: Option<Vec<String
 
     // Send request
     channel.blocking_send(request).py_excep::<PyOSError>()?;
+    Ok(())
+}
+
+#[pyfunction]
+fn add_task(q_name: String, a_name: String) -> PyResult<()> {
+    fn assertion<'a>(why: &'static str)->PyErr {
+        PyErr::new::<PyAssertionError,_>(why)
+    }
+
+    let n = get_current_skill()?;
+    let skill_path = 
+        SKILL_PATH.lock().expect(POISON_MSG)
+        .get(&n).expect("A skill has no path registered").clone();
+
+    let acts = {
+        let map =ACT_REG.lock().expect(POISON_MSG);
+        let r = map
+        .get(&n)
+        .ok_or_else(||assertion("This skill adds no queries"))?;
+
+        let action = r.get(&a_name)
+        .ok_or_else(||assertion("Action does not exist"))?
+        .lock().expect(POISON_MSG)
+        .instance(skill_path);
+
+        ActionSet::create(action)
+    };
+
+    let q = {
+        let map = QUERY_REG.lock().expect(POISON_MSG);
+        let r = map
+        .get(&n)
+        .ok_or_else(||assertion("This skill adds no skills"))?;
+
+        r.get(&q_name)
+        .ok_or_else(||assertion("Skill has no queries with the requested name"))?
+        .clone()
+    };
+    
+    POLL_SIGNAL.lock().expect(POISON_MSG).as_ref()
+    .ok_or_else(||assertion("Poll signal not available"))?
+    .lock().expect(POISON_MSG).add(q,acts).map_err(|_|assertion("Add poll failed"))?;
+    
     Ok(())
 }
 

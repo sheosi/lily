@@ -61,7 +61,7 @@ impl ActMap {
     }
 
     pub fn add_mapping(&mut self, order_name: &str, act_set: Arc<Mutex<ActionSet>>) {
-        let action_entry = self.map.entry(order_name.to_string()).or_insert(ActionSet::create());
+        let action_entry = self.map.entry(order_name.to_string()).or_insert(ActionSet::empty());
         *action_entry = act_set;
     }
 

@@ -167,6 +167,9 @@ def signal(name: str):
 class QueryProtocol:
     """ The definition of a query. A query returns information which might be
     consumed either directly by the user or by an action. Still to be defined."""
+    def get(self)->str:
+        """Obtains wathever information this is related to"""
+        return ""
 
 def query(name: str):
     """Declares a class a query, it will """

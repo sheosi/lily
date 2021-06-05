@@ -2,18 +2,26 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use crate::actions::ActionContext;
+use crate::actions::{ActionContext, LocalActionRegistry};
 use crate::config::Config;
 use crate::collections::{BaseRegistrySend, GlobalRegSend, LocalBaseRegistrySend};
+use crate::queries::LocalQueryRegistry;
 use crate::signals::poll::PollQuery;
 use crate::signals::{Signal, SignalEvent, SignalEventShared, SignalOrderCurrent, SignalRegistryShared, UserSignal};
 use crate::vars::POISON_MSG;
 
 use anyhow::Result;
 use delegate::delegate;
+use lazy_static::lazy_static;
 use log::{error, warn};
 use tokio::task::LocalSet;
 use unic_langid::LanguageIdentifier;
+
+lazy_static!{
+    pub static ref POLL_SIGNAL: Mutex<Option<Arc<Mutex<PollQuery>>>> = Mutex::new(None);
+    pub static ref QUERY_REG: Mutex<HashMap<String, LocalQueryRegistry>> = Mutex::new(HashMap::new());
+    pub static ref ACT_REG: Mutex<HashMap<String, LocalActionRegistry>> = Mutex::new(HashMap::new());
+}
 
 #[derive(Debug, Clone)]
 pub struct SignalRegistry {
@@ -92,7 +100,7 @@ impl SignalRegistry {
         };
 
         spawn_on_local("order".into(), self.order.as_ref().expect("Order signal had problems during init").clone());
-        spawn_on_local("order".into(), self.poll.as_ref().expect("Poll signal had problems during init").clone());
+        spawn_on_local("poll".into(), self.poll.as_ref().expect("Poll signal had problems during init").clone());
         for (sig_name, sig) in self.base.clone() {
             spawn_on_local_u(sig_name, sig);
         }
@@ -103,8 +111,13 @@ impl SignalRegistry {
     }
 
     pub fn set_order(&mut self, sig_order: Arc<Mutex<SignalOrderCurrent>>) -> Result<()>{
-        self.order = Some(sig_order.clone());
-        //self.insert("embedded".into(),"order".into(), sig_order)
+        self.order = Some(sig_order);
+        Ok(())
+    }
+
+    pub fn set_poll(&mut self, sig_poll: Arc<Mutex<PollQuery>>) -> Result<()>{
+        *POLL_SIGNAL.lock().expect(POISON_MSG) = Some(sig_poll.clone());
+        self.poll = Some(sig_poll);
         Ok(())
     }
 

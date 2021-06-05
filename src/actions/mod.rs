@@ -3,17 +3,15 @@ mod action_context;
 pub use self::action_context::*;
 
 // Standard library
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt; // For Debug in LocalActionRegistry
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::collections::{BaseRegistry, GlobalReg, LocalBaseRegistry};
+use crate::collections::{BaseRegistrySend, GlobalRegSend, LocalBaseRegistrySend};
 use crate::skills::call_for_skill;
 use crate::python::{get_inst_class_name, HalfBakedError, PyException};
 use crate::vars::POISON_MSG;
@@ -26,8 +24,10 @@ use pyo3::{Py, PyAny, PyObject, PyResult, Python, types::PyTuple};
 use pyo3::prelude::{pyclass, pymethods};
 use pyo3::exceptions::PyOSError;
 
-pub type ActionRegistryShared = Rc<RefCell<ActionRegistry>>;
-
+pub type ActionRegistryShared = Arc<Mutex<ActionRegistry>>;
+pub type ActionRegistry = BaseRegistrySend<dyn Action + Send>;
+pub type LocalActionRegistry = LocalBaseRegistrySend<dyn Action + Send, ActionRegistry>;
+pub type ActionItem = Arc<Mutex<dyn Action + Send>>;
 #[derive(Clone)]
 pub enum MainAnswer {
     Sound(Audio),
@@ -80,10 +80,15 @@ pub trait Action {
     fn instance(&self, lily_skill_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send>;
 }
 
+pub trait ActionItemExt {
+    fn new<A: Action + Send + 'static>(act: A) -> ActionItem;
+}
 
-pub type ActionRegistry = BaseRegistry<dyn Action + Send>;
-pub type LocalActionRegistry = LocalBaseRegistry<dyn Action + Send, ActionRegistry>;
-
+impl ActionItemExt for ActionItem {
+    fn new<A: Action + Send + 'static>(act: A) -> ActionItem {
+        Arc::new(Mutex::new(act))
+    }
+}
 
 #[derive(Debug)]
 pub struct PythonAction {
@@ -114,14 +119,14 @@ impl PythonAction {
         python: Python,
         skill_name: String,
         action_classes: Vec<(PyObject, PyObject)>)
-        -> Result<HashMap<String, Rc<RefCell<dyn Action + Send>>>, HalfBakedError> {
+        -> Result<HashMap<String, ActionItem>, HalfBakedError> {
 
         let process_list = || -> Result<_> {
             let mut act_to_add = vec![];
             for (key, val) in  &action_classes {
                 let name = key.to_string();
                 let pyobj = val.call(python, PyTuple::empty(python), None).map_err(|py_err|anyhow!("Python error while instancing action \"{}\": {:?}", name, py_err.to_string()))?;
-                let rc: Rc<RefCell<dyn Action + Send>> = Rc::new(RefCell::new(PythonAction::new(key.to_owned(),pyobj)));
+                let rc: ActionItem = Arc::new(Mutex::new(PythonAction::new(key.to_owned(),pyobj)));
                 act_to_add.push((name,rc));
             }
             Ok(act_to_add)
@@ -207,18 +212,21 @@ impl fmt::Debug for ActionSet {
 }
 
 impl ActionSet {
-    pub fn create() -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(Self {acts: Vec::new()}))
+    pub fn create(a: Box<dyn ActionInstance + Send>) -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self {acts: vec![a]}))
     }
+
+    pub fn empty() -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self {acts: vec![]}))
+    }
+
 
     pub fn with(action: Box<dyn ActionInstance + Send>) -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(Self {acts: vec![action]}))
     }
 
-    pub fn add_action(&mut self, action: Box<dyn ActionInstance + Send>) -> Result<()>{
+    pub fn add_action(&mut self, action: Box<dyn ActionInstance + Send>) {
         self.acts.push(action);
-
-        Ok(())
     }
 
     pub fn call_all(&mut self, context: &ActionContext) -> Vec<ActionAnswer> {

@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -27,7 +29,7 @@ struct UserTask {
 
 impl UserTask {
     fn new(query: Arc<Mutex<dyn Query + Send>>, act_set: Arc<Mutex<ActionSet>>) -> Self {
-        Self {query, act_set, condition: Condition::Test}
+        Self {query, act_set, condition: Condition::Changed(RefCell::new(Vec::new()))}
     }
 }
 
@@ -50,8 +52,8 @@ impl Signal for PollQuery {
     async fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, base_context: &ActionContext, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         loop {
             sleep(Duration::from_secs(30)).await;
-            for task in &self.tasks {
-                if task.condition.check(&task.query) {
+            for task in &mut self.tasks {
+                if task.condition.check(&task.query, HashMap::new()) {
                     task.act_set.lock().expect(POISON_MSG).call_all(base_context);
                 }
             }
@@ -60,7 +62,7 @@ impl Signal for PollQuery {
 }
 
 impl PollQuery {
-    fn add(&mut self, query: Arc<Mutex<dyn Query + Send>>, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
+    pub fn add(&mut self, query: Arc<Mutex<dyn Query + Send>>, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
         let task = UserTask::new(query, act_set);
         self.tasks.push(task);
 

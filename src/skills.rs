@@ -2,7 +2,7 @@
 use std::{cell::{Ref, RefCell}, unimplemented};
 use std::collections::HashMap;
 use std::mem::replace;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -11,7 +11,8 @@ use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActio
 use crate::collections::GlobalRegSend;
 use crate::python::add_py_folder;
 use crate::queries::{ActQuery, LocalQueryRegistry, PythonQuery, QueryRegistry};
-use crate::signals::{ActSignal, Hook, IntentData, LocalSignalRegistry, new_signal_order, PythonSignal, SignalRegistry, SignalRegistryShared, Timer};
+use crate::signals::{ActSignal, Hook, IntentData, LocalSignalRegistry, new_signal_order, poll::PollQuery, PythonSignal, SignalRegistry, SignalRegistryShared, Timer};
+use crate::signals::registries::{ACT_REG, QUERY_REG};
 use crate::signals::order::EntityAddValueRequest;
 use crate::nlu::EntityDef;
 use crate::vars::{SKILLS_PATH_ERR_MSG, POISON_MSG, PYTHON_SDK_PATH};
@@ -22,11 +23,16 @@ use pyo3::Python;
 use serde::Deserialize;
 use thiserror::Error;
 use tokio::sync::mpsc::Receiver;
+use lazy_static::lazy_static;
 use log::{error, info, warn};
 use unic_langid::LanguageIdentifier;
 
 thread_local! {
     pub static PYTHON_LILY_SKILL: RefString = RefString::new("<None>");
+}
+
+lazy_static! {
+    pub static ref SKILL_PATH: Mutex<HashMap<String, Arc<PathBuf>>> = Mutex::new(HashMap::new());
 }
 
 trait IntoMapping {
@@ -135,23 +141,20 @@ pub fn load_intents(
             for (intent_name, data) in skilldef.intents.into_iter() {
                 match data.hook.clone() {
                     Hook::Action(name) => {
-                        let action = actions.get(&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?.borrow_mut().instance(skill_path.clone());
-                        let act_set = ActionSet::create();
-                        act_set.lock().unwrap().add_action(action)?;
+                        let action = actions.get(&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?.lock().expect(POISON_MSG).instance(skill_path.clone());
+                        let act_set = ActionSet::create(action);
                         sig_order.lock().expect(POISON_MSG).add_intent(data, &intent_name, &skill_name, act_set)?;
                     },
                     Hook::Query(name) => {
                         // Note: Some very minimal support for queries
                         let q = queries.get(&name).ok_or_else(||anyhow!("Query '{}' does not exist", &name))?;
-                        let act_set = ActionSet::create();
-                        act_set.lock().unwrap().add_action(ActQuery::new(q.clone(), name))?;
+                        let act_set = ActionSet::create(ActQuery::new(q.clone(), name));
                         sig_order.lock().expect(POISON_MSG).add_intent(data, &intent_name, &skill_name, act_set)?;
                     },
                     Hook::Signal(name) => {
                         // Note: Some very minimal support for signals
                         let s = signals.get(&name).ok_or_else(||anyhow!("Signal '{}' does not exist", &name))?;
-                        let act_set = ActionSet::create();
-                        act_set.lock().unwrap().add_action(ActSignal::new(s.clone(), name))?;
+                        let act_set = ActionSet::create(ActSignal::new(s.clone(), name));
                         sig_order.lock().expect(POISON_MSG).add_intent(data, &intent_name, &skill_name, act_set)?;
                         unimplemented!();
                     }
@@ -171,9 +174,8 @@ pub fn load_intents(
             if !evs.is_empty() {
                 let sigevent = signals.get_sig_event();
                 let def_action = def_action.ok_or_else(||anyhow!("Skill contains events but no action linked"))?;
-                let action = actions.get(&def_action).ok_or_else(||anyhow!("Action '{}' does not exist", &def_action))?.borrow_mut().instance(skill_path.clone());
-                let act_set = ActionSet::create();
-                act_set.lock().unwrap().add_action(action)?;
+                let action = actions.get(&def_action).ok_or_else(||anyhow!("Action '{}' does not exist", &def_action))?.lock().expect(POISON_MSG).instance(skill_path.clone());
+                let act_set = ActionSet::create(action);
                 for ev in evs {
                     sigevent.lock().unwrap().add(&ev, act_set.clone());
                 }
@@ -213,7 +215,7 @@ pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_lang: &Vec<LanguageIdentifier
     let global_sigreg = Arc::new(Mutex::new(SignalRegistry::new()));
     let base_sigreg = LocalSignalRegistry::new(global_sigreg.clone());
 
-    let global_actreg = Rc::new(RefCell::new(ActionRegistry::new()));
+    let global_actreg = Arc::new(Mutex::new(ActionRegistry::new()));
     let base_actreg = LocalActionRegistry::new(global_actreg.clone());
 
     let global_queryreg = Arc::new(Mutex::new(QueryRegistry::new()));
@@ -239,6 +241,10 @@ pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_lang: &Vec<LanguageIdentifier
                 skill_actreg = local_actreg;
                 skill_queryreg = local_queryreg;
         }
+
+        let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy();
+        QUERY_REG.lock().expect(POISON_MSG).insert( skill_name.to_string(), skill_queryreg.clone());
+        ACT_REG.lock().expect(POISON_MSG).insert( skill_name.to_string(), skill_actreg.clone());
         {
             // Get GIL
             let gil = Python::acquire_gil();
@@ -252,6 +258,7 @@ pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_lang: &Vec<LanguageIdentifier
         load_intents(&mut skill_sigreg, &skill_actreg, &skill_queryreg, &entry).map_err(|e|{
             HalfBakedDoubleError::from((skill_sigreg, skill_actreg), e)
         })?;
+        SKILL_PATH.lock().expect(POISON_MSG).insert(skill_name.into(),Arc::new(entry.into()));
         Ok(())
     };
     for skl_dir in path {
@@ -311,7 +318,7 @@ impl PythonLoader {
         }?;
 
         let mut actreg = base_actreg.clone();
-        match PythonAction::extend_and_init_classes_local(&mut actreg, py, name.into(), action_classes) {
+        match PythonAction::extend_and_init_classes_local(&mut actreg, py, name.clone().into(), action_classes) {
             Ok(()) => {Ok(())}
             Err(e) => {
                 // Also, drop all actions from this package
@@ -321,7 +328,7 @@ impl PythonLoader {
         }?;
 
         let mut queryreg = base_queryreg.clone();
-        match PythonQuery::extend_and_init_classes_local(&mut queryreg, py, query_classes) {
+        match PythonQuery::extend_and_init_classes_local(&mut queryreg, py,name.clone().into(), query_classes) {
             Ok(()) => {Ok(())}
             Err(e) => {
                 // Also, drop all actions from this package
@@ -379,7 +386,7 @@ impl Loader for EmbeddedLoader {
         let mut mut_sigreg = glob_sigreg.lock().expect(POISON_MSG);
         let consumer = replace(&mut self.consumer, None).expect("Consumer already consumed");
         mut_sigreg.set_order(Arc::new(Mutex::new(new_signal_order(lang, consumer))))?;
-        // TODO: Add poll back
+        mut_sigreg.set_poll(Arc::new(Mutex::new(PollQuery::new())))?;
         mut_sigreg.insert("embedded".into(),"timer".into(), Arc::new(Mutex::new(Timer::new())))?;
 
         Ok(())

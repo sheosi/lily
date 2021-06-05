@@ -39,6 +39,12 @@ def add_entity_value(entity: str, value: str, langs: Optional[List[str]]):
     """Dynamically adds a value to an entity, the NLU will be recompiled"""
     ...
 
+def add_task(query: str, action: str):
+    """Adds a new task, this task will poll the query regularly and perform the
+    action. Both are the names of a query and an action respectively and both 
+    have to be from the same skill"""
+    ...
+
 class PyActionSet:
     """Represents an set of actions related to a signal"""
 
