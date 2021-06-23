@@ -37,6 +37,7 @@ jobs:
       with:
         release_id: "nightly"
         asset_name: "lily.zip"
+        token: ${{ secrets.GITHUB_TOKEN }
     - name: Prepare files
       run: |
         mkdir relFiles
