@@ -15,12 +15,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Install deps
+    - name: 🗞️ Checkout
+      uses: actions/checkout@v2
+
+    - name: ⚙️ Install deps
       run: |
         sudo apt update
         sudo apt install libssl-dev libasound2-dev libpocketsphinx-dev libsphinxbase-dev python3-all-dev libopus-dev clang libgsl-dev
-    - name: Cache
+
+    - name: 🤔 Cache
       uses: actions/cache@v2.1.4
       with:
         # A list of files, directories, and wildcard patterns to cache and restore
@@ -30,25 +33,32 @@ jobs:
           target
         # An explicit key for restoring and saving the cache
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-    - name: Build
+
+    - name: 🔨 Build
       run: cargo build --verbose
-    - name: Remove asset
+
+    - name: ❌ Remove asset
       uses: flcdrg/remove-release-asset-action@v1.0.7
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         release_id: "nightly"
         asset_name: "lily.zip"
-    - name: Prepare files
+
+    - name: 📋 Prepare files
       run: |
         mkdir relFiles
-        cp target/debug/lily reflFiles
-    - name: Archive Release
+        cp target/debug/lily relFiles/
+
+    - name: 📦 Archive Release
       uses: thedoctor0/zip-release@master
       with:
         filename: 'lily.zip'
         exclusions: '*.git* /*node_modules/* .editorconfig'
-    - name: Release
+
+    - name: 🎉 Release
       uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        files: target/debug/lily
+        files: lily.zip
