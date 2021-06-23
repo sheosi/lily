@@ -1,0 +1,50 @@
+name: Rust
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install deps
+      run: sudo apt install libssl-dev libasound2-dev libpocketsphinx-dev libsphinxbase-dev python3-all-dev libopus-dev clang libgsl-dev
+    - name: Cache
+      uses: actions/cache@v2.1.4
+      with:
+        # A list of files, directories, and wildcard patterns to cache and restore
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        # An explicit key for restoring and saving the cache
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - name: Build
+      run: cargo build --verbose
+    - name: Remove asset
+      uses: flcdrg/remove-release-asset-action@v1.0.7
+      with:
+        release_id: "nightly"
+        asset_name: "lily.zip"
+    - name: Prepare files
+      run: |
+        mkdir relFiles
+        cp target/debug/lily reflFiles
+    - name: Archive Release
+      uses: thedoctor0/zip-release@master
+      with:
+        filename: 'lily.zip'
+        exclusions: '*.git* /*node_modules/* .editorconfig'
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: target/debug/lily
