@@ -34,7 +34,8 @@ jobs:
       run: cargo build --verbose
     - name: Remove asset
       uses: flcdrg/remove-release-asset-action@v1.0.7
-      token: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         release_id: "nightly"
         asset_name: "lily.zip"
