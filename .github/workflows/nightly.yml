@@ -45,14 +45,16 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+    - run: echo ${{ steps.checkTag.outputs.exists }}
+
     - name: ❌ Remove asset
       uses: flcdrg/remove-release-asset-action@v1.0.7
       if: ${{ steps.checkTag.outputs.exists }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         release_id: "nightly"
         asset_name: "lily.zip"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: 📋 Prepare files
       run: |
@@ -67,7 +69,7 @@ jobs:
 
     - name: 🎉 Release
       uses: softprops/action-gh-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         files: lily.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
