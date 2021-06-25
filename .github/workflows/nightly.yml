@@ -7,6 +7,7 @@ on:
 
 
 env:
+  NIGHTLY_GITHUB_ID: '39203295'
   CARGO_TERM_COLOR: always
 
 jobs:
@@ -60,7 +61,7 @@ jobs:
       uses: flcdrg/remove-release-asset-action@v1.0.7
       if: ${{ steps.checkTag.outputs.exists == 'true' }}
       with:
-        release_id: 'nightly'
+        release_id: ${{ env.NIGHTLY_GITHUB_ID }}
         asset_name: 'lily.zip'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
