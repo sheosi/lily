@@ -45,11 +45,11 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - run: echo ${{ steps.checkTag.outputs.exists == 'false' }}
+    - run: echo ${{ steps.checkTag.outputs.exists == 'true' }}
 
     - name: ❌ Remove asset
       uses: flcdrg/remove-release-asset-action@v1.0.7
-      if: ${{ steps.checkTag.outputs.exists == 'false' }}
+      if: ${{ steps.checkTag.outputs.exists == 'true' }}
       with:
         release_id: "nightly"
         asset_name: "lily.zip"
