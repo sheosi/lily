@@ -47,14 +47,6 @@ jobs:
 
     - name: 🔨 Build
       run: cargo build --verbose
-      
-    - name: 🧐️ Check that Nightly tag exists
-      uses: mukunku/tag-exists-action@v1.0.0
-      id: checkTag
-      with: 
-        tag: 'nightly'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: 📋 Prepare files
       run: |
@@ -67,21 +59,13 @@ jobs:
         filename: 'lily.zip'
         directory: 'releaseDir'
 
-    - name: ❌ Remove asset
-      uses: flcdrg/remove-release-asset-action@v1.0.7
-      if: ${{ steps.checkTag.outputs.exists == 'true' }}
-      with:
-        release_id: ${{ env.NIGHTLY_GITHUB_ID }}
-        asset_name: 'lily.zip'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
     - name: 🎉 Release
-      uses: softprops/action-gh-release@v1
+      uses: ncipollo/release-action@v1
       with:
         name: '🌑️ Nightly'
         body: "Lily's 🌑️ nightly release. Compiled with debug information.\n\n **Don't use it for production**"
-        tag_name: 'nightly'
-        files: 'releaseDir/lily.zip'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        tag: 'nightly'
+        artifacts: 'releaseDir/lily.zip'
+        allowUpdates: true
+        artifactErrorsFailBuild: true
+        token: ${{ secrets.GITHUB_TOKEN }}
