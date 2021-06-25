@@ -7,7 +7,7 @@ on:
 
 
 env:
-  NIGHTLY_GITHUB_ID: '39203295'
+  NIGHTLY_GITHUB_ID: '45219684'
   CARGO_TERM_COLOR: always
 
 jobs:
