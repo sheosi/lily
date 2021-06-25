@@ -54,7 +54,7 @@ jobs:
       uses: thedoctor0/zip-release@master
       with:
         filename: 'lily.zip'
-        path: 'relFiles'
+        directory: 'relFiles'
 
     - name: ❌ Remove asset
       uses: flcdrg/remove-release-asset-action@v1.0.7
