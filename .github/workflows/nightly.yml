@@ -45,17 +45,6 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - run: echo ${{ steps.checkTag.outputs.exists == 'true' }}
-
-    - name: ❌ Remove asset
-      uses: flcdrg/remove-release-asset-action@v1.0.7
-      if: ${{ steps.checkTag.outputs.exists == 'true' }}
-      with:
-        release_id: "nightly"
-        asset_name: "lily.zip"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
     - name: 📋 Prepare files
       run: |
         mkdir relFiles
@@ -65,7 +54,16 @@ jobs:
       uses: thedoctor0/zip-release@master
       with:
         filename: 'lily.zip'
-        exclusions: '*.git* /*node_modules/* .editorconfig'
+        path: relFiles
+
+    - name: ❌ Remove asset
+      uses: flcdrg/remove-release-asset-action@v1.0.7
+      if: ${{ steps.checkTag.outputs.exists == 'true' }}
+      with:
+        release_id: "nightly"
+        asset_name: "lily.zip"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: 🎉 Release
       uses: softprops/action-gh-release@v1
