@@ -5,7 +5,6 @@ on:
   schedule:
     - cron:  '0 0 * * 1-5'
 
-
 env:
 
 # To get the GitHub Id of the release run:
@@ -59,7 +58,7 @@ jobs:
 
     - name: 📋 Prepare files
       run: |
-        mkdir relFiles
+        mkdir releaseDir
         cp target/debug/lily releaseDir/
 
     - name: 📦 Archive Release
