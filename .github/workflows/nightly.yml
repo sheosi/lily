@@ -80,6 +80,9 @@ jobs:
     - name: 🎉 Release
       uses: softprops/action-gh-release@v1
       with:
+        name: '🌑️ Nightly'
+        body: "Lily's 🌑️ nightly release. Compiled with debug information. *Don't use it for production*"
+        fail_on_unmatched_files: true
         tag_name: 'nightly'
         files: 'releaseDir/lily.zip'
       env:
