@@ -7,6 +7,17 @@ on:
 
 
 env:
+
+# To get the GitHub Id of the release run:
+#
+#```
+# curl \
+# -H "Accept: application/vnd.github.v3+json" \
+# https://api.github.com/repos/sheosi/lily/releases
+#```
+#
+# And copy the field 'id' inside the main result
+
   NIGHTLY_GITHUB_ID: '45219684'
   CARGO_TERM_COLOR: always
 
