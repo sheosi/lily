@@ -60,13 +60,13 @@ jobs:
     - name: 📋 Prepare files
       run: |
         mkdir relFiles
-        cp target/debug/lily relFiles/
+        cp target/debug/lily releaseDir/
 
     - name: 📦 Archive Release
       uses: thedoctor0/zip-release@master
       with:
         filename: 'lily.zip'
-        directory: 'relFiles'
+        directory: 'releaseDir'
 
     - name: ❌ Remove asset
       uses: flcdrg/remove-release-asset-action@v1.0.7
