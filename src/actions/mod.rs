@@ -270,3 +270,30 @@ impl PyActionSet {
         self.act_set.lock_it().call_all(context)
     }
 }
+
+// Just a sample action for testing
+pub struct SayHelloAction {}
+
+impl SayHelloAction {
+    pub fn new() -> Self {
+        SayHelloAction{}
+    }
+}
+
+impl Action for SayHelloAction {
+    fn instance(&self, _lily_skill_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send> {
+        Box::new(SayHelloActionInstance{})
+    }
+}
+
+pub struct SayHelloActionInstance {}
+
+impl ActionInstance for SayHelloActionInstance {
+    fn call(&self, context: &ActionContext) -> Result<ActionAnswer> {
+        ActionAnswer::send_text("Hello".into(), true)
+    }
+
+    fn get_name(&self) -> String {
+        "say_hello".into()
+    }
+}

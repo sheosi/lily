@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, hash_map::Entry};
 use std::io::Cursor;
 use std::fmt::Debug;
+use std::mem::take;
 use std::sync::{Arc, Mutex, Weak};
 
 use crate::{actions::ActionContext, stt::DecodeRes};
@@ -30,44 +31,41 @@ thread_local!{
 
 
 struct Session {
-    device: String
+    device: String,
+    curr_utt: Option<SttPoolItem>
 }
 
 impl Session {
     fn new(device: String) -> Self {
-        Self {device}
-    }
-}
-struct UtteranceManager {
-    curr_utt_stt: HashMap<String, SttPoolItem>,
-    sttset: SttSet
-}
-impl UtteranceManager {
-    pub fn new(sttset: SttSet) -> Self {
-        Self{curr_utt_stt: HashMap::new(), sttset}
+        Self {device, curr_utt: None}
     }
 
-    async fn get_stt(&mut self, uuid: String, audio:&[i16]) -> Result<&mut SttPoolItem> {
-        match self.curr_utt_stt.entry(uuid) {
-            Entry::Occupied(o) => Ok(o.into_mut()),
-            Entry::Vacant(v) => {
-                let mut stt = self.sttset.guess_stt(audio).await?;
+    async fn get_stt_or_make(&mut self, set: &mut SttSet, audio: &[i16]) -> Result<&mut SttPoolItem> {
+        match self.curr_utt {
+            Some(ref mut i) => {
+                Ok(i)
+            }
+            None => {
+                let mut stt = set.guess_stt(audio).await?;
                 debug!("STT for current session: {}", stt.get_info());
                 stt.begin_decoding().await?;
-                Ok(v.insert(stt))
+                self.curr_utt = Some(stt);
+                Ok(self.curr_utt.as_mut().unwrap())
             }
         }
+        
     }
-    fn end_utt(&mut self, uuid: &str) -> Result<()> {
-        match self.curr_utt_stt.remove(uuid)  {
+
+    fn end_utt(&mut self) -> Result<()> {
+        match take(&mut self.curr_utt)  {
             Some(_) => {Ok(())}
-            None => {Err(anyhow!("{} had no active session", uuid))}
+            None => {Err(anyhow!("{} had no active session", &self.device))}
         }
     }
 }
 
 pub struct SessionManager {
-    sessions: HashMap<String, Arc<Session>>
+    sessions: HashMap<String, Arc<Mutex<Session>>>
 }
 
 impl SessionManager {
@@ -75,13 +73,13 @@ impl SessionManager {
         Self {sessions: HashMap::new()}
     }
 
-    fn session_for(&mut self, uuid: String) -> Weak<Session> {
+    fn session_for(&mut self, uuid: String) -> Weak<Mutex<Session>> {
         match self.sessions.entry(uuid.clone()) {
             Entry::Occupied(o) => {
                 Arc::downgrade(o.get())
             }
             Entry::Vacant(v) => {
-                let arc = Arc::new(Session::new(uuid));
+                let arc = Arc::new(Mutex::new(Session::new(uuid)));
                 Arc::downgrade(v.insert(arc))
             }
         }
@@ -205,7 +203,6 @@ pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + 
         let pool= SttPool::new(1, 1,lang, config.stt.prefer_online, &ibm_data).await?;
         stt_set.add_lang(lang, pool).await?;
     }
-    let mut utterances = UtteranceManager::new(stt_set);
 
     let mut stt_audio = AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND);
     let audio_debug_path = PathRef::user_cfg("stt_audio.ogg").resolve();
@@ -236,9 +233,14 @@ pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + 
                     stt_audio.append_audio(&as_raw, DEFAULT_SAMPLES_PER_SECOND)?;
                 }
 
-                let session = sessions.lock_it().session_for(msg_nlu.satellite.clone());
+                let session = sessions
+                .lock_it()
+                .session_for(msg_nlu.satellite.clone())
+                .upgrade()
+                .expect("Session has been deleted right now?");
+
                 {
-                    match utterances.get_stt(msg_nlu.satellite.clone(), &as_raw).await {
+                    match session.lock_it().get_stt_or_make(&mut stt_set, &as_raw).await {
                         Ok(stt) => {
                             if let Err(e) = stt.process(&as_raw).await {
                                 error!("Stt failed to process audio: {}", e);
@@ -274,7 +276,7 @@ pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + 
                     }
                 }
                 if is_final {
-                    if let Err(e) = utterances.end_utt(&msg_nlu.satellite) {
+                    if let Err(e) = session.lock_it().end_utt() {
                         warn!("{}",e);
                     }
                 }

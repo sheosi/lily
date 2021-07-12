@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry, PythonAction};
+use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry, PythonAction, SayHelloAction};
 use crate::collections::GlobalRegSend;
 use crate::exts::LockIt;
 use crate::python::add_py_folder;
@@ -262,22 +262,28 @@ pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_lang: &Vec<LanguageIdentifier
         SKILL_PATH.lock_it().insert(skill_name.into(),Arc::new(entry.into()));
         Ok(())
     };
-    for skl_dir in path {
-        for entry in std::fs::read_dir(skl_dir).expect(SKILLS_PATH_ERR_MSG) {
-            let entry = entry?.path();
-            if entry.is_dir() {
-                match process_skill(&entry) {
-                    Err(e) => {
-                        let (skill_sigreg, skill_actreg) = e.act_sig;
-                        skill_sigreg.minus(&base_sigreg).remove_from_global();
-                        skill_actreg.minus(&base_actreg).remove_from_global();
-                        let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy();
-                        error!("Skill {} had a problem, won't be available. {}", skill_name, e.source);
-                        not_loaded.push(skill_name.into_owned());
-                    },
-                    _ => ()
-                }
-            }
+    
+    let skl_entries = path.into_iter()
+        .map(|skl_dir|std::fs::read_dir(skl_dir).expect(SKILLS_PATH_ERR_MSG))
+        .flatten()
+        .filter_map(|r|{match r{
+            Ok(v) => Some(v.path()),
+            Err(e) => {warn!("Loading an skill failed: {}", e); None}
+        }})
+        .filter(|p|p.is_dir());
+    
+
+    for entry in skl_entries {
+        match process_skill(&entry) {
+            Err(e) => {
+                let (skill_sigreg, skill_actreg) = e.act_sig;
+                skill_sigreg.minus(&base_sigreg).remove_from_global();
+                skill_actreg.minus(&base_actreg).remove_from_global();
+                let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy();
+                error!("Skill {} had a problem, won't be available. {}", skill_name, e.source);
+                not_loaded.push(skill_name.into_owned());
+            },
+            _ => ()
         }
     }
 
@@ -383,12 +389,14 @@ impl EmbeddedLoader {
 }
 
 impl Loader for EmbeddedLoader {
-    fn init_base(&mut self, glob_sigreg: SignalRegistryShared, _glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<()> {
+    fn init_base(&mut self, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<()> {
         let mut mut_sigreg = glob_sigreg.lock_it();
+        let mut mut_actreg = glob_actreg.lock_it();
         let consumer = replace(&mut self.consumer, None).expect("Consumer already consumed");
         mut_sigreg.set_order(Arc::new(Mutex::new(new_signal_order(lang, consumer))))?;
         mut_sigreg.set_poll(Arc::new(Mutex::new(PollQuery::new())))?;
         mut_sigreg.insert("embedded".into(),"timer".into(), Arc::new(Mutex::new(Timer::new())))?;
+        mut_actreg.insert("embedded".into(),"say_hello".into(), Arc::new(Mutex::new(SayHelloAction::new())))?;
 
         Ok(())
     }

@@ -13,18 +13,18 @@ use crate::signals::{LocalSignalRegistry, Signal, SignalEventShared, SignalRegis
 
 use async_trait::async_trait;
 use anyhow::{anyhow, Result};
-use pyo3::{conversion::IntoPy, types::PyTuple, Py, PyAny, Python, PyObject};
+use pyo3::{conversion::IntoPy, types::PyTuple, Py, Python, PyObject};
 use unic_langid::LanguageIdentifier;
 
 
 pub struct PythonSignal {
     sig_inst: PyObject,
-    sig_name: Py<PyAny>,
+    sig_name: String,
     lily_skill_path: Arc<PathBuf>
 }
 
 impl PythonSignal {
-    pub fn new(sig_name: Py<PyAny>, sig_inst: PyObject, lily_skill_path: Arc<PathBuf>) -> Self {
+    pub fn new(sig_name: String, sig_inst: PyObject, lily_skill_path: Arc<PathBuf>) -> Self {
         Self {sig_name, sig_inst, lily_skill_path}
     }
 
@@ -38,7 +38,7 @@ impl PythonSignal {
                         meth.call(py, args, None).map_err(
                             |py_err|{
                                 py_err.clone_ref(py).print(py);
-                                anyhow!("Python error while calling {}: {:?}", name, py_err)
+                                anyhow!("Python error in signal '{}' while calling {}: {:?}", &self.sig_name, name, py_err)
                             }
                         )?;
                         Ok(())
@@ -68,7 +68,7 @@ impl PythonSignal {
                 let pyobj = val.call(py, PyTuple::empty(py), None).map_err(|py_err|
                     anyhow!("Python error while instancing signal \"{}\": {:?}", name, py_err.to_string())
                 )?;
-                let sigobj: Arc<Mutex<dyn UserSignal + Send>> = Arc::new(Mutex::new(PythonSignal::new(key.clone(), pyobj, skill_path.clone())));
+                let sigobj: Arc<Mutex<dyn UserSignal + Send>> = Arc::new(Mutex::new(PythonSignal::new(name.clone(), pyobj, skill_path.clone())));
                 sig_to_add.push((name, sigobj));
             }
             Ok(sig_to_add)
