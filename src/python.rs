@@ -8,7 +8,7 @@ use crate::exts::LockIt;
 use crate::skills::{call_for_skill, PYTHON_LILY_SKILL, SKILL_PATH};
 use crate::signals::{
     registries::{ACT_REG, POLL_SIGNAL, QUERY_REG},
-    order::{server_interface::CAPS_MANAGER, ENTITY_ADD_CHANNEL, EntityAddValueRequest}
+    order::{dynamic_nlu::{ENTITY_ADD_CHANNEL, EntityAddValueRequest}, server_interface::CAPS_MANAGER}
 };
 use crate::vars::{PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_ADD_ENTITY_VALUE_MSG, NO_YAML_FLOAT_MSG};
 

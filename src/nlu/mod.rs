@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::path::{Path, PathBuf};
 
 use crate::python::try_translate;
-use crate::signals::StringList;
+use crate::exts::StringList;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -55,9 +55,6 @@ pub trait NluManagerStatic {
         ).is_empty()
     }
     fn name() -> &'static str;
-}
-
-pub trait NluManagerConf {
     fn get_paths() -> (PathBuf, PathBuf);
 }
 

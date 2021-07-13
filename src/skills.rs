@@ -12,9 +12,9 @@ use crate::collections::GlobalRegSend;
 use crate::exts::LockIt;
 use crate::python::add_py_folder;
 use crate::queries::{ActQuery, LocalQueryRegistry, PythonQuery, QueryRegistry};
-use crate::signals::{ActSignal, Hook, IntentData, LocalSignalRegistry, new_signal_order, poll::PollQuery, PythonSignal, SignalRegistry, SignalRegistryShared, Timer};
+use crate::signals::{collections::{Hook, IntentData}, ActSignal, LocalSignalRegistry, new_signal_order, poll::PollQuery, PythonSignal, SignalRegistry, SignalRegistryShared, Timer};
 use crate::signals::registries::{ACT_REG, QUERY_REG};
-use crate::signals::order::EntityAddValueRequest;
+use crate::signals::order::dynamic_nlu::EntityAddValueRequest;
 use crate::nlu::EntityDef;
 use crate::vars::{SKILLS_PATH_ERR_MSG, PYTHON_SDK_PATH};
 

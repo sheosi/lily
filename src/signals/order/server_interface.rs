@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, Weak};
 use crate::{actions::ActionContext, stt::DecodeRes};
 use crate::config::Config;
 use crate::exts::LockIt;
-use crate::nlu::{NluManager, NluManagerConf, NluManagerStatic};
+use crate::nlu::{NluManager, NluManagerStatic};
 use crate::signals::{process_answers, SignalEventShared, SignalOrder};
 use crate::stt::{SttPool, SttPoolItem, SttSet};
 use crate::tts::{Gender, Tts, TtsFactory, VoiceDescr};
@@ -161,7 +161,7 @@ mod language_detection {
     let detected_language: Option<Language> = detector.detect_language_of("languages are awesome");*/
 }
 
-async fn do_received_order<M: NluManager + NluManagerConf + NluManagerStatic + Debug + Send + 'static>(
+async fn do_received_order<M: NluManager + NluManagerStatic + Debug + Send + 'static>(
     order: &mut SignalOrder<M>,
     decoded: Option<DecodeRes>,
     signal_event: SignalEventShared,
@@ -188,7 +188,7 @@ async fn do_received_order<M: NluManager + NluManagerConf + NluManagerStatic + D
     }
 }
 
-pub async fn on_nlu_request<M: NluManager + NluManagerConf + NluManagerStatic + Debug + Send + 'static>(
+pub async fn on_nlu_request<M: NluManager + NluManagerStatic + Debug + Send + 'static>(
     config: &Config,
     mut channel: mpsc::Receiver<MsgRequest>,
     signal_event: SignalEventShared,

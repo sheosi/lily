@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 
 use crate::nlu::{compare_sets_and_train, try_open_file_and_check, write_contents};
-use crate::nlu::{EntityDef, EntityData, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponse, NluResponseSlot, NluUtterance};
+use crate::nlu::{EntityDef, EntityData, Nlu, NluManager, NluManagerStatic, NluResponse, NluResponseSlot, NluUtterance};
 use crate::vars::NLU_RASA_PATH;
 
 use anyhow::{anyhow, Result};
@@ -306,6 +306,13 @@ impl NluManagerStatic for RasaNluManager {
     fn name() -> &'static str {
         "Rasa"
     }
+
+    fn get_paths() -> (PathBuf, PathBuf) {
+        let train_path = NLU_RASA_PATH.resolve().join("models").join("main_model.tar.gz");
+        let model_path = NLU_RASA_PATH.resolve().join("data");
+
+        (train_path, model_path)
+    }
 }
 
 impl Into<NluResponse> for RasaResponse {
@@ -320,14 +327,6 @@ impl Into<NluResponse> for RasaResponse {
     }
 }
 
-impl NluManagerConf for RasaNluManager {
-    fn get_paths() -> (PathBuf, PathBuf) {
-        let train_path = NLU_RASA_PATH.resolve().join("models").join("main_model.tar.gz");
-        let model_path = NLU_RASA_PATH.resolve().join("data");
-
-        (train_path, model_path)
-    }
-}
 #[derive(Error, Debug)]
 pub enum RasaError {
     #[error("Failed to write training configuration")]

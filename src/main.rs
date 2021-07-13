@@ -22,7 +22,7 @@ use crate::actions::ActionContext;
 use crate::config::Config;
 use crate::skills::load_skills;
 use crate::python::{python_init, set_python_locale};
-use crate::signals::init_dynamic_entities;
+use crate::signals::dynamic_nlu::init_dynamic_entities;
 use crate::vars::SKILLS_PATH;
 
 // Other crates

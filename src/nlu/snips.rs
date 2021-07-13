@@ -3,11 +3,11 @@ use std::convert::Into;
 use std::fmt::{self, Debug};
 use std::path::{Path, PathBuf};
 
+use crate::exts::StringList;
 use crate::python::python_has_module_path;
 use crate::nlu::compare_sets_and_train;
-use crate::nlu::{EntityDef, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponse, NluResponseSlot, NluUtterance};
+use crate::nlu::{EntityDef, Nlu, NluManager, NluManagerStatic, NluResponse, NluResponseSlot, NluUtterance};
 use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH};
-use crate::signals::StringList;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -239,9 +239,7 @@ impl NluManagerStatic for SnipsNluManager {
     fn name() -> &'static str {
         "Snips"
     }
-}
 
-impl NluManagerConf for SnipsNluManager {
     fn get_paths() -> (PathBuf, PathBuf) {
         let train_path = NLU_TRAIN_SET_PATH.resolve().to_path_buf();
         let model_path = NLU_ENGINE_PATH.resolve().to_path_buf();

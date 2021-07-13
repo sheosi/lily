@@ -1,8 +1,10 @@
+pub mod collections;
+pub mod dynamic_nlu;
 pub mod server_interface;
 
 // Standard library
 use std::collections::HashMap;
-use std::fmt::{self, Debug};
+use std::fmt::Debug;
 use std::mem::replace;
 use std::sync::{Arc, Mutex};
 
@@ -10,19 +12,17 @@ use std::sync::{Arc, Mutex};
 use crate::actions::{ActionAnswer, ActionContext, ActionSet, MainAnswer};
 use crate::config::Config;
 use crate::exts::LockIt;
-use crate::nlu::{EntityData, EntityDef, EntityInstance, Nlu, NluManager, NluManagerConf, NluManagerStatic, NluResponseSlot, NluUtterance};
-use crate::python::{try_translate, try_translate_all};
+use crate::nlu::{EntityDef, EntityInstance, Nlu, NluManager, NluManagerStatic, NluResponseSlot, NluUtterance};
+use crate::python::try_translate;
 use crate::stt::DecodeRes;
-use crate::signals::{ActMap, Signal, SignalEventShared};
+use crate::signals::{collections::{IntentData, OrderKind}, dynamic_nlu::EntityAddValueRequest, ActMap, Signal, SignalEventShared};
 use crate::vars::{mangle, MIN_SCORE_FOR_ACTION};
 use self::server_interface::{MqttInterface, MSG_OUTPUT, on_event, on_nlu_request, SessionManager};
 
 // Other crates
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
-use lazy_static::lazy_static;
 use log::{debug, info, error, warn};
-use serde::{Deserialize, Deserializer, de::{self, SeqAccess, Visitor}, Serialize, Serializer, ser::SerializeSeq};
 use tokio::{select, sync::mpsc};
 use unic_langid::LanguageIdentifier;
 
@@ -32,154 +32,7 @@ use crate::nlu::SnipsNluManager;
 #[cfg(feature = "devel_rasa_nlu")]
 use crate::nlu::RasaNluManager;
 
-lazy_static! {
-    pub static ref ENTITY_ADD_CHANNEL: Mutex<Option<mpsc::Sender<EntityAddValueRequest>>> =  Mutex::new(None);
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct YamlEntityDef {
-    data: Vec<String>
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
-enum OrderKind {
-    Ref(String),
-    Def(YamlEntityDef)
-}
-
-#[derive(Clone, Deserialize)]
-struct OrderEntity {
-    kind: OrderKind,
-    example: String
-}
-
-
-#[derive(Clone, Debug)]
-pub struct StringList {
-    data: Vec<String>
-}
-
-impl StringList {
-    pub fn new() -> Self {
-        Self{data: Vec::new()}
-    }
-    pub fn from_vec(vec: Vec<String>) -> Self {
-        Self{ data: vec}
-    }
-
-    /// Returns an aggregated vector with the translations of all entries
-    pub fn into_translation(self, lang: &LanguageIdentifier) -> Result<Vec<String>,Vec<String>> {
-        let lang_str = lang.to_string();
-
-        let (utts_data, failed):(Vec<_>,Vec<_>) = self.data.into_iter()
-        .map(|utt|try_translate_all(&utt, &lang_str))
-        .partition(Result::is_ok);
-
-        if failed.is_empty() {
-            let utts = utts_data.into_iter().map(Result::unwrap)
-            .flatten().collect();
-
-            Ok(utts)
-        }
-        else {
-            let failed = failed.into_iter().map(Result::unwrap)
-            .flatten().collect();
-            Err(failed)            
-        }
-    }
-}
-
-struct StringListVisitor;
-
-impl<'de> Visitor<'de> for StringListVisitor {
-    type Value = StringList;
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("either a string or a list containing strings")
-    }
-
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> where E: de::Error{
-        Ok(StringList{data:vec![v.to_string()]})
-    }
-
-    fn visit_string<E>(self, v: String) -> Result<Self::Value, E> where E: de::Error{
-        Ok(StringList{data:vec![v]})
-    }
-
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
-        let mut res = StringList{data: Vec::with_capacity(seq.size_hint().unwrap_or(1))};
-        loop {
-            match seq.next_element()? {
-                Some(val) => {res.data.push(val)},
-                None => {break}
-            }
-        }
-
-        return Ok(res);   
-    }
-}
-
-impl<'de> Deserialize<'de> for StringList {
-    fn deserialize<D>(deserializer: D) -> Result<StringList, D::Error>
-    where D: Deserializer<'de> {
-        deserializer.deserialize_any(StringListVisitor)
-    }
-}
-
-// Serialize this as a list of strings
-impl Serialize for StringList {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,{
-        let mut seq = serializer.serialize_seq(Some(self.data.len()))?;
-        for e in &self.data {
-            seq.serialize_element(e)?;
-        }
-        seq.end()
-    }
-}
-
-
-
-#[derive(Debug, Deserialize)]
-struct SlotData {
-    #[serde(rename="type")]
-    slot_type: OrderKind,
-    #[serde(default="false_val")]
-    required: bool,
-    #[serde(default="none")]
-    prompt: Option<String>,
-    #[serde(default="none")]
-    reprompt: Option<String>
-}
-fn false_val() -> bool {false}
-fn none() -> Option<String> {None}
-#[derive(Debug, Deserialize)]
-pub struct IntentData {
-
-    #[serde(alias = "samples", alias = "sample")]
-    utts:  StringList,
-    #[serde(default="empty_map")]
-    slots: HashMap<String, SlotData>,
-    #[serde(flatten)]
-    pub hook: Hook
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub enum Hook {
-    #[serde(rename="query")]
-    Query(String),
-    #[serde(rename="action")]
-    Action(String),
-    #[serde(rename="signal")]
-    Signal(String)
-}
-
-fn empty_map() -> HashMap<String, SlotData> {
-    HashMap::new()
-}
-
-fn add_intent_to_nlu<N: NluManager + NluManagerStatic + NluManagerConf + Send>(
+fn add_intent_to_nlu<N: NluManager + NluManagerStatic + Send>(
     nlu_man: &mut HashMap<LanguageIdentifier, NluState<N>>,
     sig_arg: IntentData,
     intent_name: &str,
@@ -211,13 +64,10 @@ fn add_intent_to_nlu<N: NluManager + NluManagerStatic + NluManagerConf + Send>(
                 EntityInstance {
                     kind: ent_kind_name,
                     example: {
-                        match try_translate(&slot_example, &lang.to_string()) {
-                            Ok(trans) =>  trans,
-                            Err(err) => {
-                                warn!("Failed to do translation of \"{}\", error: {:?}", &slot_example, err);
-                                slot_example
-                            }
-                        }
+                        try_translate(&slot_example, &lang.to_string()).unwrap_or_else(|e|{
+                            warn!("Failed to do translation of \"{}\", error: {:?}", &slot_example, e);
+                            slot_example
+                        })
                     },
                 },
             );
@@ -250,7 +100,6 @@ fn add_intent_to_nlu<N: NluManager + NluManagerStatic + NluManagerConf + Send>(
             }
 
         }
-        
             
     }
     Ok(())
@@ -258,12 +107,12 @@ fn add_intent_to_nlu<N: NluManager + NluManagerStatic + NluManagerConf + Send>(
 
 
 #[derive(Debug)]
-pub struct NluState<M: NluManager + NluManagerStatic + NluManagerConf + Send> {
+pub struct NluState<M: NluManager + NluManagerStatic + Send> {
     manager: M,
     nlu: Option<M::NluType>
 }
 
-impl<M: NluManager + NluManagerStatic + NluManagerConf + Send> NluState<M> {
+impl<M: NluManager + NluManagerStatic + Send> NluState<M> {
     fn get_mut_nlu_man(&mut self) -> &mut M {
         &mut self.manager
     }
@@ -274,7 +123,7 @@ impl<M: NluManager + NluManagerStatic + NluManagerConf + Send> NluState<M> {
 }
 
 #[derive(Debug)]
-pub struct SignalOrder<M: NluManager + NluManagerStatic + NluManagerConf + Debug + Send> {
+pub struct SignalOrder<M: NluManager + NluManagerStatic + Debug + Send> {
     intent_map: ActMap,
     nlu: Arc<Mutex<HashMap<LanguageIdentifier, NluState<M>>>>,
     demangled_names: HashMap<String, String>,
@@ -282,9 +131,11 @@ pub struct SignalOrder<M: NluManager + NluManagerStatic + NluManagerConf + Debug
     langs: Vec<LanguageIdentifier>
 }
 
-impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> SignalOrder<M> {
+impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> SignalOrder<M> {
     pub fn new(langs: Vec<LanguageIdentifier>, consumer: mpsc::Receiver<EntityAddValueRequest>) -> Self {
         let mut managers = HashMap::new();
+
+        // Create a nlu manager per language
         for lang in &langs {
             managers.insert(lang.to_owned(), NluState::new(M::new()));
         }
@@ -368,13 +219,49 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
         
         process_answers(ans, lang, satellite.clone())
     }
+}
 
-    pub async fn record_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &ActionContext, curr_langs: &Vec<LanguageIdentifier>) -> Result<()> {
+impl<M:NluManager + NluManagerStatic + Debug + Send>  SignalOrder<M> {
+    fn demangle<'a>(&'a self, mangled: &str) -> &'a str {
+        self.demangled_names.get(mangled).expect("Mangled name was not found")
+    }
+    pub fn add_intent(&mut self, sig_arg: IntentData, intent_name: &str, skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
+        let mangled = mangle(skill_name, intent_name);
+        add_intent_to_nlu(&mut self.nlu.lock_it(), sig_arg, &mangled, skill_name, &self.langs)?;
+        self.intent_map.add_mapping(&mangled, act_set);
+        self.demangled_names.insert(mangled, intent_name.to_string());
+        Ok(())
+    }
+
+    pub fn add_slot_type(&mut self, type_name: String, data: EntityDef) -> Result<()> {
+        for lang in &self.langs {
+            let mut m = self.nlu.lock_it();
+            let nlu_man= m.get_mut(lang).expect("Language not registered").get_mut_nlu_man();
+            let trans_data = data.clone().into_translation(lang)?;
+            nlu_man.add_entity(&type_name, trans_data);
+        }
+        Ok(())
+    }
+}
+
+
+#[async_trait(?Send)]
+impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for SignalOrder<M> {
+    fn end_load(&mut self, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
+        Self::end_loading(self.nlu.clone(), &self.langs)
+    }
+
+    async fn event_loop(&mut self, 
+        signal_event: SignalEventShared,
+        config: &Config,
+        base_context: &ActionContext,
+        curr_langs: &Vec<LanguageIdentifier>
+    ) -> Result<()> {
         let mut interface = MqttInterface::new()?;
 
         // Dyn entities data
         
-        async fn on_dyn_entity<M: NluManager + NluManagerConf + NluManagerStatic + Debug + Send + 'static>(
+        async fn on_dyn_entity<M: NluManager + NluManagerStatic + Debug + Send + 'static>(
             mut channel: mpsc::Receiver<EntityAddValueRequest>,
             shared_nlu: Arc<Mutex<HashMap<LanguageIdentifier, NluState<M>>>>,
             curr_langs: Vec<LanguageIdentifier>,
@@ -418,7 +305,6 @@ impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> 
         }
     }
 }
-
 
 fn add_slots(base_context: &ActionContext, slots: Vec<NluResponseSlot>) -> ActionContext {
     let mut result = base_context.clone();
@@ -475,67 +361,7 @@ pub fn process_answers(
 
 }
 
-impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send>  SignalOrder<M> {
-    fn demangle<'a>(&'a self, mangled: &str) -> &'a str {
-        self.demangled_names.get(mangled).expect("Mangled name was not found")
-    }
-    pub fn add_intent(&mut self, sig_arg: IntentData, intent_name: &str, skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
-        let mangled = mangle(skill_name, intent_name);
-        add_intent_to_nlu(&mut self.nlu.lock_it(), sig_arg, &mangled, skill_name, &self.langs)?;
-        self.intent_map.add_mapping(&mangled, act_set);
-        self.demangled_names.insert(mangled, intent_name.to_string());
-        Ok(())
-    }
 
-    pub fn add_slot_type(&mut self, type_name: String, data: EntityDef) -> Result<()> {
-        for lang in &self.langs {
-            let mut m = self.nlu.lock_it();
-            let nlu_man= m.get_mut(lang).expect("Language not registered").get_mut_nlu_man();
-            let trans_data = data.clone().into_translation(lang)?;
-            nlu_man.add_entity(&type_name, trans_data);
-        }
-        Ok(())
-    }
-}
-
-
-#[async_trait(?Send)]
-impl<M:NluManager + NluManagerStatic + NluManagerConf + Debug + Send + 'static> Signal for SignalOrder<M> {
-    fn end_load(&mut self, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
-        Self::end_loading(self.nlu.clone(), &self.langs)
-    }
-    async fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, base_context: &ActionContext, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
-        self.record_loop(signal_event, config, base_context, curr_lang).await
-    }
-}
-
-pub struct EntityAddValueRequest {
-    pub skill: String,
-    pub entity: String,
-    pub value: String,
-    pub langs: Vec<LanguageIdentifier>,
-}
-pub fn init_dynamic_entities() -> Result<mpsc::Receiver<EntityAddValueRequest>> {
-    let (producer, consumer) = mpsc::channel(100);
-
-    (*ENTITY_ADD_CHANNEL.lock_it()) = Some(producer);
-
-    Ok(consumer)
-}
-
-impl YamlEntityDef {
-    fn try_into_with_trans(self, lang: &LanguageIdentifier) -> Result<EntityDef> {
-        let mut data = Vec::new();
-
-        for trans_data in self.data.into_iter(){
-            let mut translations = try_translate_all(&trans_data, &lang.to_string())?;
-            let value = translations.swap_remove(0);
-            data.push(EntityData{value, synonyms: StringList::from_vec(translations)});
-        }
-
-        Ok(EntityDef::new(data, true))
-    }
-}
 
 #[cfg(not(feature = "devel_rasa_nlu"))]
 pub type CurrentNluManager = SnipsNluManager;
