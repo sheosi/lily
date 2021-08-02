@@ -103,7 +103,8 @@ pub fn load_intents(
     signals: &LocalSignalRegistry,
     actions: &LocalActionRegistry,
     queries: &LocalQueryRegistry,
-    path: &Path) -> Result<()> {
+    path: &Path,
+    langs: &Vec<LanguageIdentifier>) -> Result<()> {
     info!("Loading skill: {}", path.to_str().ok_or_else(|| anyhow!("Failed to get the str from path {:?}", path))?);
 
 
@@ -136,7 +137,7 @@ pub fn load_intents(
 
             let sig_order = signals.get_sig_order().expect("Order signal was not initialized");
             for (type_name, data) in skilldef.types.into_iter() {
-                sig_order.lock_it().add_slot_type(type_name, data)?;
+                sig_order.lock_it().add_slot_type(type_name, data, langs)?;
             }
             
             for (intent_name, data) in skilldef.intents.into_iter() {
@@ -144,19 +145,19 @@ pub fn load_intents(
                     Hook::Action(name) => {
                         let action = actions.get(&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?.lock_it().instance(skill_path.clone());
                         let act_set = ActionSet::create(action);
-                        sig_order.lock_it().add_intent(data, &intent_name, &skill_name, act_set)?;
+                        sig_order.lock_it().add_intent(data, &intent_name, &skill_name, act_set, langs)?;
                     },
                     Hook::Query(name) => {
                         // Note: Some very minimal support for queries
                         let q = queries.get(&name).ok_or_else(||anyhow!("Query '{}' does not exist", &name))?;
                         let act_set = ActionSet::create(ActQuery::new(q.clone(), name));
-                        sig_order.lock_it().add_intent(data, &intent_name, &skill_name, act_set)?;
+                        sig_order.lock_it().add_intent(data, &intent_name, &skill_name, act_set, langs)?;
                     },
                     Hook::Signal(name) => {
                         // Note: Some very minimal support for signals
                         let s = signals.get(&name).ok_or_else(||anyhow!("Signal '{}' does not exist", &name))?;
                         let act_set = ActionSet::create(ActSignal::new(s.clone(), name));
-                        sig_order.lock_it().add_intent(data, &intent_name, &skill_name, act_set)?;
+                        sig_order.lock_it().add_intent(data, &intent_name, &skill_name, act_set, langs)?;
                         unimplemented!();
                     }
                 }
@@ -207,7 +208,7 @@ impl HalfBakedDoubleError {
 }
 
 
-pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_lang: &Vec<LanguageIdentifier>, consumer: Receiver<EntityAddValueRequest>) -> Result<SignalRegistry> {
+pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_langs: &Vec<LanguageIdentifier>, consumer: Receiver<EntityAddValueRequest>) -> Result<SignalRegistry> {
     let mut loaders: Vec<Box<dyn Loader>> = vec![
         Box::new(PythonLoader::new()),
         Box::new(EmbeddedLoader::new(consumer))
@@ -223,7 +224,7 @@ pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_lang: &Vec<LanguageIdentifier
     let base_queryreg = LocalQueryRegistry::new(global_queryreg.clone());
 
     for loader in &mut loaders {
-        loader.init_base(global_sigreg.clone(), global_actreg.clone(), curr_lang.to_owned())?;
+        loader.init_base(global_sigreg.clone(), global_actreg.clone(), curr_langs.to_owned())?;
     }
 
     let mut not_loaded = vec![];
@@ -251,12 +252,12 @@ pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_lang: &Vec<LanguageIdentifier
             let gil = Python::acquire_gil();
             let py = gil.python();
 
-            load_trans(py, &entry, curr_lang).map_err(|e|{
+            load_trans(py, &entry, curr_langs).map_err(|e|{
                 HalfBakedDoubleError::from((skill_sigreg.clone(), skill_actreg.clone()), e)
             })?;
         }
 
-        load_intents(&mut skill_sigreg, &skill_actreg, &skill_queryreg, &entry).map_err(|e|{
+        load_intents(&mut skill_sigreg, &skill_actreg, &skill_queryreg, &entry, curr_langs).map_err(|e|{
             HalfBakedDoubleError::from((skill_sigreg, skill_actreg), e)
         })?;
         SKILL_PATH.lock_it().insert(skill_name.into(),Arc::new(entry.into()));
@@ -291,7 +292,7 @@ pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_lang: &Vec<LanguageIdentifier
         warn!("Not loaded: {}", not_loaded.join(","));
     }
 
-    global_sigreg.lock_it().end_load(curr_lang)?;
+    global_sigreg.lock_it().end_load(curr_langs)?;
 
     // This is overall stupid but haven't found any other (interesting way to do it)
     // We need the variable to help lifetime analisys
