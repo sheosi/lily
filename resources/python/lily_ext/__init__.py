@@ -101,6 +101,9 @@ def __compare_class_with(cls: Any, model: Any) -> __ProtocolErrs:
     return res
 
 def __compare_had_errors(cls: Any, model:Any, title:str, name: str) -> bool:
+    """Compare if two classes are equals, any error are reported and set the
+    return to false. Any warning are reported too but don't set the return to 
+    false"""
     cls_err = __compare_class_with(cls, model)
     if cls_err.has_errors():
         _lily_impl.log_error(f"{title.capitalize()} {name} doesn't conform to the {title} protocol: {cls_err}. Won't be loaded")
@@ -183,6 +186,7 @@ def query(name: str):
 
 
 def __gen_bundle(lang: str, trans_path: Path) -> FluentBundle:
+    """Generates a Fluent Bundle"""
     bundle = FluentBundle([lang])
     for trans_file in trans_path.glob("*.ftl"):
         if trans_file.is_file():
@@ -195,13 +199,17 @@ def __gen_bundle(lang: str, trans_path: Path) -> FluentBundle:
 
 class TransPack:
     """Just a small class containing a set of translations, both in current
-    language and in the default one, this way we can fallback to the default one
+    language and in the defaultset_translations(curr_langs_str: List[str]):
+    tr one, this way we can fallback to the default one
     if something ever happens"""
     def __init__(self, current_langs: Dict[str, FluentBundle], default: FluentBundle):
         self.current_langs = current_langs
         self.default = default
 
 def __set_translations(curr_langs_str: List[str]):
+    """ Sets the translations for the current skill. Will load them automatically
+    from $(current_path)/translations (current path is expected to be the skill's
+    root)"""
     trans_path = Path('translations')
     DEFAULT_LANG = "en-US"
 
@@ -229,7 +237,10 @@ def __set_translations(curr_langs_str: List[str]):
         _lily_impl.log_warn("Translations not present in " + os.getcwd())
 
 
-def _gen_trans_list(trans_name: str, lang: str) -> Tuple[FluentBundle, List[Any]]:
+def __gen_trans_list(trans_name: str, lang: str) -> Tuple[FluentBundle, List[Any]]:
+    """Will generate a list of translations availabe for some identifier (a 
+    fluent name, and also any attributes which will be picked as alternatives)
+    and an specified language"""
     translations = skills_translations[_lily_impl._get_curr_lily_skill()]
     if lang in translations.current_langs:
         try:
@@ -243,7 +254,7 @@ def _gen_trans_list(trans_name: str, lang: str) -> Tuple[FluentBundle, List[Any]
                 translator = translations.default
             else:
                 _lily_impl.log_warn(log_str)
-                raise
+                raise KeyError(log_str)
     else:
         log_str = f"Translation '{trans_name}'  not present in selected lang"
         if translations.default:
@@ -259,11 +270,13 @@ def _gen_trans_list(trans_name: str, lang: str) -> Tuple[FluentBundle, List[Any]
 
     return (translator, all_trans)
 
-def _translate_all_impl(trans_name: str, dict_args: Dict[str, Any], lang: str):
-    translations, all_trans = _gen_trans_list(trans_name, lang)
+def _translate_all_impl(trans_name: str, dict_args: Dict[str, Any], lang: str) -> List[str]:
+    """ Loads a translation and returns all members """
+    translations, all_trans = __gen_trans_list(trans_name, lang)
 
 
-    def extract_trans(element):
+    def extract_trans(element: Any) -> str:
+        """Formats an structured messaged with the translation args we have"""
         trans, err = translations.format_pattern(element, dict_args)
         if err:
             _lily_impl.log_warn(str(err))
@@ -272,8 +285,9 @@ def _translate_all_impl(trans_name: str, dict_args: Dict[str, Any], lang: str):
     res = list(map(extract_trans, all_trans))
     return res
 
-def _translate_impl(trans_name: str, dict_args: Dict[str, Any], lang: str):
-    translations, all_trans = _gen_trans_list(trans_name, lang)
+def _translate_impl(trans_name: str, dict_args: Dict[str, Any], lang: str) -> str:
+    """ Loads a translation and returns a random member """
+    translations, all_trans = __gen_trans_list(trans_name, lang)
     sel_trans = random.choice(all_trans)
     trans, err = translations.format_pattern(sel_trans, dict_args)
     if err: # Note: this will only show the error for the one picked
