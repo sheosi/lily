@@ -118,6 +118,25 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> SignalOrder<M> {
         
         process_answers(ans, lang, satellite.clone())
     }
+
+    pub fn end_loading(nlu: &Arc<Mutex<NluMap<M>>>,langs: &Vec<LanguageIdentifier>) -> Result<()> {
+        for lang in langs {
+            let (train_path, model_path) = M::get_paths();
+            let m = nlu.lock_it();
+            let nlu  = m.get_mut(lang)?;
+            if M::is_lang_compatible(lang) {
+                nlu.manager.ready_lang(lang)?;
+                nlu.nlu = Some(nlu.manager.train(&train_path, &model_path.join("main_model.json"), lang)?);
+            }
+            else {
+                Err(anyhow!("{} NLU is not compatible with the selected language", M::name()))?
+            }
+
+            info!("Initted Nlu");
+        }
+
+        Ok(())
+    }
 }
 
 impl<M:NluManager + NluManagerStatic + Debug + Send>  SignalOrder<M> {
@@ -135,7 +154,7 @@ impl<M:NluManager + NluManagerStatic + Debug + Send>  SignalOrder<M> {
 
     pub fn add_slot_type(&mut self, type_name: String, data: EntityDef, langs: &Vec<LanguageIdentifier>) -> Result<()> {
         for lang in langs {
-            let mut m = self.nlu.lock_it();
+            let m = self.nlu.lock_it();
             let trans_data = data.clone().into_translation(lang)?;
             m.get_mut_nlu_man(lang).add_entity(&type_name, trans_data);
         }
@@ -147,22 +166,7 @@ impl<M:NluManager + NluManagerStatic + Debug + Send>  SignalOrder<M> {
 #[async_trait(?Send)]
 impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for SignalOrder<M> {
     fn end_load(&mut self, curr_langs: &Vec<LanguageIdentifier>) -> Result<()> {
-        for lang in curr_langs {
-            let (train_path, model_path) = M::get_paths();
-            let mut m = self.nlu.lock_it();
-            let nlu  = m.get_mut(lang)?;
-            if M::is_lang_compatible(lang) {
-                nlu.manager.ready_lang(lang)?;
-                nlu.nlu = Some(nlu.manager.train(&train_path, &model_path.join("main_model.json"), lang)?);
-            }
-            else {
-                Err(anyhow!("{} NLU is not compatible with the selected language", M::name()))?
-            }
-
-            info!("Initted Nlu");
-        }
-
-        Ok(())
+        Self::end_loading(&self.nlu, curr_langs)
     }
 
     async fn event_loop(&mut self, 
@@ -189,15 +193,14 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
                     request.langs
                 };
 
-                let mut m = shared_nlu.lock_it();
+                let m = shared_nlu.lock_it();
                 for lang in langs {
                     let man = m.get_mut_nlu_man(&lang);
                     let mangled = mangle(&request.skill, &request.entity);
                     if let Err(e) = man.add_entity_value(&mangled, request.value.clone()) {
                         error!("Failed to add value to entity {}", e);
                     }
-
-                    SignalOrder::end_load(shared_nlu.clone(), &curr_langs)?;
+                    SignalOrder::end_loading(&shared_nlu, &curr_langs)?;
                 }
             }
         }
