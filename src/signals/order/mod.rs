@@ -77,7 +77,7 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> SignalOrder<M> {
             Some(decode_res) => {
 
                 if !decode_res.hypothesis.is_empty() {
-                    let m = self.nlu.lock_it();
+                    let mut m = self.nlu.lock_it();
                     let nlu = m.get_nlu(lang);
                     let result = nlu.parse(&decode_res.hypothesis).await.map_err(|err|anyhow!("Failed to parse: {:?}", err))?;
                     info!("{:?}", result);
@@ -122,7 +122,7 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> SignalOrder<M> {
     pub fn end_loading(nlu: &Arc<Mutex<NluMap<M>>>,langs: &Vec<LanguageIdentifier>) -> Result<()> {
         for lang in langs {
             let (train_path, model_path) = M::get_paths();
-            let m = nlu.lock_it();
+            let mut m = nlu.lock_it();
             let nlu  = m.get_mut(lang)?;
             if M::is_lang_compatible(lang) {
                 nlu.manager.ready_lang(lang)?;
@@ -154,7 +154,7 @@ impl<M:NluManager + NluManagerStatic + Debug + Send>  SignalOrder<M> {
 
     pub fn add_slot_type(&mut self, type_name: String, data: EntityDef, langs: &Vec<LanguageIdentifier>) -> Result<()> {
         for lang in langs {
-            let m = self.nlu.lock_it();
+            let mut m = self.nlu.lock_it();
             let trans_data = data.clone().into_translation(lang)?;
             m.get_mut_nlu_man(lang).add_entity(&type_name, trans_data);
         }
@@ -193,7 +193,7 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
                     request.langs
                 };
 
-                let m = shared_nlu.lock_it();
+                let mut m = shared_nlu.lock_it();
                 for lang in langs {
                     let man = m.get_mut_nlu_man(&lang);
                     let mangled = mangle(&request.skill, &request.entity);

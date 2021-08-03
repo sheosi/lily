@@ -107,19 +107,19 @@ impl<M: NluManager + NluManagerStatic + Debug + Send> NluMap<M> {
         NluMap{map: managers}
     }
 
-    pub fn get_nlu(&self, lang: &LanguageIdentifier) -> &mut <M as NluManager>::NluType {
+    pub fn get_nlu(&mut self, lang: &LanguageIdentifier) -> &mut <M as NluManager>::NluType {
         const ERR_MSG: &str = "Received language to the NLU was not registered";
         const NO_NLU_MSG: &str = "received_order can't be called before end_loading";
 
         self.map.get_mut(&lang).expect(ERR_MSG).nlu.as_mut().expect(NO_NLU_MSG)
     }
 
-    pub fn get_mut(&self, lang: &LanguageIdentifier) -> Result<&mut NluState<M>> {
+    pub fn get_mut(&mut self, lang: &LanguageIdentifier) -> Result<&mut NluState<M>> {
         let err = || {anyhow!("Received language '{}' has not been registered", lang.to_string())};
         self.map.get_mut(lang).ok_or_else(err)
     }
 
-    pub fn get_mut_nlu_man(&self, lang: &LanguageIdentifier) -> &mut M {
+    pub fn get_mut_nlu_man(&mut self, lang: &LanguageIdentifier) -> &mut M {
         self.map.get_mut(lang).expect("Language not registered").get_mut_nlu_man()
     }
 

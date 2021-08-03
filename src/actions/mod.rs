@@ -289,7 +289,7 @@ impl Action for SayHelloAction {
 pub struct SayHelloActionInstance {}
 
 impl ActionInstance for SayHelloActionInstance {
-    fn call(&self, context: &ActionContext) -> Result<ActionAnswer> {
+    fn call(&self, _context: &ActionContext) -> Result<ActionAnswer> {
         ActionAnswer::send_text("Hello".into(), true)
     }
 
