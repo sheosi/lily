@@ -19,12 +19,12 @@ thiserror = "^1.0" # For error handling in parts that can be made their own crat
 regex = "^1.5" # To parse configuration
 ctrlc = "^3.1" # To catch ctrl-c in all platforms and exit the program
 # Some async deps
-tokio = {version="^1.7", features = ["macros", "rt", "sync", "time"]}
+tokio = {version="^1.9", features = ["macros", "rt", "sync", "time"]}
 async-trait = "^0.1"
 rumqttc = "^0.8"
 rmp-serde = "^0.15"
 futures = "^0.3"
-delegate = "^0.5" # Used for the registries using the base ones
+delegate = "^0.6" # Used for the registries using the base ones
 void = "^1.0"
 
 pocketsphinx = "^0.6.0" # Offline Stt
@@ -32,7 +32,7 @@ deepspeech = {version = "^0.9", optional = true} # More correct and better (also
 magnum-opus = "^0.3" # Still used to propagate errors
 
 snips-nlu-lib = { git = "https://github.com/snipsco/snips-nlu-rs", branch = "master" } # NLU
-snips-nlu-ontology = { git = "https://github.com/snipsco/snips-nlu-ontology", tag = "0.67.1"  } # NLU-related things
+snips-nlu-ontology = { git = "https://github.com/snipsco/snips-nlu-ontology", tag = "0.67.2"  } # NLU-related things
 serde_json ="^1.0" # Used in nlu output and to get text from IBM's Wattson
 pyo3 = "^0.13" # Load code from packages
 lazy_static = "^1.4" # We use this for the path were the data is stored
