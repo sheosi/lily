@@ -114,7 +114,7 @@ pub fn try_translate(input: &str, lang: &str) -> Result<String> {
             let lily_ext = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
 
             // Remove initial $ from translation
-            let call_res_result = lily_ext.call("_translate_impl", (&input[1..], PyDict::new(python), lang), None);
+            let call_res_result = lily_ext.getattr("_translate_impl")?.call((&input[1..], PyDict::new(python), lang), None);
             let call_res = call_res_result.map_err(|py_err|{py_err.clone_ref(python).print(python);anyhow!("lily_ext's \"__translate_impl\" failed, most probably you tried to load an inexistent translation, {:?}", py_err)})?;
 
             let trans_lst: String = FromPyObject::extract(&call_res).map_err(|py_err|anyhow!("_translate_impl() didn't return a string: {:?}", py_err))?;
@@ -140,7 +140,7 @@ pub fn try_translate_all(input: &str, lang: &str) -> Result<Vec<String>> {
             let lily_ext = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
 
             // Remove initial $ from translation
-            let call_res_result = lily_ext.call("_translate_all_impl", (&input[1..], PyDict::new(python), lang), None);
+            let call_res_result = lily_ext.getattr("_translate_all_impl")?.call((&input[1..], PyDict::new(python), lang), None);
             let call_res = call_res_result.map_err(|py_err|{py_err.clone_ref(python).print(python);anyhow!("lily_ext's \"__translate_all_impl\" failed, most probably you tried to load an inexistent translation, {:?}", py_err)})?;
 
             let trans_lst: Vec<String> = FromPyObject::extract(&call_res).map_err(|py_err|anyhow!("_translate_all_impl() didn't return a list: {:?}", py_err))?;
@@ -181,7 +181,7 @@ pub fn add_py_folder(python: Python, actions_path: &Path) -> Result<(Vec<(PyObje
     let ext_mod = python.import("lily_ext")?;
 
     let extract_dict = |name: &str| -> Result<Vec<(PyObject,PyObject)>> {
-        let sgn_cls_obj = ext_mod.get(name)?; // Get objects
+        let sgn_cls_obj = ext_mod.getattr(name)?; // Get objects
         ext_mod.dict().set_item(name, PyDict::new(python))?; // Reset dict
         let sgn_dict = sgn_cls_obj.downcast::<PyDict>().map_err(|e|anyhow!("signal_classes is not a dict: {}",e))?;
         Ok(sgn_dict.items().extract()?)
@@ -368,7 +368,7 @@ mod sys_path {
     pub fn get<'a>(py: Python::<'a>)-> Result<&'a PyList> {
         let sys = py.import("sys").map_err(|py_err|anyhow!("Failed while importing sys package: {:?}", py_err))?;
         
-        let obj = sys.get("path").map_err(|py_err|anyhow!("Error while getting path module from sys: {:?}", py_err))?;
+        let obj = sys.getattr("path").map_err(|py_err|anyhow!("Error while getting path module from sys: {:?}", py_err))?;
         obj.cast_as::<PyList>().map_err(|py_err|anyhow!("What? Couldn't get path as a List: {:?}", py_err))
     }
 
@@ -383,10 +383,10 @@ mod sys_path {
 
 pub fn set_python_locale(py: Python, lang_id: &LanguageIdentifier) -> Result<()> {
     let locale = py.import("locale").map_err(|py_err|anyhow!("Failed while importing locale package: {:?}", py_err))?;
-    let lc_all = locale.get("LC_ALL").map_err(|py_err|anyhow!("Failed to get LC_ALL from locale: {:?}", py_err))?;
+    let lc_all = locale.getattr("LC_ALL").map_err(|py_err|anyhow!("Failed to get LC_ALL from locale: {:?}", py_err))?;
     let local_str = format!("{}.UTF-8", lang_id.to_string().replacen("-", "_", 1));
     log::info!("Curr locale: {:?}", local_str);
-    locale.call("setlocale", (lc_all, local_str), None).map_err(|py_err|anyhow!("Failed the call to setlocale: {:?}", py_err))?;
+    locale.getattr("setlocale")?.call((lc_all, local_str), None).map_err(|py_err|anyhow!("Failed the call to setlocale: {:?}", py_err))?;
     Ok(())
 }
 

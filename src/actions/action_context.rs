@@ -347,7 +347,7 @@ impl PyIterProtocol for  ActionContext {
 impl ActionContext {
     // classmethods
     #[classmethod]
-    fn fromkeys(_cls: &&PyType, py:Python, iterable: &PyAny, value: ContextElement) -> PyResult<ActionContext> {
+    fn fromkeys(_cls: &PyType, py:Python, iterable: &PyAny, value: ContextElement) -> PyResult<ActionContext> {
         let mut map = HashMap::new();
         let it = PyIterator::from_object(py,iterable.call_method("__iter__", (), None)?)?;
         for key in it {

@@ -94,7 +94,7 @@ fn load_trans(python: Python, skill_path: &Path, curr_langs: &Vec<LanguageIdenti
     let lily_py_mod = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
 
     let as_strs: Vec<String> = curr_langs.into_iter().map(|i|i.to_string()).collect();
-    call_for_skill(skill_path, |_| lily_py_mod.call("__set_translations", (as_strs,), None).map_err(|py_err|anyhow!("Python error while calling __set_translations: {:?}", py_err)))??;
+    call_for_skill(skill_path, |_| lily_py_mod.getattr("__set_translations")?.call((as_strs,), None).map_err(|py_err|anyhow!("Python error while calling __set_translations: {:?}", py_err)))??;
 
     Ok(())
 }
