@@ -49,8 +49,8 @@ google_translate_tts = {version = "0.1.2", optional = true} # Format TTS URLs
 reqwest = {version = "^0.11", features = ["default-tls", "json"]} # HTTP client
 url = "^2.2"
 base64 = "^0.13" # For sending data to the online TTS and STT
-tungstenite = {version = "^0.13", features = ["native-tls"]} # Web sockets for online STT, each version needs to be compatible with tokio-tungstenite
-tokio-tungstenite = {version = "^0.14", features = ["native-tls"]}
+tungstenite = {version = "^0.14", features = ["native-tls"]} # Web sockets for online STT, each version needs to be compatible with tokio-tungstenite
+tokio-tungstenite = {version = "^0.15", features = ["native-tls"]}
 
 chrono = "^0.4"
 
