@@ -274,17 +274,17 @@ impl Nlu for SnipsNlu {
 
     async fn parse(&self, input: &str) -> Result<NluResponse> {
         self.engine.parse_with_alternatives(&input, None, None, 3, 3)
-        .map(|r|r.into())
+        .map(|r|{let a: NluResponse =r.into(); a})
         .map_err(|_|anyhow!("Failed snips NLU"))
     }
 }
 
-impl Into<NluResponse> for snips_nlu_ontology::IntentParserResult {
-    fn into(self) -> NluResponse {
+impl From<snips_nlu_ontology::IntentParserResult> for NluResponse {
+    fn from(res: snips_nlu_ontology::IntentParserResult) -> NluResponse {
         NluResponse {
-            name: self.intent.intent_name,
-            confidence: self.intent.confidence_score,
-            slots: self.slots.into_iter()
+            name: res.intent.intent_name,
+            confidence: res.intent.confidence_score,
+            slots: res.slots.into_iter()
                              .map(|slt|NluResponseSlot{value: slt.raw_value, name: slt.slot_name})
                              .collect()
         }
