@@ -7,12 +7,12 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{ActionSet, ActionRegistry, ActionRegistryShared, LocalActionRegistry, PythonAction, SayHelloAction};
+use crate::actions::{ActionSet, ActionRegistry, LocalActionRegistry, PythonAction, SayHelloAction};
 use crate::collections::GlobalRegSend;
 use crate::exts::LockIt;
 use crate::python::add_py_folder;
 use crate::queries::{ActQuery, LocalQueryRegistry, PythonQuery, QueryRegistry};
-use crate::signals::{collections::{Hook, IntentData}, ActSignal, LocalSignalRegistry, new_signal_order, poll::PollQuery, PythonSignal, SignalRegistry, SignalRegistryShared, Timer};
+use crate::signals::{collections::{Hook, IntentData}, ActSignal, LocalSignalRegistry, new_signal_order, poll::PollQuery, PythonSignal, SignalRegistry, Timer};
 use crate::signals::registries::{ACT_REG, QUERY_REG};
 use crate::signals::order::dynamic_nlu::EntityAddValueRequest;
 use crate::nlu::EntityDef;
@@ -208,9 +208,9 @@ impl HalfBakedDoubleError {
 }
 
 
-pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_langs: &Vec<LanguageIdentifier>, consumer: Receiver<EntityAddValueRequest>) -> Result<SignalRegistry> {
+pub fn load_skills(paths: Vec<PathBuf>, curr_langs: &Vec<LanguageIdentifier>, consumer: Receiver<EntityAddValueRequest>) -> Result<SignalRegistry> {
     let mut loaders: Vec<Box<dyn Loader>> = vec![
-        Box::new(PythonLoader::new()),
+        Box::new(LocalLoader::new(paths)),
         Box::new(EmbeddedLoader::new(consumer))
     ];
 
@@ -224,72 +224,7 @@ pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_langs: &Vec<LanguageIdentifie
     let base_queryreg = LocalQueryRegistry::new(global_queryreg.clone());
 
     for loader in &mut loaders {
-        loader.init_base(global_sigreg.clone(), global_actreg.clone(), curr_langs.to_owned())?;
-    }
-
-    let mut not_loaded = vec![];
-
-    let process_skill = |entry: &Path| -> Result<(), HalfBakedDoubleError> {
-        let mut skill_sigreg = base_sigreg.clone();
-        let mut skill_actreg = base_actreg.clone();
-        let mut skill_queryreg = base_queryreg.clone();
-        for loader in &loaders {
-            let (local_sigreg, local_actreg, local_queryreg)= 
-                loader.load_code(&entry, &skill_sigreg, &skill_actreg, &skill_queryreg).map_err(|e|{
-                    HalfBakedDoubleError::from((skill_sigreg, skill_actreg), e)
-                })?;
-
-                skill_sigreg = local_sigreg;
-                skill_actreg = local_actreg;
-                skill_queryreg = local_queryreg;
-        }
-
-        let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy();
-        QUERY_REG.lock_it().insert( skill_name.to_string(), skill_queryreg.clone());
-        ACT_REG.lock_it().insert( skill_name.to_string(), skill_actreg.clone());
-        {
-            // Get GIL
-            let gil = Python::acquire_gil();
-            let py = gil.python();
-
-            load_trans(py, &entry, curr_langs).map_err(|e|{
-                HalfBakedDoubleError::from((skill_sigreg.clone(), skill_actreg.clone()), e)
-            })?;
-        }
-
-        load_intents(&mut skill_sigreg, &skill_actreg, &skill_queryreg, &entry, curr_langs).map_err(|e|{
-            HalfBakedDoubleError::from((skill_sigreg, skill_actreg), e)
-        })?;
-        SKILL_PATH.lock_it().insert(skill_name.into(),Arc::new(entry.into()));
-        Ok(())
-    };
-    
-    let skl_entries = path.into_iter()
-        .map(|skl_dir|std::fs::read_dir(skl_dir).expect(SKILLS_PATH_ERR_MSG))
-        .flatten()
-        .filter_map(|r|{match r{
-            Ok(v) => Some(v.path()),
-            Err(e) => {warn!("Loading an skill failed: {}", e); None}
-        }})
-        .filter(|p|p.is_dir());
-    
-
-    for entry in skl_entries {
-        match process_skill(&entry) {
-            Err(e) => {
-                let (skill_sigreg, skill_actreg) = e.act_sig;
-                skill_sigreg.minus(&base_sigreg).remove_from_global();
-                skill_actreg.minus(&base_actreg).remove_from_global();
-                let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy();
-                error!("Skill {} had a problem, won't be available. {}", skill_name, e.source);
-                not_loaded.push(skill_name.into_owned());
-            },
-            _ => ()
-        }
-    }
-
-    if !not_loaded.is_empty() {
-        warn!("Not loaded: {}", not_loaded.join(","));
+        loader.load_skills(&base_sigreg, &base_actreg, &base_queryreg, curr_langs)?;
     }
 
     global_sigreg.lock_it().end_load(curr_langs)?;
@@ -301,13 +236,18 @@ pub fn load_skills<P:AsRef<Path>>(path: &[P], curr_langs: &Vec<LanguageIdentifie
 }
 
 trait Loader {
-    fn init_base(&mut self, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<()>;
-    fn load_code(&self, skill_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry, base_quereg: &LocalQueryRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry, LocalQueryRegistry)> ;
+    fn load_skills(&mut self,
+        base_sigreg: &LocalSignalRegistry,
+        base_actreg: &LocalActionRegistry,
+        base_queryreg: &LocalQueryRegistry,
+        langs: &Vec<LanguageIdentifier>) -> Result<()>;
 }
 
-struct PythonLoader {}
+struct LocalLoader {
+    paths: Vec<PathBuf>
+}
 
-impl PythonLoader {
+impl LocalLoader {
     pub fn load_package_python(py: Python, path: &Path,
         skill_path: &Path,
         base_sigreg: &LocalSignalRegistry,
@@ -350,20 +290,94 @@ impl PythonLoader {
     }
 }
 
-impl Loader for PythonLoader {
-    fn init_base(&mut self, _glob_sigreg: SignalRegistryShared, _glob_actreg: ActionRegistryShared, _lang: Vec<LanguageIdentifier>) -> Result<()> {
-        // Get GIL
-        let gil = Python::acquire_gil();
-        let py = gil.python();
+impl Loader for LocalLoader {
 
-        // Same as load_package_python, but since those actions are crucial we
-        // want to make sure they exist and propagate error otherwise
-        let path = &PYTHON_SDK_PATH.resolve();
-        let _ = add_py_folder(py, path)?;
-        //PythonSignal::extend_and_init_classes_py_local(&mut sigreg, py, path, initial_signals)?;
-        //PythonAction::extend_and_init_classes_local(&mut actreg, py, initial_actions)?;
+    fn load_skills(&mut self,
+        base_sigreg: &LocalSignalRegistry,
+        base_actreg: &LocalActionRegistry,
+        base_queryreg: &LocalQueryRegistry,
+        curr_langs: &Vec<LanguageIdentifier>) -> Result<()>{
+        {
+            let gil = Python::acquire_gil();
+            let py = gil.python();
+    
+            // Same as load_package_python, but since those actions are crucial we
+            // want to make sure they exist and propagate error otherwise
+            let path = &PYTHON_SDK_PATH.resolve();
+            let _ = add_py_folder(py, path)?;
+        }
+
+        let mut not_loaded = vec![];
+
+        let process_skill = |entry: &Path| -> Result<(), HalfBakedDoubleError> {
+            let mut skill_sigreg = base_sigreg.clone();
+            let mut skill_actreg = base_actreg.clone();
+            let mut skill_queryreg = base_queryreg.clone();
+            
+            let (local_sigreg, local_actreg, local_queryreg)= 
+                self.load_code(&entry, &skill_sigreg, &skill_actreg, &skill_queryreg).map_err(|e|{
+                    HalfBakedDoubleError::from((skill_sigreg, skill_actreg), e)
+                })?;
+
+            skill_sigreg = local_sigreg;
+            skill_actreg = local_actreg;
+            skill_queryreg = local_queryreg;
+            
+    
+            let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy();
+            QUERY_REG.lock_it().insert( skill_name.to_string(), skill_queryreg.clone());
+            ACT_REG.lock_it().insert( skill_name.to_string(), skill_actreg.clone());
+            {
+                // Get GIL
+                let gil = Python::acquire_gil();
+                let py = gil.python();
+    
+                load_trans(py, &entry, curr_langs).map_err(|e|{
+                    HalfBakedDoubleError::from((skill_sigreg.clone(), skill_actreg.clone()), e)
+                })?;
+            }
+    
+            load_intents(&mut skill_sigreg, &skill_actreg, &skill_queryreg, &entry, curr_langs).map_err(|e|{
+                HalfBakedDoubleError::from((skill_sigreg, skill_actreg), e)
+            })?;
+            SKILL_PATH.lock_it().insert(skill_name.into(),Arc::new(entry.into()));
+            Ok(())
+        };
+        
+        let skl_entries = self.paths.iter()
+            .map(|skl_dir|std::fs::read_dir(skl_dir).expect(SKILLS_PATH_ERR_MSG))
+            .flatten()
+            .filter_map(|r|{match r{
+                Ok(v) => Some(v.path()),
+                Err(e) => {warn!("Loading an skill failed: {}", e); None}
+            }})
+            .filter(|p|p.is_dir());
+        
+    
+        for entry in skl_entries {
+            match process_skill(&entry) {
+                Err(e) => {
+                    let (skill_sigreg, skill_actreg) = e.act_sig;
+                    skill_sigreg.minus(&base_sigreg).remove_from_global();
+                    skill_actreg.minus(&base_actreg).remove_from_global();
+                    let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy();
+                    error!("Skill {} had a problem, won't be available. {}", skill_name, e.source);
+                    not_loaded.push(skill_name.into_owned());
+                },
+                _ => ()
+            }
+        }
+    
+        if !not_loaded.is_empty() {
+            warn!("Not loaded: {}", not_loaded.join(","));
+        }
 
         Ok(())
+    }
+}
+impl LocalLoader {
+    fn new(paths: Vec<PathBuf>) -> Self {
+        Self{paths}
     }
 
     fn load_code(&self, skill_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry, base_quereg: &LocalQueryRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry, LocalQueryRegistry)> {
@@ -371,11 +385,6 @@ impl Loader for PythonLoader {
         let gil = Python::acquire_gil();
         let py = gil.python();
         Self::load_package_python(py, &skill_path.join("python"), &skill_path, base_sigreg, base_actreg, base_quereg)
-    }
-}
-impl PythonLoader {
-    fn new() -> Self {
-        Self{}
     }
 }
 
@@ -390,19 +399,40 @@ impl EmbeddedLoader {
 }
 
 impl Loader for EmbeddedLoader {
-    fn init_base(&mut self, glob_sigreg: SignalRegistryShared, glob_actreg: ActionRegistryShared, lang: Vec<LanguageIdentifier>) -> Result<()> {
-        let mut mut_sigreg = glob_sigreg.lock_it();
-        let mut mut_actreg = glob_actreg.lock_it();
+    fn load_skills(&mut self, 
+        base_sigreg: &LocalSignalRegistry,
+        base_actreg: &LocalActionRegistry,
+        _base_queryreg: &LocalQueryRegistry,
+        langs: &Vec<LanguageIdentifier>) -> Result<()> {
+        let mut mut_sigreg = base_sigreg.get_global_mut();
+        let mut mut_actreg = base_actreg.get_global_mut();
         let consumer = replace(&mut self.consumer, None).expect("Consumer already consumed");
-        mut_sigreg.set_order(Arc::new(Mutex::new(new_signal_order(lang, consumer))))?;
+        
+        mut_sigreg.set_order(Arc::new(Mutex::new(new_signal_order(langs.to_owned(), consumer))))?;
         mut_sigreg.set_poll(Arc::new(Mutex::new(PollQuery::new())))?;
         mut_sigreg.insert("embedded".into(),"timer".into(), Arc::new(Mutex::new(Timer::new())))?;
         mut_actreg.insert("embedded".into(),"say_hello".into(), Arc::new(Mutex::new(SayHelloAction::new())))?;
 
         Ok(())
     }
+}
 
-    fn load_code(&self, _skill_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry, base_quereg: &LocalQueryRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry, LocalQueryRegistry)> {
-        Ok((base_sigreg.clone(), base_actreg.clone(), base_quereg.clone()))
+struct RemoteLoader {
+
+}
+
+impl RemoteLoader {
+    
+}
+
+impl Loader for RemoteLoader {
+    fn load_skills(&mut self,
+        _base_sigreg: &LocalSignalRegistry,
+        _base_actreg: &LocalActionRegistry,
+        _base_queryreg: &LocalQueryRegistry,
+        _langs: &Vec<LanguageIdentifier>) -> Result<()> {
+
+
+        Ok(())
     }
 }
