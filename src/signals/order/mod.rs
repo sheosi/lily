@@ -15,11 +15,12 @@ use std::sync::{Arc, Mutex};
 use crate::actions::{ActionAnswer, ActionContext, ActionSet, MainAnswer};
 use crate::config::Config;
 use crate::exts::LockIt;
+use crate::mqtt::MqttApi;
 use crate::nlu::{EntityDef, Nlu, NluManager, NluManagerStatic, NluResponseSlot};
 use crate::stt::DecodeRes;
 use crate::signals::{collections::{IntentData, NluMap}, dynamic_nlu::EntityAddValueRequest, ActMap, Signal, SignalEventShared};
 use crate::vars::{mangle, MIN_SCORE_FOR_ACTION};
-use self::{mqtt::{MqttInterface, MSG_OUTPUT}, server_actions::{on_event, on_nlu_request}, dev_mgmt::SessionManager};
+use self::{mqtt::MSG_OUTPUT, server_actions::{on_event, on_nlu_request}, dev_mgmt::SessionManager};
 
 // Other crates
 use anyhow::{Result, anyhow};
@@ -175,7 +176,7 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
         base_context: &ActionContext,
         curr_langs: &Vec<LanguageIdentifier>
     ) -> Result<()> {
-        let mut interface = MqttInterface::new()?;
+        let mut mqtt = MqttApi::new()?;
 
         // Dyn entities data
         
@@ -210,13 +211,13 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
         let sessions = Arc::new(Mutex::new(SessionManager::new()));
         let def_lang = curr_langs.get(0);
         let dyn_ent_fut = on_dyn_entity(
-             replace(&mut self.dyn_entities, None).expect("Dyn_entities already consumed"),
-             self.nlu.clone(),
-             curr_langs.clone()
+            replace(&mut self.dyn_entities, None).expect("Dyn_entities already consumed"),
+            self.nlu.clone(),
+            curr_langs.clone()
         );
         select!{
             e = dyn_ent_fut => {Err(anyhow!("Dynamic entitying failed: {:?}",e))}
-            e = interface.interface_loop(config, curr_langs, def_lang, sessions.clone(), nlu_sender, event_sender) => {e}
+            e = mqtt.api_loop(config, curr_langs, def_lang, sessions.clone(), nlu_sender, event_sender) => {e}
             e = on_nlu_request(config, nlu_receiver, signal_event.clone(), curr_langs, self, base_context, sessions) => {Err(anyhow!("Nlu request failed: {:?}", e))}
             e = on_event(event_receiver, signal_event, def_lang, base_context) => {Err(anyhow!("Event handling failed: {:?}", e))}
         }

@@ -2,6 +2,7 @@ mod actions;
 mod config;
 mod nlu;
 mod exts;
+mod mqtt;
 mod python;
 mod skills;
 mod collections;

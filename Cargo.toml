@@ -23,6 +23,7 @@ tokio = {version="^1.9", features = ["macros", "rt", "sync", "time"]}
 async-trait = "^0.1"
 rumqttc = "^0.8"
 rmp-serde = "^0.15"
+bytes = "^1.1"
 futures = "^0.3"
 delegate = "^0.6" # Used for the registries using the base ones
 void = "^1.0"
