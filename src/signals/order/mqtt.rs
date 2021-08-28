@@ -59,6 +59,16 @@ impl MqttInterfaceIn {
         Ok(())
     }
 
+    pub async fn subscribe(client: &Arc<Mutex<AsyncClient>>) -> Result<()> {
+        let client_raw = client.lock_it();
+        client_raw.subscribe("lily/new_satellite", QoS::AtMostOnce).await?;
+        client_raw.subscribe("lily/nlu_process", QoS::AtMostOnce).await?;
+        client_raw.subscribe("lily/event", QoS::AtMostOnce).await?;
+        client_raw.subscribe("lily/disconnected", QoS::ExactlyOnce).await?;
+
+        Ok(())
+    }
+
 }
 pub struct MqttInterfaceOut {
     common_out: mpsc::Receiver<(SendData, String)>
