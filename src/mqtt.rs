@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use crate::{config::Config};
 use crate::signals::mqtt::{MqttInterfaceIn, MqttInterfaceOut};
 use crate::signals::order::dev_mgmt::SessionManager;
+use crate::skills::hermes::{HermesApiIn, HermesApiOut};
 use crate::tts::TtsData;
 
 use anyhow::Result;
@@ -48,11 +49,15 @@ impl MqttApi {
 
 pub struct MqttApiIn {
     satellite_server_in: MqttInterfaceIn,
+    hermes_in: HermesApiIn,
 }
 
 impl MqttApiIn {
     fn new() -> Self {
-        Self{satellite_server_in: MqttInterfaceIn::new()}
+        Self{
+            hermes_in: HermesApiIn::new(),
+            satellite_server_in: MqttInterfaceIn::new()
+        }
     }
     async fn handle(
         &mut self,
@@ -64,11 +69,13 @@ impl MqttApiIn {
     ) -> Result<()> {
         
         MqttInterfaceIn::subscribe(&client).await?;
+        HermesApiIn::subscribe(&client).await?;
 
         loop {
             match eloop.poll().await? {
                 Event::Incoming(Packet::Publish(pub_msg)) => {
                     match pub_msg.topic.as_str() {
+                        // Lily client related
                         "lily/new_satellite" => {
                             self.satellite_server_in.handle_new_sattelite(&pub_msg.payload, config, &client).await?;
                         }
@@ -81,6 +88,9 @@ impl MqttApiIn {
                         "lily/disconnected" => {
                             self.satellite_server_in.handle_disconnected(&pub_msg.payload).await?;
                         }
+
+                        // Hermes related
+                        
                         _ => {}
                     }
                 }
@@ -91,12 +101,16 @@ impl MqttApiIn {
 }
 
 pub struct MqttApiOut {
-    satellite_server_out: MqttInterfaceOut
+    satellite_server_out: MqttInterfaceOut,
+    hermes_out: HermesApiOut,
 }
 
 impl MqttApiOut {
     fn new() -> Result<Self> {
-        Ok(Self{satellite_server_out: MqttInterfaceOut::new()?})
+        Ok(Self{
+            hermes_out: HermesApiOut::new(),
+            satellite_server_out: MqttInterfaceOut::new()?
+        })
     }
     
     async fn handle(&mut self,

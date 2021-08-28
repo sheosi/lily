@@ -1,6 +1,6 @@
 pub mod local;
 mod embedded;
-mod remote;
+pub mod hermes;
 
 // Standard library
 use std::{cell::{Ref, RefCell}};
@@ -14,7 +14,7 @@ use crate::exts::LockIt;
 use crate::queries::{LocalQueryRegistry, QueryRegistry};
 use crate::signals::{LocalSignalRegistry, SignalRegistry};
 use crate::signals::order::dynamic_nlu::EntityAddValueRequest;
-use self::{embedded::EmbeddedLoader, local::LocalLoader, remote::RemoteLoader};
+use self::{embedded::EmbeddedLoader, local::LocalLoader, hermes::HermesLoader};
 
 // Other crates
 use anyhow::{anyhow, Result};
@@ -24,19 +24,6 @@ use unic_langid::LanguageIdentifier;
 thread_local! {
     pub static PYTHON_LILY_SKILL: RefString = RefString::new("<None>");
 }
-
-/*trait IntoMapping {
-    fn into_mapping(self) -> Option<serde_yaml::Mapping>;
-}
-
-impl IntoMapping for serde_yaml::Value {
-    fn into_mapping(self) -> Option<serde_yaml::Mapping> {
-        match self {
-            serde_yaml::Value::Mapping(mapping) => Some(mapping),
-            _ => None
-        }
-    }
-}*/
 
 pub fn call_for_skill<F, R>(path: &Path, f: F) -> Result<R> where F: FnOnce(Rc<String>) -> R {
     let canon_path = path.canonicalize()?;
@@ -83,7 +70,7 @@ pub fn load_skills(paths: Vec<PathBuf>, curr_langs: &Vec<LanguageIdentifier>, co
     let mut loaders: Vec<Box<dyn Loader>> = vec![
         Box::new(EmbeddedLoader::new(consumer)),
         Box::new(LocalLoader::new(paths)),
-        Box::new(RemoteLoader::new())
+        Box::new(HermesLoader::new())
     ];
 
     let global_sigreg = Arc::new(Mutex::new(SignalRegistry::new()));

@@ -1,26 +1,28 @@
 // Standard library
-
+use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::actions::LocalActionRegistry;
+use crate::exts::LockIt;
 use crate::queries::LocalQueryRegistry;
 use crate::signals::LocalSignalRegistry;
 use crate::skills::Loader;
 
 // Other crates
 use anyhow::Result;
+use rumqttc::{AsyncClient, QoS};
 use unic_langid::LanguageIdentifier;
-pub struct RemoteLoader {
+pub struct HermesLoader {
 
 }
 
-impl RemoteLoader {
+impl HermesLoader {
     pub fn new() -> Self {
         Self {}
     }
 }
 
-impl Loader for RemoteLoader {
+impl Loader for HermesLoader {
     fn load_skills(&mut self,
         _base_sigreg: &LocalSignalRegistry,
         _base_actreg: &LocalActionRegistry,
@@ -29,5 +31,31 @@ impl Loader for RemoteLoader {
 
 
         Ok(())
+    }
+}
+
+pub struct HermesApiIn {
+
+}
+
+impl HermesApiIn {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub async fn subscribe(client: &Arc<Mutex<AsyncClient>>) -> Result<()> {
+        let client_raw = client.lock_it();
+        
+
+        Ok(())
+    }
+}
+
+pub struct HermesApiOut {
+}
+
+impl HermesApiOut {
+    pub fn new() -> Self {
+        Self {}
     }
 }
