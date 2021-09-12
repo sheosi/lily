@@ -176,7 +176,8 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
         base_context: &ActionContext,
         curr_langs: &Vec<LanguageIdentifier>
     ) -> Result<()> {
-        let mut mqtt = MqttApi::new()?;
+        let def_lang = curr_langs.get(0);
+        let mut mqtt = MqttApi::new(def_lang.expect("We need at least one language").clone())?;
 
         // Dyn entities data
         
@@ -209,7 +210,6 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
         let (nlu_sender, nlu_receiver) = tokio::sync::mpsc::channel(100);
         let (event_sender, event_receiver) = tokio::sync::mpsc::channel(100);
         let sessions = Arc::new(Mutex::new(SessionManager::new()));
-        let def_lang = curr_langs.get(0);
         let dyn_ent_fut = on_dyn_entity(
             replace(&mut self.dyn_entities, None).expect("Dyn_entities already consumed"),
             self.nlu.clone(),
@@ -236,7 +236,7 @@ fn add_slots(base_context: &ActionContext, slots: Vec<NluResponseSlot>) -> Actio
 
 // Response
 fn process_answer(ans: ActionAnswer, lang: &LanguageIdentifier, uuid: String) -> Result<()> {
-    MSG_OUTPUT. with::<_,Result<()>>(|m|{match *m.borrow_mut() {
+    MSG_OUTPUT.with::<_,Result<()>>(|m|{match *m.borrow_mut() {
         Some(ref mut output) => {
             match ans.answer {
                 MainAnswer::Sound(s) => {

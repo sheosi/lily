@@ -5,7 +5,7 @@ use std::process::Command;
 
 use crate::actions::ActionSet;
 use crate::exts::LockIt;
-use crate::skills::{call_for_skill, PYTHON_LILY_SKILL, local::SKILL_PATH};
+use crate::skills::{call_for_skill, PYTHON_LILY_SKILL};
 use crate::signals::{
     registries::{ACT_REG, POLL_SIGNAL, QUERY_REG},
     order::{dynamic_nlu::{ENTITY_ADD_CHANNEL, EntityAddValueRequest}, dev_mgmt::CAPS_MANAGER}
@@ -323,9 +323,6 @@ fn add_task(q_name: String, a_name: String) -> PyResult<()> {
     }
 
     let n = get_current_skill()?;
-    let skill_path = 
-        SKILL_PATH.lock_it()
-        .get(&n).expect("A skill has no path registered").clone();
 
     let acts = {
         let map =ACT_REG.lock_it();
@@ -336,7 +333,7 @@ fn add_task(q_name: String, a_name: String) -> PyResult<()> {
         let action = r.get(&a_name)
         .ok_or_else(||assertion("Action does not exist"))?
         .lock_it()
-        .instance(skill_path);
+        .instance();
 
         ActionSet::create(action)
     };

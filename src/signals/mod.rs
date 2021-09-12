@@ -22,7 +22,6 @@ use crate::exts::LockIt;
 // Other crates
 use anyhow::Result;
 use async_trait::async_trait;
-use lily_common::vars::PathRef;
 use unic_langid::LanguageIdentifier;
 
 pub type SignalEventShared = Arc<Mutex<SignalEvent>>;
@@ -104,14 +103,13 @@ impl ActionInstance for ActSignal {
         // TODO: In theory, Lily should ask which parameters for the signal and 
         // which action to be executed but we can't do that right now
         let m = HashMap::new();
-        let path = Arc::new(PathRef::own("").resolve()); // Just use the base of Lily for the time being
         let a = ACT_REG.lock_it()
         .get("embedded")
         .expect("Skill 'embedded' is somehow not available")
         .get("say_hello")
         .expect("Embedded skill 'say_hello' is not available")
         .lock_it()
-        .instance(path);
+        .instance();
 
         let acts = ActionSet::create(a);
 

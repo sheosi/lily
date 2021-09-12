@@ -51,7 +51,7 @@ impl LocalLoader {
         }?;
 
         let mut actreg = base_actreg.clone();
-        match PythonAction::extend_and_init_classes_local(&mut actreg, py, name.clone().into(), action_classes) {
+        match PythonAction::extend_and_init_classes_local(&mut actreg, py, name.clone().into(), action_classes, Arc::new(skill_path.to_path_buf())) {
             Ok(()) => {Ok(())}
             Err(e) => {
                 // Also, drop all actions from this package
@@ -206,8 +206,6 @@ fn load_intents(
     langs: &Vec<LanguageIdentifier>) -> Result<()> {
     info!("Loading skill: {}", path.to_str().ok_or_else(|| anyhow!("Failed to get the str from path {:?}", path))?);
 
-
-    let skill_path = Arc::new(path.to_path_buf());
     call_for_skill::<_, Result<()>>(path, |skill_name| {
 
         let yaml_path = path.join("model.yaml");
@@ -242,7 +240,7 @@ fn load_intents(
             for (intent_name, data) in skilldef.intents.into_iter() {
                 match data.hook.clone() {
                     Hook::Action(name) => {
-                        let action = actions.get(&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?.lock_it().instance(skill_path.clone());
+                        let action = actions.get(&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?.lock_it().instance();
                         let act_set = ActionSet::create(action);
                         sig_order.lock_it().add_intent(data, &intent_name, &skill_name, act_set, langs)?;
                     },
@@ -275,7 +273,7 @@ fn load_intents(
             if !evs.is_empty() {
                 let sigevent = signals.get_sig_event();
                 let def_action = def_action.ok_or_else(||anyhow!("Skill contains events but no action linked"))?;
-                let action = actions.get(&def_action).ok_or_else(||anyhow!("Action '{}' does not exist", &def_action))?.lock_it().instance(skill_path.clone());
+                let action = actions.get(&def_action).ok_or_else(||anyhow!("Action '{}' does not exist", &def_action))?.lock_it().instance();
                 let act_set = ActionSet::create(action);
                 for ev in evs {
                     sigevent.lock().unwrap().add(&ev, act_set.clone());

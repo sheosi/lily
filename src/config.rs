@@ -1,11 +1,14 @@
+// Standard library
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+// This crate
 use crate::stt::SttData;
 use crate::tts::TtsData;
 use crate::vars::MAIN_CONF_PATH;
 
+// Other crates
 use anyhow::{anyhow, Result};
 use lily_common::communication::ClientConf;
 use lily_common::other::{false_val, ConnectionConf, none};
@@ -14,7 +17,7 @@ use serde::Deserialize;
 use serde_yaml::Value;
 
 thread_local! {
-     pub static GLOBAL_CONF: RefCell<Rc<Config>> = RefCell::new(Rc::new(Config::default()));
+    pub static GLOBAL_CONF: RefCell<Rc<Config>> = RefCell::new(Rc::new(Config::default()));
 }
 
 #[derive(Clone, Debug, Deserialize)]

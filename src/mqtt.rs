@@ -16,9 +16,9 @@ pub struct MqttApi {
     api_out: MqttApiOut
 }
 impl MqttApi {
-    pub fn new() -> Result<Self> {
+    pub fn new(def_lang: LanguageIdentifier) -> Result<Self> {
         Ok(Self {
-            api_in: MqttApiIn::new(),
+            api_in: MqttApiIn::new(def_lang),
             api_out: MqttApiOut::new()?
         })
     }
@@ -53,9 +53,9 @@ pub struct MqttApiIn {
 }
 
 impl MqttApiIn {
-    fn new() -> Self {
+    fn new(def_lang: LanguageIdentifier) -> Self {
         Self{
-            hermes_in: HermesApiIn::new(),
+            hermes_in: HermesApiIn::new(def_lang),
             satellite_server_in: MqttInterfaceIn::new()
         }
     }
@@ -90,7 +90,9 @@ impl MqttApiIn {
                         }
 
                         // Hermes related
-                        
+                        "hermes/tts/say" => {
+                            self.hermes_in.handle_tts_say(&pub_msg.payload).await?;
+                        }
                         _ => {}
                     }
                 }

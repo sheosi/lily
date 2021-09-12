@@ -77,7 +77,7 @@ pub trait ActionInstance {
 }
 
 pub trait Action {
-    fn instance(&self, lily_skill_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send>;
+    fn instance(&self) -> Box<dyn ActionInstance + Send>;
 }
 
 pub trait ActionItemExt {
@@ -93,22 +93,24 @@ impl ActionItemExt for ActionItem {
 #[derive(Debug)]
 pub struct PythonAction {
     act_name: Py<PyAny>,
-    obj: PyObject
+    obj: PyObject,
+    skill_path:Arc<PathBuf>
 }
 
 impl PythonAction {
-    pub fn new(act_name: Py<PyAny>, obj: PyObject) -> Self {
-        Self{act_name, obj}
+    pub fn new(act_name: Py<PyAny>, obj: PyObject, skill_path: Arc<PathBuf>) -> Self {
+        Self{act_name, obj, skill_path}
     }
 
     pub fn extend_and_init_classes_local(
         act_reg: &mut LocalActionRegistry,
         py:Python,
         skill_name: String,
-        action_classes: Vec<(PyObject, PyObject)>)
+        action_classes: Vec<(PyObject, PyObject)>,
+        skill_path: Arc<PathBuf>)
         -> Result<(), HalfBakedError> {
 
-        let actions = Self::extend_and_init_classes(&mut act_reg.get_global_mut(), py, skill_name, action_classes)?;
+        let actions = Self::extend_and_init_classes(&mut act_reg.get_global_mut(), py, skill_name, action_classes, skill_path)?;
         act_reg.extend_with_map(actions);
         Ok(())
     }
@@ -118,15 +120,15 @@ impl PythonAction {
         act_reg: &mut ActionRegistry,
         python: Python,
         skill_name: String,
-        action_classes: Vec<(PyObject, PyObject)>)
-        -> Result<HashMap<String, ActionItem>, HalfBakedError> {
+        action_classes: Vec<(PyObject, PyObject)>,
+        skill_path: Arc<PathBuf>) -> Result<HashMap<String, ActionItem>, HalfBakedError> {
 
         let process_list = || -> Result<_> {
             let mut act_to_add = vec![];
             for (key, val) in  &action_classes {
                 let name = key.to_string();
                 let pyobj = val.call(python, PyTuple::empty(python), None).map_err(|py_err|anyhow!("Python error while instancing action \"{}\": {:?}", name, py_err.to_string()))?;
-                let rc: ActionItem = Arc::new(Mutex::new(PythonAction::new(key.to_owned(),pyobj)));
+                let rc: ActionItem = Arc::new(Mutex::new(PythonAction::new(key.to_owned(),pyobj, skill_path.clone())));
                 act_to_add.push((name,rc));
             }
             Ok(act_to_add)
@@ -157,8 +159,10 @@ impl PythonAction {
 }
 
 impl Action for PythonAction {
-    fn instance(&self, lily_skill_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send> {
-        Box::new(PythonActionInstance::new(self.obj.clone(), lily_skill_path))
+    fn instance(&self) -> Box<dyn ActionInstance + Send> {
+        Box::new(PythonActionInstance::new(
+            self.obj.clone(),
+            self.skill_path.clone()))
     }
 }
 
@@ -281,7 +285,7 @@ impl SayHelloAction {
 }
 
 impl Action for SayHelloAction {
-    fn instance(&self, _lily_skill_path:Arc<PathBuf>) -> Box<dyn ActionInstance + Send> {
+    fn instance(&self) -> Box<dyn ActionInstance + Send> {
         Box::new(SayHelloActionInstance{})
     }
 }
