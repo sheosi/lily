@@ -5,6 +5,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::str::FromStr;
 use std::path::{Path, PathBuf};
 
+#[cfg(feature="python_skills")]
 use crate::python::try_translate;
 use crate::exts::StringList;
 
@@ -83,6 +84,7 @@ pub struct EntityData {
 }
 
 impl EntityData {
+    #[cfg(feature="python_skills")]
     pub fn into_translation(self, lang: &LanguageIdentifier) -> Result<Self> {
         let l_str = lang.to_string();
         let value = try_translate(&self.value, &l_str)?;
@@ -169,6 +171,8 @@ impl EntityDef {
     pub fn new(data: Vec<EntityData>, automatically_extensible: bool) -> Self {
         Self {data, automatically_extensible}
     }
+    
+    #[cfg(feature="python_skills")]
     pub fn into_translation(self, lang: &LanguageIdentifier) -> Result<EntityDef> {
         let data_res: Result<Vec<_>,_> = self.data.into_iter().map(|d|d.into_translation(lang)).collect();
         Ok(EntityDef {

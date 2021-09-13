@@ -7,19 +7,32 @@ use crate::exts::LockIt;
 use crate::vars::UNEXPECTED_MSG;
 
 // Other crates
+#[cfg(feature="python_skills")]
 use pyo3::{IntoPy, Py, PyAny, PyErr, PyIterProtocol, PyObject, PyRef, PyRefMut, PyResult, Python, exceptions::*, types::{PyDict, PyIterator, PyTuple, PyType}};
+#[cfg(feature="python_skills")]
 use pyo3::prelude::{FromPyObject, pyclass, pymethods, pyproto};
+#[cfg(feature="python_skills")]
 use pyo3::class::PyObjectProtocol;
+#[cfg(feature="python_skills")]
 use pyo3::mapping::PyMappingProtocol;
+#[cfg(feature="python_skills")]
 use pyo3::sequence::PySequenceProtocol;
 
-
+#[cfg(feature="python_skills")]
 #[derive(Clone, Debug, FromPyObject, PartialEq)]
 pub enum ContextElement {
     String(String),
     Dict(ActionContext)
 }
 
+#[cfg(not(feature="python_skills"))]
+#[derive(Clone, Debug, PartialEq)]
+pub enum ContextElement {
+    String(String),
+    Dict(ActionContext)
+}
+
+#[cfg(feature="python_skills")]
 impl IntoPy<PyObject> for ContextElement {
     fn into_py(self, py: Python) -> PyObject {
         match self {
@@ -68,12 +81,13 @@ impl BaseIterator {
     }
 }
 
-
+#[cfg(feature="python_skills")]
 #[pyclass]
 pub struct ActionContextItemsIterator {
     base: BaseIterator
 }
 
+#[cfg(feature="python_skills")]
 impl ActionContextItemsIterator {
     fn new(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
         Self { base: BaseIterator::new(inner)}
@@ -84,6 +98,7 @@ impl ActionContextItemsIterator {
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pyproto]
 impl PyIterProtocol for ActionContextItemsIterator {
     fn __iter__(slf: PyRefMut<Self>) -> Py<ActionContextItemsIterator> {
@@ -100,11 +115,13 @@ impl PyIterProtocol for ActionContextItemsIterator {
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pyclass]
 struct ActionContextValuesIterator {
     base: BaseIterator
 }
 
+#[cfg(feature="python_skills")]
 impl ActionContextValuesIterator {
     fn new(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
         Self { base: BaseIterator::new(inner)}
@@ -115,6 +132,7 @@ impl ActionContextValuesIterator {
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pyproto]
 impl PyIterProtocol for ActionContextValuesIterator {
     fn __iter__(slf: PyRefMut<Self>) -> Py<ActionContextValuesIterator> {
@@ -131,11 +149,13 @@ impl PyIterProtocol for ActionContextValuesIterator {
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pyclass]
 struct ActionContextKeysIterator {
     base: BaseIterator
 }
 
+#[cfg(feature="python_skills")]
 impl ActionContextKeysIterator {
     fn new(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
         Self { base: BaseIterator::new(inner)}
@@ -146,6 +166,7 @@ impl ActionContextKeysIterator {
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pyproto]
 impl PyIterProtocol for ActionContextKeysIterator {
     fn __iter__(slf: PyRefMut<Self>) -> Py<ActionContextKeysIterator> {
@@ -162,19 +183,20 @@ impl PyIterProtocol for ActionContextKeysIterator {
     }
 }
 
-
+#[cfg(feature="python_skills")]
 #[pyclass]
 struct ActionContextItemsView {
     inner: Arc<Mutex<HashMap<String, ContextElement>>>,
 }
 
+#[cfg(feature="python_skills")]
 impl ActionContextItemsView {
     fn from(ctx: &ActionContext) -> Self {
         Self{inner: ctx.map.clone()}
     }
 }
 
-
+#[cfg(feature="python_skills")]
 #[pymethods]
 impl ActionContextItemsView {
     fn __len__(&self) -> usize {
@@ -191,6 +213,7 @@ impl ActionContextItemsView {
 
 }
 
+#[cfg(feature="python_skills")]
 #[pyproto]
 impl PyIterProtocol for  ActionContextItemsView {
     fn __iter__(slf: PyRef<Self>) -> PyResult<Py<ActionContextItemsIterator>> {
@@ -198,6 +221,7 @@ impl PyIterProtocol for  ActionContextItemsView {
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pyproto]
 impl PySequenceProtocol for ActionContextItemsView {
     fn __contains__(&self, k: &str) -> bool {
@@ -205,19 +229,20 @@ impl PySequenceProtocol for ActionContextItemsView {
     }
 }
 
-
+#[cfg(feature="python_skills")]
 #[pyclass]
 struct ActionContextValuesView {
     inner: Arc<Mutex<HashMap<String, ContextElement>>>,
 }
 
+#[cfg(feature="python_skills")]
 impl ActionContextValuesView {
     fn from(ctx: &ActionContext) -> Self {
         Self{inner: ctx.map.clone()}
     }
 }
 
-
+#[cfg(feature="python_skills")]
 #[pymethods]
 impl ActionContextValuesView {
     fn __len__(&self) -> usize {
@@ -234,17 +259,20 @@ impl ActionContextValuesView {
 
 }
 
+#[cfg(feature="python_skills")]
 #[pyclass]
 struct ActionContextKeysView {
     inner: Arc<Mutex<HashMap<String, ContextElement>>>,
 }
 
+#[cfg(feature="python_skills")]
 impl ActionContextKeysView {
     fn from(ctx: &ActionContext) -> Self {
         Self{inner: ctx.map.clone()}
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pymethods]
 impl ActionContextKeysView {
     fn __len__(&self) -> usize {
@@ -260,8 +288,14 @@ impl ActionContextKeysView {
     }
 
 }
-
+#[cfg(feature="python_skills")]
 #[pyclass]
+#[derive(Debug, Clone)]
+pub struct ActionContext {
+    map: Arc<Mutex<HashMap<String, ContextElement>>>,
+}
+
+#[cfg(not(feature="python_skills"))]
 #[derive(Debug, Clone)]
 pub struct ActionContext {
     map: Arc<Mutex<HashMap<String, ContextElement>>>,
@@ -292,6 +326,7 @@ impl PartialEq for ActionContext {
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pyproto]
 impl PyMappingProtocol for ActionContext {
     fn __delitem__(&mut self, key: &str) -> PyResult<()> {
@@ -316,6 +351,7 @@ impl PyMappingProtocol for ActionContext {
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pyproto]
 impl PyObjectProtocol for ActionContext {
     fn __repr__(&self) -> String {
@@ -329,6 +365,7 @@ impl PyObjectProtocol for ActionContext {
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pyproto]
 impl PySequenceProtocol for ActionContext {
     fn __contains__(&self, k: &str) -> bool {
@@ -336,6 +373,7 @@ impl PySequenceProtocol for ActionContext {
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pyproto]
 impl PyIterProtocol for  ActionContext {
     fn __iter__(slf: PyRef<Self>) -> PyResult<Py<ActionContextItemsIterator>> {
@@ -343,6 +381,7 @@ impl PyIterProtocol for  ActionContext {
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pymethods]
 impl ActionContext {
     // classmethods
@@ -456,5 +495,12 @@ impl ActionContext {
 
     fn values(&self) -> ActionContextValuesView {
         ActionContextValuesView::from(self)
+    }
+}
+
+#[cfg(not(feature = "python_skills"))]
+impl ActionContext {
+    pub fn copy(&self) -> Self {
+        Self{map: Arc::new(Mutex::new(self.map.lock_it().clone()))}
     }
 }

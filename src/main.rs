@@ -3,6 +3,7 @@ mod config;
 mod nlu;
 mod exts;
 mod mqtt;
+#[cfg(feature="python_skills")]
 mod python;
 mod skills;
 mod collections;
@@ -22,6 +23,7 @@ use std::rc::Rc;
 use crate::actions::ActionContext;
 use crate::config::Config;
 use crate::skills::load_skills;
+#[cfg(feature="python_skills")]
 use crate::python::{python_init, set_python_locale};
 use crate::signals::dynamic_nlu::init_dynamic_entities;
 use crate::vars::SKILLS_PATH;
@@ -30,9 +32,10 @@ use crate::vars::SKILLS_PATH;
 use anyhow::Result;
 use lily_common::other::init_log;
 use lily_common::vars::set_app_name;
-use pyo3::Python;
 use unic_langid::LanguageIdentifier;
 
+#[cfg(feature="python_skills")]
+use pyo3::Python;
 
 fn get_locale_default() -> String {
     for (tag, val) in locale_config::Locale::user_default().tags() {
@@ -44,6 +47,24 @@ fn get_locale_default() -> String {
     "".to_string()
 }
 
+#[cfg(feature="python_skills")]
+fn set_py_locale(lang_id: &LanguageIdentifier) -> Result<()> {
+    let gil = Python::acquire_gil();
+    let py = gil.python();
+
+    set_python_locale(py, lang_id)
+}
+
+#[cfg(not(feature="python_skills"))]
+fn set_py_locale(lang_id: &LanguageIdentifier) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(not(feature="python_skills"))]
+fn python_init()-> Result<()> {
+    Ok(())
+}
+
 #[tokio::main(flavor="current_thread")]
 pub async fn main()  -> Result<()> {
     // Set explicit handle for Ctrl-C signal
@@ -53,7 +74,10 @@ pub async fn main()  -> Result<()> {
 
     set_app_name("lily");
     init_log("lily".into());
-    python_init()?;
+
+    if cfg!(feature = "python_skills") {
+        python_init()?;
+    }
 
     // Set config on global
     let config = Config::load().unwrap_or(Config::default());
@@ -74,11 +98,9 @@ pub async fn main()  -> Result<()> {
 
         as_str.into_iter().map(|i|i.parse().expect("Locale parsing failed")).collect()
     };
-    {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
 
-        set_python_locale(py, &curr_langs[0])?;
+    if cfg!(feature = "python_skills") {
+        set_py_locale(&curr_langs[0])?;
     }
 
     let consumer = init_dynamic_entities()?;

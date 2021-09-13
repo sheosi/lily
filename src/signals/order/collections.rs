@@ -6,6 +6,7 @@ use std::fmt::Debug;
 use crate::exts::StringList;
 use crate::signals::order::NluState;
 use crate::nlu::{EntityData, EntityDef, EntityInstance, NluManager, NluManagerStatic, NluUtterance};
+#[cfg(feature="python_skills")]
 use crate::python::{try_translate, try_translate_all};
 
 // Other crates
@@ -75,6 +76,7 @@ pub struct YamlEntityDef {
 }
 
 impl YamlEntityDef {
+    #[cfg(feature="python_skills")]
     pub fn try_into_with_trans(self, lang: &LanguageIdentifier) -> Result<EntityDef> {
         let mut data = Vec::new();
 

@@ -1,3 +1,4 @@
+#[cfg(feature = "python_skills")]
 pub mod local;
 mod embedded;
 pub mod hermes;
@@ -14,7 +15,10 @@ use crate::exts::LockIt;
 use crate::queries::{LocalQueryRegistry, QueryRegistry};
 use crate::signals::{LocalSignalRegistry, SignalRegistry};
 use crate::signals::order::dynamic_nlu::EntityAddValueRequest;
-use self::{embedded::EmbeddedLoader, local::LocalLoader, hermes::HermesLoader};
+use self::{embedded::EmbeddedLoader, hermes::HermesLoader};
+
+#[cfg(feature = "python_skills")]
+use self::local::LocalLoader;
 
 // Other crates
 use anyhow::{anyhow, Result};
@@ -66,12 +70,31 @@ fn extract_name(path: &Path) -> Result<Rc<String>> {
     Ok(Rc::new(skill_name_str.to_string()))
 }
 
-pub fn load_skills(paths: Vec<PathBuf>, curr_langs: &Vec<LanguageIdentifier>, consumer: Receiver<EntityAddValueRequest>) -> Result<SignalRegistry> {
-    let mut loaders: Vec<Box<dyn Loader>> = vec![
+#[cfg(feature="python_skills")]
+fn get_loaders(
+    consumer: Receiver<EntityAddValueRequest>,
+    paths: Vec<PathBuf>
+) ->Vec<Box<dyn Loader>> {
+    vec![
         Box::new(EmbeddedLoader::new(consumer)),
         Box::new(LocalLoader::new(paths)),
         Box::new(HermesLoader::new())
-    ];
+    ]
+}
+
+#[cfg(not(feature="python_skills"))]
+fn get_loaders(
+    consumer: Receiver<EntityAddValueRequest>,
+    paths: Vec<PathBuf>
+) ->Vec<Box<dyn Loader>> {
+    vec![
+        Box::new(EmbeddedLoader::new(consumer)),
+        Box::new(HermesLoader::new())
+    ]
+}
+
+pub fn load_skills(paths: Vec<PathBuf>, curr_langs: &Vec<LanguageIdentifier>, consumer: Receiver<EntityAddValueRequest>) -> Result<SignalRegistry> {
+    let mut loaders  = get_loaders(consumer, paths);
 
     let global_sigreg = Arc::new(Mutex::new(SignalRegistry::new()));
     let base_sigreg = LocalSignalRegistry::new(global_sigreg.clone());

@@ -35,7 +35,7 @@ magnum-opus = "^0.3" # Still used to propagate errors
 snips-nlu-lib = { git = "https://github.com/snipsco/snips-nlu-rs", tag = "0.65.6" } # NLU
 snips-nlu-ontology = { git = "https://github.com/snipsco/snips-nlu-ontology", tag = "0.67.1"  } # NLU-related things
 serde_json ="^1.0" # Used in nlu output and to get text from IBM's Wattson
-pyo3 = "^0.14" # Load code from packages
+pyo3 ={version = "^0.14", optional = true} # Load code from packages
 lazy_static = "^1.4" # We use this for the path were the data is stored
 
 ttspico = "^0.1" # Main Tts (only for some languages)
@@ -64,10 +64,11 @@ locale_config = "*" # Interact with the system locale, the * is suggested by it'
 fluent-langneg = "^0.13" # Language negotiation
 
 [features]
-default = []
+default = ["python_skills"]
 extra_langs_tts = ["espeak-ng-sys"]
 google_tts = ["google_translate_tts"]
 deepspeech_stt = ["deepspeech"]
+python_skills = ["pyo3"] # Support for in-process Python skills
 devel_rasa_nlu= []
 unused = []
 

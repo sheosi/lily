@@ -2,6 +2,7 @@ use std::fmt::{self, Debug};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+#[cfg(feature="python_skills")]
 use crate::python::try_translate_all;
 use crate::vars::POISON_MSG;
 
@@ -54,6 +55,7 @@ impl StringList {
         Self{ data: vec}
     }
 
+    #[cfg(feature="python_skills")]
     /// Returns an aggregated vector with the translations of all entries
     pub fn into_translation(self, lang: &LanguageIdentifier) -> Result<Vec<String>,Vec<String>> {
         let lang_str = lang.to_string();

@@ -14,14 +14,18 @@ use std::sync::{Arc, Mutex};
 use crate::collections::{BaseRegistrySend, GlobalRegSend, LocalBaseRegistrySend};
 use crate::exts::LockIt;
 use crate::skills::call_for_skill;
+#[cfg(feature="python_skills")]
 use crate::python::{get_inst_class_name, HalfBakedError, PyException};
 
 // Other crates
 use anyhow::{anyhow, Result};
 use log::error;
 use lily_common::audio::Audio;
+#[cfg(feature="python_skills")]
 use pyo3::{Py, PyAny, PyObject, PyResult, Python, types::PyTuple};
+#[cfg(feature="python_skills")]
 use pyo3::prelude::{pyclass, pymethods};
+#[cfg(feature="python_skills")]
 use pyo3::exceptions::PyOSError;
 
 pub type ActionRegistryShared = Arc<Mutex<ActionRegistry>>;
@@ -34,6 +38,7 @@ pub enum MainAnswer {
     Text(String)
 }
 
+#[cfg(feature="python_skills")]
 #[pyclass]
 #[derive(Clone)]
 pub struct ActionAnswer {
@@ -41,6 +46,12 @@ pub struct ActionAnswer {
     pub should_end_session: bool
 }
 
+#[cfg(not(feature="python_skills"))]
+#[derive(Clone)]
+pub struct ActionAnswer {
+    pub answer: MainAnswer,
+    pub should_end_session: bool
+}
 
 impl ActionAnswer {
     pub fn audio_file(path: &Path, end_session: bool) -> Result<Self> {
@@ -56,6 +67,7 @@ impl ActionAnswer {
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pymethods]
 impl ActionAnswer {
     #[staticmethod]
@@ -90,6 +102,7 @@ impl ActionItemExt for ActionItem {
     }
 }
 
+#[cfg(feature="python_skills")]
 #[derive(Debug)]
 pub struct PythonAction {
     act_name: Py<PyAny>,
@@ -97,6 +110,7 @@ pub struct PythonAction {
     skill_path:Arc<PathBuf>
 }
 
+#[cfg(feature="python_skills")]
 impl PythonAction {
     pub fn new(act_name: Py<PyAny>, obj: PyObject, skill_path: Arc<PathBuf>) -> Self {
         Self{act_name, obj, skill_path}
@@ -158,6 +172,7 @@ impl PythonAction {
     }
 }
 
+#[cfg(feature="python_skills")]
 impl Action for PythonAction {
     fn instance(&self) -> Box<dyn ActionInstance + Send> {
         Box::new(PythonActionInstance::new(
@@ -166,18 +181,20 @@ impl Action for PythonAction {
     }
 }
 
-
+#[cfg(feature="python_skills")]
 pub struct PythonActionInstance {
     obj: PyObject,
     lily_skill_path: Arc<PathBuf>
 }
 
+#[cfg(feature="python_skills")]
 impl PythonActionInstance {
     pub fn new (act_obj:Py<PyAny>, lily_skill_path:Arc<PathBuf>) -> Self {
         Self{obj: act_obj, lily_skill_path}
     }
 }
 
+#[cfg(feature="python_skills")]
 impl ActionInstance for PythonActionInstance {
     fn call(&self ,context: &ActionContext) -> Result<ActionAnswer> {
         let gil = Python::acquire_gil();
@@ -257,17 +274,20 @@ impl SharedActionSet for Arc<Mutex<ActionSet>> {
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pyclass]
 pub struct PyActionSet {
     act_set: Arc<Mutex<ActionSet>>
 }
 
+#[cfg(feature="python_skills")]
 impl PyActionSet {
     pub fn from_arc(act_set: Arc<Mutex<ActionSet>>) -> Self {
         Self {act_set}
     }
 }
 
+#[cfg(feature="python_skills")]
 #[pymethods]
 impl PyActionSet {
     fn call(&mut self, context: &ActionContext) -> Vec<ActionAnswer> {

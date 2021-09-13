@@ -5,10 +5,12 @@ use std::sync::{Arc, Mutex};
 use crate::actions::{ActionAnswer, ActionContext, ActionInstance};
 use crate::exts::LockIt;
 use crate::collections::{BaseRegistrySend, GlobalRegSend, LocalBaseRegistrySend};
+#[cfg(feature = "python_skills")]
 use crate::python::HalfBakedError;
 
 use anyhow::{anyhow, Result};
 use log::error;
+#[cfg(feature = "python_skills")]
 use pyo3::{PyObject, Python, types::{PyTuple}};
 
 pub type QueryData = HashMap<String, String>;
@@ -22,11 +24,13 @@ pub trait Query {
     fn get_name(&self) -> &str;
 }
 
+#[cfg(feature = "python_skills")]
 pub struct PythonQuery {
     name: String,
     py_obj: PyObject,
 }
 
+#[cfg(feature = "python_skills")]
 impl Query for PythonQuery {
     fn is_monitorable(&self) -> bool {true}
     fn execute(&mut self, _data: QueryData) -> Result<QueryResult,()> {
@@ -44,6 +48,7 @@ impl Query for PythonQuery {
     }
 }
 
+#[cfg(feature = "python_skills")]
 impl PythonQuery {
     pub fn new(name: String, py_obj: PyObject) -> Self {
         PythonQuery {name, py_obj}
