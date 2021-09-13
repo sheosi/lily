@@ -66,11 +66,9 @@ pub fn yaml_to_python(py: Python, yaml: &serde_yaml::Value) -> PyObject {
 
 pub fn python_init() -> Result<()> {
     // Add this executable as a Python module
-    if cfg!(feature = "python_skills") {
     extern "C" fn safe_lily_impl() -> *mut pyo3::ffi::PyObject {
         unsafe{PyInit__lily_impl()}
     }
-}
 
     let py_env = PYTHON_VIRTUALENV.resolve();
     std::fs::create_dir_all(&py_env)?;
