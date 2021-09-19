@@ -8,11 +8,18 @@ Lily is written in Rust + Python.
 Lily uses git [LFS](https://git-lfs.github.com/) which means it needs to be
 cloned with that installed and ready beforehand.
 
-First install git LFS, for Debian/Ubuntu it is:
+First install git LFS, for *Debian/Ubuntu* it is:
 
 ```shell
 sudo apt install git-lfs
 ```
+
+On *Fedora*:
+
+```shell
+sudo dnf install git-lfs
+```
+
 
 Then, no matter which OS you are under you need to initialize git LFS:
 
@@ -44,6 +51,11 @@ And you'll be good to go.
 *On Debian:*
 ```shell
 sudo apt install libssl-dev libasound2-dev libpocketsphinx-dev libsphinxbase-dev python3-all-dev clang libgsl-dev
+```
+
+*On Fedora:
+```shell
+sudo dnf install openssl-dev alsa-lib-devel pocketsphinx-devel sphinxbase-devel python3-devel clang gsl-dev
 ```
 
 *Optional* dependency for feature `extra_langs_tts` (Languages not provided by Pico Tts for local Tts):
