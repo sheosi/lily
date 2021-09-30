@@ -5,14 +5,16 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::str::FromStr;
 use std::path::{Path, PathBuf};
 
+use crate::exts::StringList;
 #[cfg(feature="python_skills")]
 use crate::python::try_translate;
-use crate::exts::StringList;
+use crate::signals::collections::Hook;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use serde::{de, Deserialize, Deserializer, Serialize};
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
+use lily_common::other::false_val;
+use serde::{de, Deserialize, Deserializer, Serialize};
 use unic_langid::LanguageIdentifier;
 use void::Void;
 
@@ -159,10 +161,9 @@ where
     deserializer.deserialize_any(StringOrStruct(PhantomData))
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct EntityDef {
     pub data: Vec<EntityData>,
-    #[serde(alias="accept_others")]
     pub automatically_extensible: bool
 }
 
@@ -181,6 +182,35 @@ impl EntityDef {
         })
     }
 }
+#[derive(Debug, Clone)]
+pub enum OrderKind {
+    Ref(String),
+    Def(EntityDef)
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct IntentData {
+
+    #[serde(alias = "samples", alias = "sample")]
+    pub utts:  StringList,
+    #[serde(default)]
+    pub slots: HashMap<String, SlotData>,
+    #[serde(flatten)]
+    pub hook: Hook
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct SlotData {
+    #[serde(rename="type")]
+    pub slot_type: OrderKind,
+    #[serde(default="false_val")]
+    pub required: bool,
+    #[serde(default)]
+    pub prompt: Option<String>,
+    #[serde(default)]
+    pub reprompt: Option<String>
+}
+
 
 #[derive(Debug)]
 pub struct NluResponse {

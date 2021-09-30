@@ -16,9 +16,9 @@ use crate::actions::{ActionAnswer, ActionContext, ActionSet, MainAnswer};
 use crate::config::Config;
 use crate::exts::LockIt;
 use crate::mqtt::MqttApi;
-use crate::nlu::{EntityDef, Nlu, NluManager, NluManagerStatic, NluResponseSlot};
+use crate::nlu::{EntityDef, IntentData, Nlu, NluManager, NluManagerStatic, NluResponseSlot};
 use crate::stt::DecodeRes;
-use crate::signals::{collections::{IntentData, NluMap}, dynamic_nlu::EntityAddValueRequest, ActMap, Signal, SignalEventShared};
+use crate::signals::{collections::NluMap, dynamic_nlu::EntityAddValueRequest, ActMap, Signal, SignalEventShared};
 use crate::vars::{mangle, MIN_SCORE_FOR_ACTION};
 use self::{mqtt::MSG_OUTPUT, server_actions::{on_event, on_nlu_request}, dev_mgmt::SessionManager};
 
@@ -145,21 +145,17 @@ impl<M:NluManager + NluManagerStatic + Debug + Send>  SignalOrder<M> {
         self.demangled_names.get(mangled).expect("Mangled name was not found")
     }
     pub fn add_intent(&mut self, sig_arg: IntentData, intent_name: &str,
-        skill_name: &str, act_set: Arc<Mutex<ActionSet>>, langs: &Vec<LanguageIdentifier>) -> Result<()> {
+        skill_name: &str, act_set: Arc<Mutex<ActionSet>>, lang: &LanguageIdentifier) -> Result<()> {
         let mangled = mangle(skill_name, intent_name);
-        self.nlu.lock_it().add_intent_to_nlu(sig_arg, &mangled, skill_name, langs)?;
+        self.nlu.lock_it().add_intent_to_nlu(sig_arg, &mangled, skill_name, lang)?;
         self.intent_map.add_mapping(&mangled, act_set);
         self.demangled_names.insert(mangled, intent_name.to_string());
         Ok(())
     }
 
-    pub fn add_slot_type(&mut self, type_name: String, data: EntityDef, langs: &Vec<LanguageIdentifier>) -> Result<()> {
-        for lang in langs {
-            let mut m = self.nlu.lock_it();
-            let trans_data = data.clone().into_translation(lang)?;
-            m.get_mut_nlu_man(lang).add_entity(&type_name, trans_data);
-        }
-        Ok(())
+    pub fn add_slot_type(&mut self, type_name: String, data: EntityDef, lang: &LanguageIdentifier) {
+        let mut m = self.nlu.lock_it();
+        m.get_mut_nlu_man(lang).add_entity(&type_name, data);
     }
 }
 
@@ -281,9 +277,6 @@ pub fn process_answers(
     }
 
 }
-
-
-
 
 #[cfg(not(feature = "devel_rasa_nlu"))]
 pub type CurrentNluManager = SnipsNluManager;

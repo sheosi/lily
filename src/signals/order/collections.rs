@@ -1,23 +1,25 @@
+/**
+ * Collections for the Order Signal.
+ * 
+ * Take into account that the methods here expect the translation to be done
+ * already, SkillLoader is the one responsible for that (either directly or 
+ * expecting the translation to be done already).
+ */
 // Standard library
 use std::collections::HashMap;
 use std::fmt::Debug;
 
 // This crate
-use crate::exts::StringList;
 use crate::signals::order::NluState;
-use crate::nlu::{EntityData, EntityDef, EntityInstance, NluManager, NluManagerStatic, NluUtterance};
-#[cfg(feature="python_skills")]
-use crate::python::{try_translate, try_translate_all};
+use crate::nlu::{EntityInstance, IntentData, NluManager, NluManagerStatic, NluUtterance, OrderKind};
 
 // Other crates
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
-use log::{error, warn};
+use log::error;
 use unic_langid::LanguageIdentifier;
 
 
-fn false_val() -> bool {false}
-fn none() -> Option<String> {None}
 
 /*** Config ********************************************************************/
 #[derive(Clone, Debug, Deserialize)]
@@ -30,65 +32,6 @@ pub enum Hook {
     Signal(String)
 }
 
-fn empty_map() -> HashMap<String, SlotData> {
-    HashMap::new()
-}
-
-#[derive(Debug, Deserialize)]
-pub struct IntentData {
-
-    #[serde(alias = "samples", alias = "sample")]
-    pub utts:  StringList,
-    #[serde(default="empty_map")]
-    pub slots: HashMap<String, SlotData>,
-    #[serde(flatten)]
-    pub hook: Hook
-}
-
-#[derive(Debug, Deserialize)]
-pub struct SlotData {
-    #[serde(rename="type")]
-    pub slot_type: OrderKind,
-    #[serde(default="false_val")]
-    pub required: bool,
-    #[serde(default="none")]
-    pub prompt: Option<String>,
-    #[serde(default="none")]
-    pub reprompt: Option<String>
-}
-
-#[derive(Clone, Deserialize)]
-struct OrderEntity {
-    kind: OrderKind,
-    example: String
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
-pub enum OrderKind {
-    Ref(String),
-    Def(YamlEntityDef)
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct YamlEntityDef {
-    data: Vec<String>
-}
-
-impl YamlEntityDef {
-    #[cfg(feature="python_skills")]
-    pub fn try_into_with_trans(self, lang: &LanguageIdentifier) -> Result<EntityDef> {
-        let mut data = Vec::new();
-
-        for trans_data in self.data.into_iter(){
-            let mut translations = try_translate_all(&trans_data, &lang.to_string())?;
-            let value = translations.swap_remove(0);
-            data.push(EntityData{value, synonyms: StringList::from_vec(translations)});
-        }
-
-        Ok(EntityDef::new(data, true))
-    }
-}
 
 /*** NluMap *******************************************************************/
 
@@ -130,71 +73,61 @@ impl<M: NluManager + NluManagerStatic + Debug + Send> NluMap<M> {
         sig_arg: IntentData,
         intent_name: &str,
         skill_name: &str,
-        langs: &Vec<LanguageIdentifier>
+        lang: &LanguageIdentifier,
     ) -> Result<()> {
-        
-        for lang in langs {
-    
-            //First, register all slots
-            let mut slots_res:HashMap<String, EntityInstance> = HashMap::new();
-            for (slot_name, slot_data) in sig_arg.slots.iter() {
-    
-                // Handle that slot types might be defined on the spot
-                let ent_kind_name = match slot_data.slot_type.clone() {
-                    OrderKind::Ref(name) => name,
-                    OrderKind::Def(def) => {
-                        let name = format!("_{}__{}_", skill_name, slot_name);
-                        self.map.get_mut(lang).expect("Language not registered").get_mut_nlu_man()
-                        .add_entity(&name, def.try_into_with_trans(lang)?);
-                        name
-                    }
-                };
-    
-                let slot_example = "".to_string();
-    
-                slots_res.insert(
-                    slot_name.to_string(),
-                    EntityInstance {
-                        kind: ent_kind_name,
-                        example: {
-                            try_translate(&slot_example, &lang.to_string()).unwrap_or_else(|e|{
-                                warn!("Failed to do translation of \"{}\", error: {:?}", &slot_example, e);
-                                slot_example
-                            })
-                        },
-                    },
-                );
-            }
-    
-            // Now register all utterances
-            match sig_arg.utts.clone().into_translation(lang) {
-                Ok(t) => {
-                    let utts = t.into_iter().map(|utt|
-                    if slots_res.is_empty() {
-                        NluUtterance::Direct(utt)
-                    }
-                    else {
-                        NluUtterance::WithEntities {
-                            text: utt,
-                            entities: slots_res.clone(),
-                        }
-                    }).collect();
-    
-                    self.map.get_mut(lang).expect("Input language was not present before").get_mut_nlu_man()
-                    .add_intent(intent_name, utts);
+        //First, register all slots
+        let mut slots_res:HashMap<String, EntityInstance> = HashMap::new();
+        for (slot_name, slot_data) in sig_arg.slots.iter() {
+
+            // Handle that slot types might be defined on the spot
+            let (ent_kind_name, example):(_, String) = match slot_data.slot_type.clone() {
+                OrderKind::Ref(name) => (name, "".into()),
+                OrderKind::Def(def) => {
+                    
+                    let name = format!("_{}__{}_", skill_name, slot_name);
+                    self.map.get_mut(lang).expect("Language not registered").get_mut_nlu_man()
+                    .add_entity(&name, def);
+                    (name, def.data.first().map(|d|d.value.clone()).unwrap_or("".into()))
                 }
-                Err(failed) => {
-                    if failed.len() == 1 {
-                        error!("Sample '{}' of '{}'  couldn't be translated", failed[0], skill_name)
-                    }
-                    else {
-                        error!("Samples '{}' of '{}' couldn't be translated", failed.join(", "), skill_name)
-                    }
-                }
-    
-            }
-                
+            };
+
+            slots_res.insert(
+                slot_name.to_string(),
+                EntityInstance {
+                    kind: ent_kind_name,
+                    example,
+                },
+            );
         }
+
+        // Now register all utterances
+        match sig_arg.utts.clone().into_translation(lang) {
+            Ok(t) => {
+                let utts = t.into_iter().map(|utt|
+                if slots_res.is_empty() {
+                    NluUtterance::Direct(utt)
+                }
+                else {
+                    NluUtterance::WithEntities {
+                        text: utt,
+                        entities: slots_res.clone(),
+                    }
+                }).collect();
+
+                self.map.get_mut(lang).expect("Input language was not present before").get_mut_nlu_man()
+                .add_intent(intent_name, utts);
+            }
+            Err(failed) => {
+                if failed.len() == 1 {
+                    error!("Sample '{}' of '{}'  couldn't be translated", failed[0], skill_name)
+                }
+                else {
+                    error!("Samples '{}' of '{}' couldn't be translated", failed.join(", "), skill_name)
+                }
+            }
+
+        }
+                
         Ok(())
     }
     

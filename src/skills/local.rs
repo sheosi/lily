@@ -6,13 +6,14 @@ use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::actions::{ActionSet, LocalActionRegistry, PythonAction};
-use crate::exts::LockIt;
+use crate::exts::{LockIt, StringList};
 use crate::python::add_py_folder;
 use crate::queries::{ActQuery, LocalQueryRegistry, PythonQuery};
-use crate::signals::{collections::{Hook, IntentData}, ActSignal, LocalSignalRegistry, PythonSignal};
+use crate::signals::{collections::Hook, ActSignal, LocalSignalRegistry, PythonSignal};
 use crate::signals::registries::{ACT_REG, QUERY_REG};
 use crate::skills::{call_for_skill, Loader};
-use crate::nlu::EntityDef;
+use crate::nlu::{IntentData, EntityData, EntityDef, OrderKind};
+use crate::python::{try_translate, try_translate_all};
 use crate::vars::{SKILLS_PATH_ERR_MSG, PYTHON_SDK_PATH};
 
 // Other crates
@@ -21,6 +22,7 @@ use pyo3::Python;
 use serde::Deserialize;
 use thiserror::Error;
 use lazy_static::lazy_static;
+use lily_common::other::false_val;
 use log::{error, info, warn};
 use unic_langid::LanguageIdentifier;
 
@@ -173,6 +175,57 @@ impl LocalLoader {
     }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct YamlSlotData {
+    #[serde(rename="type")]
+    pub slot_type: OrderKind,
+    #[serde(default="false_val")]
+    pub required: bool,
+    #[serde(default)]
+    pub prompt: Option<String>,
+    #[serde(default)]
+    pub reprompt: Option<String>
+}
+
+#[derive(Debug, Deserialize)]
+pub struct YamlIntentData {
+
+    #[serde(alias = "samples", alias = "sample")]
+    pub utts:  StringList,
+    #[serde(default)]
+    pub slots: HashMap<String, YamlSlotData>,
+    #[serde(flatten)]
+    pub hook: Hook
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum YamlOrderKind {
+    Ref(String),
+    Def(YamlEntityDef)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct YamlEntityDef {
+    data: Vec<String>
+}
+
+impl YamlEntityDef {
+    
+    #[cfg(feature="python_skills")]
+    pub fn try_into_with_trans(self, lang: &LanguageIdentifier) -> Result<EntityDef> {
+        let mut data = Vec::new();
+
+        for trans_data in self.data.into_iter(){
+            let mut translations = try_translate_all(&trans_data, &lang.to_string())?;
+            let value = translations.swap_remove(0);
+            data.push(EntityData{value, synonyms: StringList::from_vec(translations)});
+        }
+
+        Ok(EntityDef::new(data, true))
+    }
+}
+
 /** Thrown after an error while loading classes, 
 contains the error and the new classes*/
 #[derive(Debug, Error)]
@@ -196,6 +249,22 @@ fn load_trans(python: Python, skill_path: &Path, curr_langs: &Vec<LanguageIdenti
     call_for_skill(skill_path, |_| lily_py_mod.getattr("__set_translations")?.call((as_strs,), None).map_err(|py_err|anyhow!("Python error while calling __set_translations: {:?}", py_err)))??;
 
     Ok(())
+}
+
+fn trans_intent(mut intent_data: IntentData, lang: &LanguageIdentifier) -> Result<IntentData> {
+    // XXX!
+    let t  = intent_data.utts.into_translation(lang).map_err(|v|anyhow!("Translation failed for: {:?}", v))?;
+    intent_data.utts = StringList::from_vec(t);
+    intent_data.slots = intent_data.slots.into_iter().map(|(k,v)|{
+        v.prompt = v.prompt.map(|p|try_translate(p));
+        let mut translations = try_translate_all(&trans_data, &lang.to_string())?;
+        let value = translations.swap_remove(0);
+        data.push(EntityData{value, synonyms: StringList::from_vec(translations)});
+        (k,v)
+    });
+
+
+    Ok(intent_data)
 }
 
 fn load_intents(
@@ -234,7 +303,9 @@ fn load_intents(
 
             let sig_order = signals.get_sig_order().expect("Order signal was not initialized");
             for (type_name, data) in skilldef.types.into_iter() {
-                sig_order.lock_it().add_slot_type(type_name, data, langs)?;
+                for lang in langs {
+                    sig_order.lock_it().add_slot_type(type_name, data.into_translation(lang)?, lang);
+                }
             }
             
             for (intent_name, data) in skilldef.intents.into_iter() {
@@ -242,19 +313,43 @@ fn load_intents(
                     Hook::Action(name) => {
                         let action = actions.get(&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?.lock_it().instance();
                         let act_set = ActionSet::create(action);
-                        sig_order.lock_it().add_intent(data, &intent_name, &skill_name, act_set, langs)?;
+                        for lang in langs {
+                            sig_order.lock_it().add_intent(
+                                trans_intent(data.clone(), lang)?,
+                                &intent_name,
+                                &skill_name,
+                                act_set,
+                                lang
+                            )?;
+                        }
                     },
                     Hook::Query(name) => {
                         // Note: Some very minimal support for queries
                         let q = queries.get(&name).ok_or_else(||anyhow!("Query '{}' does not exist", &name))?;
                         let act_set = ActionSet::create(ActQuery::new(q.clone(), name));
-                        sig_order.lock_it().add_intent(data, &intent_name, &skill_name, act_set, langs)?;
+                        for lang in langs {
+                            sig_order.lock_it().add_intent(
+                                trans_intent(data.clone(), lang)?,
+                                &intent_name,
+                                &skill_name,
+                                act_set,
+                                lang
+                            )?;
+                        }
                     },
                     Hook::Signal(name) => {
                         // Note: Some very minimal support for signals
                         let s = signals.get(&name).ok_or_else(||anyhow!("Signal '{}' does not exist", &name))?;
                         let act_set = ActionSet::create(ActSignal::new(s.clone(), name));
-                        sig_order.lock_it().add_intent(data, &intent_name, &skill_name, act_set, langs)?;
+                        for lang in langs {
+                            sig_order.lock_it().add_intent(
+                                trans_intent(data.clone(), lang)?,
+                                &intent_name,
+                                &skill_name,
+                                act_set,
+                                lang
+                            )?;
+                        }
                         unimplemented!();
                     }
                 }
