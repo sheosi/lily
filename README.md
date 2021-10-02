@@ -1,8 +1,8 @@
 # lily
 
-A local open-source voice assistant with an NLU
+An efficient voice assistant for human beings.
 
-Lily is written in Rust + Python.
+Lily is written in [Rust](https://www.rust-lang.org/)🦀  + [Python](https://www.python.org/)🐍.
 
 ## Obtaining Lily
 Lily uses git [LFS](https://git-lfs.github.com/) which means it needs to be
@@ -53,15 +53,21 @@ And you'll be good to go.
 sudo apt install libssl-dev libasound2-dev libpocketsphinx-dev libsphinxbase-dev python3-all-dev clang libgsl-dev
 ```
 
-*On Fedora:
+*On Fedora:*
 ```shell
-sudo dnf install openssl-dev alsa-lib-devel pocketsphinx-devel sphinxbase-devel python3-devel clang gsl-dev
+sudo dnf install openssl-devel alsa-lib-devel pocketsphinx-devel python3-devel clang gsl-devel
 ```
 
 *Optional* dependency for feature `extra_langs_tts` (Languages not provided by Pico Tts for local Tts):
+
 *Debian*
 ```shell
 sudo apt install libespeak-ng-dev
+```
+
+*Fedora*
+```shell
+sudo dnf install espeak-ng-devel
 ```
 
 Note: The first time that you use a language it needs to be downloaded by the NLU, so it needs internet at that time. Also, installing them as system would make this download fail, and you would need to install the languages on your own, for english: `snips-nlu download en`
@@ -74,8 +80,8 @@ need [Rust](https://www.rust-lang.org/) and cargo (bundled alongside Rust) for t
 
 ### Debian package
 This repository can make a Debian package, however it is still dependent on 
-`snips-nlu` and `fluent.runtime` packages being installed and it does not 
-install them on it's own.
+`snips-nlu` and `fluent.runtime` python packages, though will try to install 
+them on it's own.
 
 To generate the Debian package.
 
@@ -95,10 +101,10 @@ cargo deb
 - [ ] Interactivity (asking for something after the initial trigger)
 
 ## Where will it run?
-Lily is meant to be run on-device (mostly) even on constrained hardware like a Raspberry, of course, it will still work on standard PCs and more powerful hardware.
+Lily is meant to be run on-device (mostly) even on constrained hardware like a Raspberry. Of course, it will still work on standard PCs and more powerful hardware.
 
 ## Current state:
 
-The shell (the voice part and interfaces) it's in a pretty decent shape, though needs testing.
-The AI itself however, is pretty rough, it's only capable of basic triggering of actions.
-It now has a kind of client/server architecture, this is pretty new and needs tons of testing but should bring this project pretty far.
+* *Smartness*: Can trigger actions, with a dialog system on the works
+* *Modularity*: Client and Server are their own processes, skills are getting the same treatment (getting compatibility with Hermes protocol)
+* *Multilanguage* [Needs testing]: Can work with multiple languages and detect by voice which is being used. Detection is only made for voice (not text). Languages can`t be mixed in the same question.
