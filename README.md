@@ -14,7 +14,7 @@ First install git LFS, for *Debian/Ubuntu* it is:
 sudo apt install git-lfs
 ```
 
-On *Fedora*:
+On *Fedora*:    
 
 ```shell
 sudo dnf install git-lfs
@@ -55,7 +55,7 @@ sudo apt install libssl-dev libasound2-dev libpocketsphinx-dev libsphinxbase-dev
 
 *On Fedora:*
 ```shell
-sudo dnf install openssl-devel alsa-lib-devel pocketsphinx-devel python3-devel clang gsl-devel
+sudo dnf install openssl-devel alsa-lib-devel pocketsphinx-devel python3-devel clang-libs llvm-devel clang gsl-devel
 ```
 
 *Optional* dependency for feature `extra_langs_tts` (Languages not provided by Pico Tts for local Tts):
