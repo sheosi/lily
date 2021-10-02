@@ -2,7 +2,7 @@
 
 An efficient voice assistant for human beings.
 
-Lily is written in [Rust](https://www.rust-lang.org/)🦀  + [Python](https://www.python.org/)🐍.
+Lily is written in [Rust](https://www.rust-lang.org/)🦀 + [Python](https://www.python.org/)🐍.
 
 ## Obtaining Lily
 Lily uses git [LFS](https://git-lfs.github.com/) which means it needs to be
