@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::str::FromStr;
 use std::path::{Path, PathBuf};
 
 use crate::exts::StringList;
@@ -13,10 +12,8 @@ use crate::signals::collections::Hook;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
-use lily_common::other::false_val;
-use serde::{de, Deserialize, Deserializer, Serialize};
+use serde::Serialize;
 use unic_langid::LanguageIdentifier;
-use void::Void;
 
 #[cfg(not(feature="devel_rasa_nlu"))]
 mod snips;
@@ -81,7 +78,7 @@ pub struct EntityInstance {
 #[derive(Clone, Debug, Serialize)]
 pub struct EntityData {
     pub value: String,
-    #[serde(default, alias = "synonym")]
+    #[serde(default)]
     pub synonyms: StringList
 }
 
@@ -104,25 +101,6 @@ impl EntityData {
         .map_err(|v|anyhow!("Translation of '{}' failed", v.join("\"")))?;
 
         Ok(EntityData {value,synonyms: StringList::from_vec(synonyms)})
-    }
-}
-
-impl FromStr for EntityData {
-    type Err = Void;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(EntityData {
-            value: s.to_string(),
-            synonyms: StringList::new()
-        })
-    }
-}
-
-impl<'de> Deserialize<'de> for EntityData {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
-        let data = String::deserialize(deserializer)?;
-        FromStr::from_str(&data).map_err(de::Error::custom)
     }
 }
 
@@ -171,7 +149,7 @@ where
     deserializer.deserialize_any(StringOrStruct(PhantomData))
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct EntityDef {
     pub data: Vec<EntityData>,
     pub automatically_extensible: bool
@@ -201,37 +179,29 @@ impl EntityDef {
         })
     }
 }
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum OrderKind {
     Ref(String),
     Def(EntityDef)
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct IntentData {
-
-    #[serde(alias = "samples", alias = "sample")]
     pub utts:  StringList,
-    #[serde(default)]
     pub slots: HashMap<String, SlotData>,
-    #[serde(flatten)]
     pub hook: Hook
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct SlotData {
-    #[serde(rename="type")]
     pub slot_type: OrderKind,
-    #[serde(default="false_val")]
     pub required: bool,
 
     // In case this slot is not present in the user response but is required
     // have a way of automatically asking for it
-    #[serde(default)]
     pub prompt: Option<String>,
 
     // Second chance for asking the user for this slot
-    #[serde(default)]
     pub reprompt: Option<String>
 }
 

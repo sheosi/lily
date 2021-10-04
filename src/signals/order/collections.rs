@@ -16,7 +16,6 @@ use crate::nlu::{EntityInstance, IntentData, NluManager, NluManagerStatic, NluUt
 // Other crates
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
-use log::error;
 use unic_langid::LanguageIdentifier;
 
 

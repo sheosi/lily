@@ -12,54 +12,62 @@ description = "Open source voice assistance for humans."
 [dependencies]
 yaml-rust = "^0.4" # Load configuration files from this program and skills
 serde_yaml = "^0.8" # Join serde and Yaml for loading conf and skills
-serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
+serde = { version = "^1.0", features = [
+    "derive",
+] } # Serialization framework (used by serde_yaml and serde_json)
 maplit = "^1.0" # Literals for hasmaps, mostly used for the config of Rasa
 anyhow = "^1.0" # For error handling overall in the app
 thiserror = "^1.0" # For error handling in parts that can be made their own crate
 regex = "^1.5" # To parse configuration
 ctrlc = "^3.1" # To catch ctrl-c in all platforms and exit the program
 # Some async deps
-tokio = {version="^1.9", features = ["macros", "rt", "sync", "time"]}
+tokio = { version = "^1.9", features = ["macros", "rt", "sync", "time"] }
 async-trait = "^0.1"
 rumqttc = "^0.8"
 rmp-serde = "^0.15"
 bytes = "^1.1"
 futures = "^0.3"
-delegate = "^0.6" # Used for the registries using the base ones
-void = "^1.0"
+delegate = "^0.6"                                                         # Used for the registries using the base ones
 
-pocketsphinx = "^0.6.0" # Offline Stt
-deepspeech = {version = "^0.9", optional = true} # More correct and better (also slower) Stt
-magnum-opus = "^0.3" # Still used to propagate errors
+pocketsphinx = "^0.6.0"                            # Offline Stt
+deepspeech = { version = "^0.9", optional = true } # More correct and better (also slower) Stt
+magnum-opus = "^0.3"                               # Still used to propagate errors
 
-snips-nlu-lib = { git = "https://github.com/snipsco/snips-nlu-rs", tag = "0.65.6" } # NLU
-snips-nlu-ontology = { git = "https://github.com/snipsco/snips-nlu-ontology", tag = "0.67.1"  } # NLU-related things
-serde_json ="^1.0" # Used in nlu output and to get text from IBM's Wattson
-pyo3 ={version = "^0.14", optional = true} # Load code from packages
-lazy_static = "^1.4" # We use this for the path were the data is stored
+snips-nlu-lib = { git = "https://github.com/snipsco/snips-nlu-rs", tag = "0.65.6" }            # NLU
+snips-nlu-ontology = { git = "https://github.com/snipsco/snips-nlu-ontology", tag = "0.67.1" } # NLU-related things
+serde_json = "^1.0"                                                                            # Used in nlu output and to get text from IBM's Wattson
+pyo3 = { version = "^0.14", optional = true }                                                  # Load code from packages
+lazy_static = "^1.4"                                                                           # We use this for the path were the data is stored
 
-ttspico = "^0.1" # Main Tts (only for some languages)
-espeak-ng-sys = {git = "https://github.com/sheosi/espeak-ng-sys", optional = true} # Auxiliar Tts (speaks any language)
-libc = "^0.2" # Required to interface with espeak-ng-sys
-log = "^0.4" # Common API for logging so we can change backend easily
+ttspico = "^0.1"                                                                     # Main Tts (only for some languages)
+espeak-ng-sys = { git = "https://github.com/sheosi/espeak-ng-sys", optional = true } # Auxiliar Tts (speaks any language)
+libc = "^0.2"                                                                        # Required to interface with espeak-ng-sys
+log = "^0.4"                                                                         # Common API for logging so we can change backend easily
 
 #lingua = "^1.2" # Written text language detection
 
 #Cloud-based
-google_translate_tts = {version = "0.1.2", optional = true} # Format TTS URLs
-reqwest = {version = "^0.11", features = ["default-tls", "json"]} # HTTP client
+google_translate_tts = { version = "0.1.2", optional = true } # Format TTS URLs
+reqwest = { version = "^0.11", features = [
+    "default-tls",
+    "json",
+] } # HTTP client
 url = "^2.2"
 base64 = "^0.13" # For sending data to the online TTS and STT
-tungstenite = {version = "^0.14", features = ["native-tls"]} # Web sockets for online STT, each version needs to be compatible with tokio-tungstenite
-tokio-tungstenite = {version = "^0.15", features = ["native-tls"]}
+tungstenite = { version = "^0.14", features = [
+    "native-tls",
+] } # Web sockets for online STT, each version needs to be compatible with tokio-tungstenite
+tokio-tungstenite = { version = "^0.15", features = ["native-tls"] }
 
 chrono = "^0.4"
 
-lily_common = {path = "common", default-features = false}
+lily_common = { path = "common", default-features = false }
 ogg-opus = "^0.1"
 
 # Localization
-unic-langid = {version="^0.9", features = ["macros"]} # For parsing Unicode Language Identifiers
+unic-langid = { version = "^0.9", features = [
+    "macros",
+] } # For parsing Unicode Language Identifiers
 locale_config = "*" # Interact with the system locale, the * is suggested by it's author
 fluent-langneg = "^0.13" # Language negotiation
 
@@ -68,8 +76,8 @@ default = ["python_skills"]
 extra_langs_tts = ["espeak-ng-sys"]
 google_tts = ["google_translate_tts"]
 deepspeech_stt = ["deepspeech"]
-python_skills = ["pyo3"] # Support for in-process Python skills
-devel_rasa_nlu= []
+python_skills = ["pyo3"]              # Support for in-process Python skills
+devel_rasa_nlu = []
 unused = []
 
 [workspace]
@@ -85,58 +93,234 @@ section = "utility"
 priority = "optional"
 maintainer-scripts = "packaging/debian"
 assets = [
-    ["target/release/lily", "usr/bin/", "755"],
-    ["resources/python/lily_ext/__init__.py", "usr/share/lily/python/lily_ext/__init__.py", "644"],
-    ["resources/python/stubs/_lily_impl.py", "usr/share/lily/python/stubs/_lily_impl.py", "644"],
+    [
+        "target/release/lily",
+        "usr/bin/",
+        "755",
+    ],
+    [
+        "resources/python/lily_ext/__init__.py",
+        "usr/share/lily/python/lily_ext/__init__.py",
+        "644",
+    ],
+    [
+        "resources/python/stubs/_lily_impl.py",
+        "usr/share/lily/python/stubs/_lily_impl.py",
+        "644",
+    ],
 
     # Pocketpshinx en-US
-    ["resources/stt/en-us/en-us/feat.params", "usr/share/lily/stt/en-us/en-us/feat.params", "644"],
-    ["resources/stt/en-us/en-us/mdef", "usr/share/lily/stt/en-us/en-us/mdef", "644"],
-    ["resources/stt/en-us/en-us/means", "usr/share/lily/stt/en-us/en-us/means", "644"],
-    ["resources/stt/en-us/en-us/noisedict", "usr/share/lily/stt/en-us/en-us/noisedict", "644"],
-    ["resources/stt/en-us/en-us/README", "usr/share/lily/stt/en-us/en-us/README", "644"],
-    ["resources/stt/en-us/en-us/sendump", "usr/share/lily/stt/en-us/en-us/sendump", "644"],
-    ["resources/stt/en-us/en-us/transition_matrices", "usr/share/lily/stt/en-us/en-us/transition_matrices", "644"],
-    ["resources/stt/en-us/en-us/variances", "usr/share/lily/stt/en-us/en-us/variances", "644"],
-    ["resources/stt/en-us/cmudict-en-us.dict", "usr/share/lily/stt/en-us/cmudict-en-us.dict", "644"],
-    ["resources/stt/en-us/en-us-phone.lm.bin", "usr/share/lily/stt/en-us/en-us-phone.lm.bin", "644"],
-    ["resources/stt/en-us/en-us.lm.bin", "usr/share/lily/stt/en-us/en-us.lm.bin", "644"],
-    ["resources/stt/en-us/LICENSE", "usr/share/lily/stt/en-us/LICENSE", "644"],
+    [
+        "resources/stt/en-us/en-us/feat.params",
+        "usr/share/lily/stt/en-us/en-us/feat.params",
+        "644",
+    ],
+    [
+        "resources/stt/en-us/en-us/mdef",
+        "usr/share/lily/stt/en-us/en-us/mdef",
+        "644",
+    ],
+    [
+        "resources/stt/en-us/en-us/means",
+        "usr/share/lily/stt/en-us/en-us/means",
+        "644",
+    ],
+    [
+        "resources/stt/en-us/en-us/noisedict",
+        "usr/share/lily/stt/en-us/en-us/noisedict",
+        "644",
+    ],
+    [
+        "resources/stt/en-us/en-us/README",
+        "usr/share/lily/stt/en-us/en-us/README",
+        "644",
+    ],
+    [
+        "resources/stt/en-us/en-us/sendump",
+        "usr/share/lily/stt/en-us/en-us/sendump",
+        "644",
+    ],
+    [
+        "resources/stt/en-us/en-us/transition_matrices",
+        "usr/share/lily/stt/en-us/en-us/transition_matrices",
+        "644",
+    ],
+    [
+        "resources/stt/en-us/en-us/variances",
+        "usr/share/lily/stt/en-us/en-us/variances",
+        "644",
+    ],
+    [
+        "resources/stt/en-us/cmudict-en-us.dict",
+        "usr/share/lily/stt/en-us/cmudict-en-us.dict",
+        "644",
+    ],
+    [
+        "resources/stt/en-us/en-us-phone.lm.bin",
+        "usr/share/lily/stt/en-us/en-us-phone.lm.bin",
+        "644",
+    ],
+    [
+        "resources/stt/en-us/en-us.lm.bin",
+        "usr/share/lily/stt/en-us/en-us.lm.bin",
+        "644",
+    ],
+    [
+        "resources/stt/en-us/LICENSE",
+        "usr/share/lily/stt/en-us/LICENSE",
+        "644",
+    ],
 
     # Pocketsphinx es-ES
-    ["resources/stt/es-es/es-es/feat.params", "usr/share/lily/stt/es-es/es-es/feat.params", "644"],
-    ["resources/stt/es-es/es-es/mdef", "usr/share/lily/stt/es-es/es-es/mdef", "644"],
-    ["resources/stt/es-es/es-es/means", "usr/share/lily/stt/es-es/es-es/means", "644"],
-    ["resources/stt/es-es/es-es/mixture_weights", "usr/share/lily/stt/es-es/es-es/mixture_weights", "644"],
-    ["resources/stt/es-es/es-es/noisedict", "usr/share/lily/stt/es-es/es-es/noisedict", "644"],
-    ["resources/stt/es-es/es-es/sendump", "usr/share/lily/stt/es-es/es-es/sendump", "644"],
-    ["resources/stt/es-es/es-es/transition_matrices", "usr/share/lily/stt/es-es/es-es/transition_matrices", "644"],
-    ["resources/stt/es-es/es-es/variances", "usr/share/lily/stt/es-es/es-es/variances", "644"],
-    ["resources/stt/es-es/cmudict-es-es.dict", "usr/share/lily/stt/es-es/cmudict-es-es.dict", "644"],
-    ["resources/stt/es-es/es-es.lm.bin", "usr/share/lily/stt/es-es/es-es.lm.bin", "644"],
-    ["resources/stt/es-es/LICENSE", "usr/share/lily/stt/es-es/LICENSE", "644"],
+    [
+        "resources/stt/es-es/es-es/feat.params",
+        "usr/share/lily/stt/es-es/es-es/feat.params",
+        "644",
+    ],
+    [
+        "resources/stt/es-es/es-es/mdef",
+        "usr/share/lily/stt/es-es/es-es/mdef",
+        "644",
+    ],
+    [
+        "resources/stt/es-es/es-es/means",
+        "usr/share/lily/stt/es-es/es-es/means",
+        "644",
+    ],
+    [
+        "resources/stt/es-es/es-es/mixture_weights",
+        "usr/share/lily/stt/es-es/es-es/mixture_weights",
+        "644",
+    ],
+    [
+        "resources/stt/es-es/es-es/noisedict",
+        "usr/share/lily/stt/es-es/es-es/noisedict",
+        "644",
+    ],
+    [
+        "resources/stt/es-es/es-es/sendump",
+        "usr/share/lily/stt/es-es/es-es/sendump",
+        "644",
+    ],
+    [
+        "resources/stt/es-es/es-es/transition_matrices",
+        "usr/share/lily/stt/es-es/es-es/transition_matrices",
+        "644",
+    ],
+    [
+        "resources/stt/es-es/es-es/variances",
+        "usr/share/lily/stt/es-es/es-es/variances",
+        "644",
+    ],
+    [
+        "resources/stt/es-es/cmudict-es-es.dict",
+        "usr/share/lily/stt/es-es/cmudict-es-es.dict",
+        "644",
+    ],
+    [
+        "resources/stt/es-es/es-es.lm.bin",
+        "usr/share/lily/stt/es-es/es-es.lm.bin",
+        "644",
+    ],
+    [
+        "resources/stt/es-es/LICENSE",
+        "usr/share/lily/stt/es-es/LICENSE",
+        "644",
+    ],
 
     # Pico TTS
-    ["resources/tts/de-DE_gl0_sg.bin", "usr/share/lily/tts/de-DE_gl0_sg.bin", "644"],
-    ["resources/tts/de-DE_ta.bin", "usr/share/lily/tts/de-DE_ta.bin", "644"],
-    ["resources/tts/en-GB_kh0_sg.bin", "usr/share/lily/tts/en-GB_kh0_sg.bin", "644"],
-    ["resources/tts/en-GB_ta.bin", "usr/share/lily/tts/en-GB_ta.bin", "644"],
-    ["resources/tts/en-US_lh0_sg.bin", "usr/share/lily/tts/en-US_lh0_sg.bin", "644"],
-    ["resources/tts/en-US_ta.bin", "usr/share/lily/tts/en-US_ta.bin", "644"],
-    ["resources/tts/es-ES_ta.bin", "usr/share/lily/tts/es-ES_ta.bin", "644"],
-    ["resources/tts/es-ES_zl0_sg.bin", "usr/share/lily/tts/es-ES_zl0_sg.bin", "644"],
-    ["resources/tts/fr-FR_nk0_sg.bin", "usr/share/lily/tts/fr-FR_nk0_sg.bin", "644"],
-    ["resources/tts/fr-FR_ta.bin", "usr/share/lily/tts/fr-FR_ta.bin", "644"],
-    ["resources/tts/it-IT_cm0_sg.bin", "usr/share/lily/tts/it-IT_cm0_sg.bin", "644"],
-    ["resources/tts/it-IT_ta.bin", "usr/share/lily/tts/it-IT_ta.bin", "644"],
+    [
+        "resources/tts/de-DE_gl0_sg.bin",
+        "usr/share/lily/tts/de-DE_gl0_sg.bin",
+        "644",
+    ],
+    [
+        "resources/tts/de-DE_ta.bin",
+        "usr/share/lily/tts/de-DE_ta.bin",
+        "644",
+    ],
+    [
+        "resources/tts/en-GB_kh0_sg.bin",
+        "usr/share/lily/tts/en-GB_kh0_sg.bin",
+        "644",
+    ],
+    [
+        "resources/tts/en-GB_ta.bin",
+        "usr/share/lily/tts/en-GB_ta.bin",
+        "644",
+    ],
+    [
+        "resources/tts/en-US_lh0_sg.bin",
+        "usr/share/lily/tts/en-US_lh0_sg.bin",
+        "644",
+    ],
+    [
+        "resources/tts/en-US_ta.bin",
+        "usr/share/lily/tts/en-US_ta.bin",
+        "644",
+    ],
+    [
+        "resources/tts/es-ES_ta.bin",
+        "usr/share/lily/tts/es-ES_ta.bin",
+        "644",
+    ],
+    [
+        "resources/tts/es-ES_zl0_sg.bin",
+        "usr/share/lily/tts/es-ES_zl0_sg.bin",
+        "644",
+    ],
+    [
+        "resources/tts/fr-FR_nk0_sg.bin",
+        "usr/share/lily/tts/fr-FR_nk0_sg.bin",
+        "644",
+    ],
+    [
+        "resources/tts/fr-FR_ta.bin",
+        "usr/share/lily/tts/fr-FR_ta.bin",
+        "644",
+    ],
+    [
+        "resources/tts/it-IT_cm0_sg.bin",
+        "usr/share/lily/tts/it-IT_cm0_sg.bin",
+        "644",
+    ],
+    [
+        "resources/tts/it-IT_ta.bin",
+        "usr/share/lily/tts/it-IT_ta.bin",
+        "644",
+    ],
 
     # Default package
-    ["skills/default/python/default/__init__.py", "usr/share/lily/skills/default/python/default/__init__.py", "644"],
-    ["skills/default/sounds/beep.ogg", "usr/share/lily/skills/default/sounds/beep.ogg", "644"],
-    ["skills/default/sounds/end_recognition.ogg", "usr/share/lily/skills/default/sounds/end_recognition.ogg", "644"],
-    ["skills/default/translations/en-US/translations.ftl", "usr/share/lily/skills/default/translations/en-US/translations.ftl", "644"],
-    ["skills/default/translations/es-ES/translations.ftl", "usr/share/lily/skills/default/translations/es-ES/translations.ftl", "644"],
-    ["skills/default/model.yaml", "usr/share/lily/skills/default/model.yaml", "644"],
+    [
+        "skills/default/python/default/__init__.py",
+        "usr/share/lily/skills/default/python/default/__init__.py",
+        "644",
+    ],
+    [
+        "skills/default/sounds/beep.ogg",
+        "usr/share/lily/skills/default/sounds/beep.ogg",
+        "644",
+    ],
+    [
+        "skills/default/sounds/end_recognition.ogg",
+        "usr/share/lily/skills/default/sounds/end_recognition.ogg",
+        "644",
+    ],
+    [
+        "skills/default/translations/en-US/translations.ftl",
+        "usr/share/lily/skills/default/translations/en-US/translations.ftl",
+        "644",
+    ],
+    [
+        "skills/default/translations/es-ES/translations.ftl",
+        "usr/share/lily/skills/default/translations/es-ES/translations.ftl",
+        "644",
+    ],
+    [
+        "skills/default/model.yaml",
+        "usr/share/lily/skills/default/model.yaml",
+        "644",
+    ],
 
 ]
 

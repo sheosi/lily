@@ -2,7 +2,9 @@
 use std::unimplemented;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+
 
 // This crate
 use crate::actions::{ActionSet, LocalActionRegistry, PythonAction};
@@ -12,14 +14,14 @@ use crate::queries::{ActQuery, LocalQueryRegistry, PythonQuery};
 use crate::signals::{collections::Hook, ActSignal, LocalSignalRegistry, PythonSignal};
 use crate::signals::registries::{ACT_REG, QUERY_REG};
 use crate::skills::{call_for_skill, Loader};
-use crate::nlu::{IntentData, EntityData, EntityDef, OrderKind};
+use crate::nlu::{EntityData, EntityDef, IntentData, OrderKind, SlotData};
 use crate::python::{try_translate, try_translate_all};
 use crate::vars::{SKILLS_PATH_ERR_MSG, PYTHON_SDK_PATH};
 
 // Other crates
 use anyhow::{anyhow, Result};
 use pyo3::Python;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use thiserror::Error;
 use lazy_static::lazy_static;
 use lily_common::other::false_val;
@@ -175,10 +177,10 @@ impl LocalLoader {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct YamlSlotData {
     #[serde(rename="type")]
-    pub slot_type: OrderKind,
+    pub slot_type: YamlOrderKind,
     #[serde(default="false_val")]
     pub required: bool,
     #[serde(default)]
@@ -187,7 +189,7 @@ pub struct YamlSlotData {
     pub reprompt: Option<String>
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct YamlIntentData {
 
     #[serde(alias = "samples", alias = "sample")]
@@ -196,6 +198,29 @@ pub struct YamlIntentData {
     pub slots: HashMap<String, YamlSlotData>,
     #[serde(flatten)]
     pub hook: Hook
+}
+
+impl YamlIntentData {
+    pub fn try_into_with_trans(self, lang: &LanguageIdentifier) -> Result<IntentData> {
+        let t  = self.utts.into_translation(lang).map_err(|v|anyhow!("Translation failed for: {:?}", v))?;
+        let utts = StringList::from_vec(t);
+        let lang_str = &lang.to_string();
+        let mut slots = HashMap::new();
+
+        for (k, v) in self.slots.into_iter() {
+            slots.insert(k, SlotData {
+                slot_type: match v.slot_type {
+                    YamlOrderKind::Ref(t) => OrderKind::Ref(t),
+                    YamlOrderKind::Def(t) => OrderKind::Def(t.try_into_with_trans(lang)?),
+                },
+                required: v.required,
+                prompt: v.prompt.as_ref().map(|p|try_translate(&p, lang_str)).transpose()?,
+                reprompt: v.reprompt.as_ref().map(|p|try_translate(&p, lang_str)).transpose()?
+            });
+        }
+    
+        Ok(IntentData{utts, slots, hook: self.hook})
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -211,14 +236,14 @@ pub struct YamlEntityDef {
 }
 
 impl YamlEntityDef {
-    
-    #[cfg(feature="python_skills")]
     pub fn try_into_with_trans(self, lang: &LanguageIdentifier) -> Result<EntityDef> {
         let mut data = Vec::new();
 
         for trans_data in self.data.into_iter(){
+            // Only first translation
             let mut translations = try_translate_all(&trans_data, &lang.to_string())?;
             let value = translations.swap_remove(0);
+            
             data.push(EntityData{value, synonyms: StringList::from_vec(translations)});
         }
 
@@ -251,18 +276,6 @@ fn load_trans(python: Python, skill_path: &Path, curr_langs: &Vec<LanguageIdenti
     Ok(())
 }
 
-fn trans_intent(mut intent_data: IntentData, lang: &LanguageIdentifier) -> Result<IntentData> {
-    let t  = intent_data.utts.into_translation(lang).map_err(|v|anyhow!("Translation failed for: {:?}", v))?;
-    intent_data.utts = StringList::from_vec(t);
-    let lang_str = &lang.to_string();
-    for (_, v) in intent_data.slots.iter_mut() {
-        v.prompt = v.prompt.as_ref().map(|p|try_translate(&p, lang_str)).transpose()?;
-        v.reprompt = v.reprompt.as_ref().map(|p|try_translate(&p, lang_str)).transpose()?;
-    }
-
-    Ok(intent_data)
-}
-
 fn load_intents(
     signals: &LocalSignalRegistry,
     actions: &LocalActionRegistry,
@@ -284,9 +297,9 @@ fn load_intents(
             #[derive(Debug, Deserialize)]
             struct SkillDef {
                 #[serde(flatten)]
-                intents: HashMap<String, IntentData>,
+                intents: HashMap<String, YamlIntentData>,
                 #[serde(default)]
-                types: HashMap<String, EntityDef>,
+                types: HashMap<String, YamlEntityDef>,
                 #[serde(default)]
                 events: Vec<EventOrAction>
             }
@@ -300,7 +313,7 @@ fn load_intents(
             let sig_order = signals.get_sig_order().expect("Order signal was not initialized");
             for (type_name, data) in skilldef.types.into_iter() {
                 for lang in langs {
-                    sig_order.lock_it().add_slot_type(type_name.clone(), data.to_translation(lang)?, lang);
+                    sig_order.lock_it().add_slot_type(type_name.clone(), data.clone().try_into_with_trans(lang)?, lang);
                 }
             }
             
@@ -311,7 +324,7 @@ fn load_intents(
                         let act_set = ActionSet::create(action);
                         for lang in langs {
                             sig_order.lock_it().add_intent(
-                                trans_intent(data.clone(), lang)?,
+                                data.clone().try_into_with_trans(lang)?,
                                 &intent_name,
                                 &skill_name,
                                 act_set.clone(),
@@ -325,7 +338,7 @@ fn load_intents(
                         let act_set = ActionSet::create(ActQuery::new(q.clone(), name));
                         for lang in langs {
                             sig_order.lock_it().add_intent(
-                                trans_intent(data.clone(), lang)?,
+                                data.clone().try_into_with_trans(lang)?,
                                 &intent_name,
                                 &skill_name,
                                 act_set.clone(),
@@ -339,7 +352,7 @@ fn load_intents(
                         let act_set = ActionSet::create(ActSignal::new(s.clone(), name));
                         for lang in langs {
                             sig_order.lock_it().add_intent(
-                                trans_intent(data.clone(), lang)?,
+                                data.clone().try_into_with_trans(lang)?,
                                 &intent_name,
                                 &skill_name,
                                 act_set.clone(),
