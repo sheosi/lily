@@ -85,9 +85,10 @@ impl<M: NluManager + NluManagerStatic + Debug + Send> NluMap<M> {
                 OrderKind::Def(def) => {
                     
                     let name = format!("_{}__{}_", skill_name, slot_name);
+                    let example = def.data.first().as_ref().map(|d|d.value.clone()).unwrap_or("".into());
                     self.map.get_mut(lang).expect("Language not registered").get_mut_nlu_man()
-                    .add_entity(&name, def);
-                    (name, def.data.first().map(|d|d.value.clone()).unwrap_or("".into()))
+                    .add_entity(name.clone(), def.clone());
+                    (name, example)
                 }
             };
 
@@ -101,32 +102,19 @@ impl<M: NluManager + NluManagerStatic + Debug + Send> NluMap<M> {
         }
 
         // Now register all utterances
-        match sig_arg.utts.clone().into_translation(lang) {
-            Ok(t) => {
-                let utts = t.into_iter().map(|utt|
-                if slots_res.is_empty() {
-                    NluUtterance::Direct(utt)
-                }
-                else {
-                    NluUtterance::WithEntities {
-                        text: utt,
-                        entities: slots_res.clone(),
-                    }
-                }).collect();
-
-                self.map.get_mut(lang).expect("Input language was not present before").get_mut_nlu_man()
-                .add_intent(intent_name, utts);
+        let utts = sig_arg.utts.data.into_iter().map(|utt|
+            if slots_res.is_empty() {
+                NluUtterance::Direct(utt)
             }
-            Err(failed) => {
-                if failed.len() == 1 {
-                    error!("Sample '{}' of '{}'  couldn't be translated", failed[0], skill_name)
+            else {
+                NluUtterance::WithEntities {
+                    text: utt,
+                    entities: slots_res.clone(),
                 }
-                else {
-                    error!("Samples '{}' of '{}' couldn't be translated", failed.join(", "), skill_name)
-                }
-            }
+        }).collect();
 
-        }
+        self.map.get_mut(lang).expect("Input language was not present before").get_mut_nlu_man()
+        .add_intent(intent_name, utts);
                 
         Ok(())
     }

@@ -155,7 +155,7 @@ impl<M:NluManager + NluManagerStatic + Debug + Send>  SignalOrder<M> {
 
     pub fn add_slot_type(&mut self, type_name: String, data: EntityDef, lang: &LanguageIdentifier) {
         let mut m = self.nlu.lock_it();
-        m.get_mut_nlu_man(lang).add_entity(&type_name, data);
+        m.get_mut_nlu_man(lang).add_entity(type_name, data);
     }
 }
 

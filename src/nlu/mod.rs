@@ -40,7 +40,7 @@ pub trait NluManager {
     fn ready_lang(&mut self, lang: &LanguageIdentifier) -> Result<()>;
 
     fn add_intent(&mut self, order_name: &str, phrases: Vec<NluUtterance>);
-    fn add_entity(&mut self, name:&str, def: EntityDef);
+    fn add_entity(&mut self, name: String, def: EntityDef);
     fn add_entity_value(&mut self, name: &str, value: String) -> Result<()>;
 
     // Consume the struct so that we can reuse memory
@@ -91,6 +91,16 @@ impl EntityData {
         let l_str = lang.to_string();
         let value = try_translate(&self.value, &l_str)?;
         let synonyms = self.synonyms.into_translation(lang)
+        .map_err(|v|anyhow!("Translation of '{}' failed", v.join("\"")))?;
+
+        Ok(EntityData {value,synonyms: StringList::from_vec(synonyms)})
+    }
+
+    #[cfg(feature="python_skills")]
+    pub fn to_translation(&self, lang: &LanguageIdentifier) -> Result<Self> {
+        let l_str = lang.to_string();
+        let value = try_translate(&self.value, &l_str)?;
+        let synonyms = self.synonyms.to_translation(lang)
         .map_err(|v|anyhow!("Translation of '{}' failed", v.join("\"")))?;
 
         Ok(EntityData {value,synonyms: StringList::from_vec(synonyms)})
@@ -161,7 +171,7 @@ where
     deserializer.deserialize_any(StringOrStruct(PhantomData))
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct EntityDef {
     pub data: Vec<EntityData>,
     pub automatically_extensible: bool
@@ -181,8 +191,17 @@ impl EntityDef {
             automatically_extensible: self.automatically_extensible
         })
     }
+
+    #[cfg(feature="python_skills")]
+    pub fn to_translation(&self, lang: &LanguageIdentifier) -> Result<EntityDef> {
+        let data_res: Result<Vec<_>,_> = self.data.iter().map(|d|d.to_translation(lang)).collect();
+        Ok(EntityDef {
+            data: data_res?,
+            automatically_extensible: self.automatically_extensible
+        })
+    }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub enum OrderKind {
     Ref(String),
     Def(EntityDef)
@@ -205,8 +224,13 @@ pub struct SlotData {
     pub slot_type: OrderKind,
     #[serde(default="false_val")]
     pub required: bool,
+
+    // In case this slot is not present in the user response but is required
+    // have a way of automatically asking for it
     #[serde(default)]
     pub prompt: Option<String>,
+
+    // Second chance for asking the user for this slot
     #[serde(default)]
     pub reprompt: Option<String>
 }

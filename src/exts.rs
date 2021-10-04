@@ -44,7 +44,7 @@ impl<T: ?std::marker::Sized> LockIt<T> for Mutex<T> {
 
 #[derive(Clone, Debug)]
 pub struct StringList {
-    data: Vec<String>
+    pub data: Vec<String>
 }
 
 impl StringList {
@@ -61,6 +61,27 @@ impl StringList {
         let lang_str = lang.to_string();
 
         let (utts_data, failed):(Vec<_>,Vec<_>) = self.data.into_iter()
+        .map(|utt|try_translate_all(&utt, &lang_str))
+        .partition(Result::is_ok);
+
+        if failed.is_empty() {
+            let utts = utts_data.into_iter().map(Result::unwrap)
+            .flatten().collect();
+
+            Ok(utts)
+        }
+        else {
+            let failed = failed.into_iter().map(Result::unwrap)
+            .flatten().collect();
+            Err(failed)            
+        }
+    }
+    #[cfg(feature="python_skills")]
+    /// Returns an aggregated vector with the translations of all entries
+    pub fn to_translation(&self, lang: &LanguageIdentifier) -> Result<Vec<String>,Vec<String>> {
+        let lang_str = lang.to_string();
+
+        let (utts_data, failed):(Vec<_>,Vec<_>) = self.data.iter()
         .map(|utt|try_translate_all(&utt, &lang_str))
         .partition(Result::is_ok);
 

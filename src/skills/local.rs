@@ -252,17 +252,13 @@ fn load_trans(python: Python, skill_path: &Path, curr_langs: &Vec<LanguageIdenti
 }
 
 fn trans_intent(mut intent_data: IntentData, lang: &LanguageIdentifier) -> Result<IntentData> {
-    // XXX!
     let t  = intent_data.utts.into_translation(lang).map_err(|v|anyhow!("Translation failed for: {:?}", v))?;
     intent_data.utts = StringList::from_vec(t);
-    intent_data.slots = intent_data.slots.into_iter().map(|(k,v)|{
-        v.prompt = v.prompt.map(|p|try_translate(p));
-        let mut translations = try_translate_all(&trans_data, &lang.to_string())?;
-        let value = translations.swap_remove(0);
-        data.push(EntityData{value, synonyms: StringList::from_vec(translations)});
-        (k,v)
-    });
-
+    let lang_str = &lang.to_string();
+    for (_, v) in intent_data.slots.iter_mut() {
+        v.prompt = v.prompt.as_ref().map(|p|try_translate(&p, lang_str)).transpose()?;
+        v.reprompt = v.reprompt.as_ref().map(|p|try_translate(&p, lang_str)).transpose()?;
+    }
 
     Ok(intent_data)
 }
@@ -304,7 +300,7 @@ fn load_intents(
             let sig_order = signals.get_sig_order().expect("Order signal was not initialized");
             for (type_name, data) in skilldef.types.into_iter() {
                 for lang in langs {
-                    sig_order.lock_it().add_slot_type(type_name, data.into_translation(lang)?, lang);
+                    sig_order.lock_it().add_slot_type(type_name.clone(), data.to_translation(lang)?, lang);
                 }
             }
             
@@ -318,7 +314,7 @@ fn load_intents(
                                 trans_intent(data.clone(), lang)?,
                                 &intent_name,
                                 &skill_name,
-                                act_set,
+                                act_set.clone(),
                                 lang
                             )?;
                         }
@@ -332,7 +328,7 @@ fn load_intents(
                                 trans_intent(data.clone(), lang)?,
                                 &intent_name,
                                 &skill_name,
-                                act_set,
+                                act_set.clone(),
                                 lang
                             )?;
                         }
@@ -346,7 +342,7 @@ fn load_intents(
                                 trans_intent(data.clone(), lang)?,
                                 &intent_name,
                                 &skill_name,
-                                act_set,
+                                act_set.clone(),
                                 lang
                             )?;
                         }

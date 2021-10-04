@@ -188,7 +188,7 @@ impl NluManager for RasaNluManager {
         self.intents.push((order_name.to_string(), phrases));
     }
 
-    fn add_entity(&mut self, _name: &str, def: EntityDef) {
+    fn add_entity(&mut self, _name: String, def: EntityDef) {
         self.synonyms.extend(def.data.into_iter());
     }
 
