@@ -9,6 +9,7 @@ use crate::collections::{BaseRegistrySend, GlobalRegSend, LocalBaseRegistrySend}
 use crate::python::HalfBakedError;
 
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use log::error;
 #[cfg(feature = "python_skills")]
 use pyo3::{PyObject, Python, types::{PyTuple}};
@@ -154,8 +155,9 @@ impl ActQuery {
     }
 }
 
+#[async_trait(?Send)]
 impl ActionInstance for ActQuery {
-    fn call(&self ,_context: &ActionContext) -> Result<ActionAnswer> {
+    async fn call(&self ,_context: &ActionContext) -> Result<ActionAnswer> {
         let data = HashMap::new();
         let a = match self.q.lock_it().execute(data) {
             Ok(v)=>v.into_iter().fold("".to_string(),|g,s|format!("{} {:?},", g, s)),

@@ -19,6 +19,8 @@ use crate::python::{get_inst_class_name, HalfBakedError, PyException};
 
 // Other crates
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
+use futures::executor::block_on;
 use log::error;
 use lily_common::audio::Audio;
 #[cfg(feature="python_skills")]
@@ -27,6 +29,7 @@ use pyo3::{Py, PyAny, PyObject, PyResult, Python, types::PyTuple};
 use pyo3::prelude::{pyclass, pymethods};
 #[cfg(feature="python_skills")]
 use pyo3::exceptions::PyOSError;
+use tokio::runtime::Handle;
 
 pub type ActionRegistryShared = Arc<Mutex<ActionRegistry>>;
 pub type ActionRegistry = BaseRegistrySend<dyn Action + Send>;
@@ -82,9 +85,9 @@ impl ActionAnswer {
     }
 }
 
-
+#[async_trait(?Send)]
 pub trait ActionInstance {
-    fn call(&self, context: &ActionContext) -> Result<ActionAnswer>;
+    async fn call(&self, context: &ActionContext) -> Result<ActionAnswer>;
     fn get_name(&self) -> String;
 }
 
@@ -195,8 +198,9 @@ impl PythonActionInstance {
 }
 
 #[cfg(feature="python_skills")]
+#[async_trait(?Send)]
 impl ActionInstance for PythonActionInstance {
-    fn call(&self ,context: &ActionContext) -> Result<ActionAnswer> {
+    async fn call(&self ,context: &ActionContext) -> Result<ActionAnswer> {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
@@ -250,10 +254,10 @@ impl ActionSet {
         self.acts.push(action);
     }
 
-    pub fn call_all(&mut self, context: &ActionContext) -> Vec<ActionAnswer> {
+    pub async fn call_all(&mut self, context: &ActionContext) -> Vec<ActionAnswer> {
         let mut res = Vec::new();
         for action in &self.acts {
-            match action.call(context) {
+            match action.call(context).await {
                 Ok(a) => res.push(a),
                 Err(e) =>  {
                     error!("Action {} failed while being triggered: {}", &action.get_name(), e);
@@ -261,16 +265,6 @@ impl ActionSet {
             }
         }
         res
-    }
-}
-
-// Just exists as a way of extending Arc
-pub trait SharedActionSet {
-    fn call_all(&self, context: &ActionContext) -> Vec<ActionAnswer>;
-}
-impl SharedActionSet for Arc<Mutex<ActionSet>> {
-    fn call_all(&self, context: &ActionContext) -> Vec<ActionAnswer> {
-        self.lock_it().call_all(context)
     }
 }
 
@@ -291,7 +285,9 @@ impl PyActionSet {
 #[pymethods]
 impl PyActionSet {
     fn call(&mut self, context: &ActionContext) -> Vec<ActionAnswer> {
-        self.act_set.lock_it().call_all(context)
+        let handle = Handle::current();
+        handle.enter();
+        block_on(self.act_set.lock_it().call_all(context))
     }
 }
 
@@ -312,8 +308,9 @@ impl Action for SayHelloAction {
 
 pub struct SayHelloActionInstance {}
 
+#[async_trait(?Send)]
 impl ActionInstance for SayHelloActionInstance {
-    fn call(&self, _context: &ActionContext) -> Result<ActionAnswer> {
+    async fn call(&self, _context: &ActionContext) -> Result<ActionAnswer> {
         ActionAnswer::send_text("Hello".into(), true)
     }
 

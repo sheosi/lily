@@ -143,7 +143,7 @@ pub async fn on_event(
     loop {
         let msg = channel.recv().await.expect("Channel closed!");
         let context = add_context_data(base_context, &def_lang, &msg.satellite);
-        let ans = signal_event.lock_it().call(&msg.event, context.clone());
+        let ans = signal_event.lock_it().call(&msg.event, context.clone()).await;
         if let Err(e) = process_answers(ans,&def_lang,msg.satellite) {
             error!("Occurred a problem while processing event: {}", e);
         }

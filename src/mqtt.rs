@@ -110,7 +110,7 @@ pub struct MqttApiOut {
 impl MqttApiOut {
     fn new() -> Result<Self> {
         Ok(Self{
-            hermes_out: HermesApiOut::new(),
+            hermes_out: HermesApiOut::new()?,
             satellite_server_out: MqttInterfaceOut::new()?
         })
     }

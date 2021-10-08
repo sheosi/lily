@@ -3,8 +3,9 @@ use std::fmt;
 use std::time::{Duration};
 use std::sync::{Arc, Mutex};
 
-use crate::actions::{ActionContext, ActionSet, SharedActionSet};
+use crate::actions::{ActionContext, ActionSet};
 use crate::config::Config;
+use crate::exts::LockIt;
 use crate::signals::{Signal, SignalEventShared, UserSignal};
 use crate::vars::UNEXPECTED_MSG;
 
@@ -12,7 +13,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use log::warn;
-use tokio::{spawn, time::sleep};
+use tokio::{task::spawn_local, time::sleep};
 use serde::{de::{self, Visitor}, Deserialize, Deserializer};
 use unic_langid::LanguageIdentifier;
 
@@ -79,24 +80,24 @@ impl Signal for Timer {
 
             match timer {
                 TimerKind::Once(dur) => {
-                    spawn(async move {
+                    spawn_local(async move {
                         sleep(dur).await;
-                        actions.call_all(&base_context);
+                        actions.lock_it().call_all(&base_context).await;
                     });
                 },
                 TimerKind::Every(dur) => {
-                    spawn(async move {
+                    spawn_local(async move {
                         loop {
                             sleep(dur).await;
-                            actions.call_all(&base_context);
+                            actions.lock_it().call_all(&base_context).await;
                         }
                     });
                 },
                 TimerKind::On(date) => {
-                    spawn( async move {
+                    spawn_local( async move {
                         let dur = date.inner.signed_duration_since(Utc::now()).to_std().expect(UNEXPECTED_MSG);
                         sleep(dur).await;
-                        actions.call_all(&base_context);
+                        actions.lock_it().call_all(&base_context).await;
                     });
                 }
             }

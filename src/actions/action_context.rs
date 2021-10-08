@@ -22,14 +22,48 @@ use pyo3::sequence::PySequenceProtocol;
 #[derive(Clone, Debug, FromPyObject, PartialEq)]
 pub enum ContextElement {
     String(String),
-    Dict(ActionContext)
+    Dict(ActionContext),
+    Decimal(f32),
+    Integer(i32)
+}
+
+impl ContextElement {
+    pub fn as_string(&self) -> Option<&str> {
+        match self {
+            ContextElement::String(s) => Some(s),
+            _ => None
+        }
+    }
+
+    pub fn as_dict(&self) -> Option<&ActionContext> {
+        match self {
+            ContextElement::Dict(d) => Some(d),
+            _ => None
+        }
+    }
+
+    pub fn as_decimal(&self) -> Option<f32> {
+        match self {
+            ContextElement::Decimal(d) => Some(*d),
+            _ => None
+        }
+    }
+
+    pub fn as_integer(&self) -> Option<i32> {
+        match self {
+            ContextElement::Integer(i) => Some(*i),
+            _ => None
+        }
+    }
 }
 
 #[cfg(not(feature="python_skills"))]
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextElement {
     String(String),
-    Dict(ActionContext)
+    Dict(ActionContext),
+    Decimal(f32),
+    Integer(i32)
 }
 
 #[cfg(feature="python_skills")]
@@ -37,7 +71,9 @@ impl IntoPy<PyObject> for ContextElement {
     fn into_py(self, py: Python) -> PyObject {
         match self {
             ContextElement::String(str)=>{str.into_py(py)},
-            ContextElement::Dict(c) =>{c.into_py(py)}
+            ContextElement::Dict(c) =>{c.into_py(py)},
+            ContextElement::Decimal(f)=>{f.into_py(py)},
+            ContextElement::Integer(i)=>{i.into_py(py)}
         }
     }
 }
@@ -316,6 +352,14 @@ impl ActionContext {
 
     pub fn set_dict(&mut self, key: String, value: ActionContext) {
         self.map.lock_it().insert(key, ContextElement::Dict(value));
+    }
+
+    pub fn set_decimal(&mut self, key: String, value: f32) {
+        self.map.lock_it().insert(key, ContextElement::Decimal(value));
+    }
+
+    pub fn set_integer(&mut self, key: String, value: i32) {
+        self.map.lock_it().insert(key, ContextElement::Integer(value));
     }
 
 }

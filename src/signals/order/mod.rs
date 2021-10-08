@@ -74,7 +74,7 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> SignalOrder<M> {
         debug!("Heard from user: {:?}", decode_res);
 
         let ans = match decode_res {
-            None => event_signal.lock_it().call("empty_reco", base_context.clone()),
+            None => event_signal.lock_it().call("empty_reco", base_context.clone()).await,
             Some(decode_res) => {
 
                 if !decode_res.hypothesis.is_empty() {
@@ -91,28 +91,34 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> SignalOrder<M> {
 
                             let slots_data =  add_slots(&ActionContext::new(),result.slots);
 
-                            let mut intent_data = ActionContext::new();
-                            intent_data.set_str("name".to_string(), self.demangle(&intent_name).to_string());
-                            intent_data.set_dict("slots".to_string(), slots_data);
+                            let intent_data ={ 
+                                let mut intent_data = ActionContext::new();
+                                intent_data.set_str("name".to_string(), self.demangle(&intent_name).to_string());
+                                intent_data.set_str("input".to_string(), decode_res.hypothesis);
+                                intent_data.set_dict("slots".to_string(), slots_data);
+                                intent_data.set_decimal("confidence".to_string(), result.confidence);
+                                intent_data
+                            };
 
                             let mut intent_context = base_context.clone();
                             intent_context.set_str("type".to_string(), "intent".to_string());
                             intent_context.set_dict("intent".to_string(), intent_data);
                             
-                            let answers = self.intent_map.call_mapping(&intent_name, &intent_context);
+                            
+                            let answers = self.intent_map.call_mapping(&intent_name, &intent_context).await;
                             info!("Action called");
                             answers
                         }
                         else {
-                            event_signal.lock_it().call("unrecognized", base_context.clone())
+                            event_signal.lock_it().call("unrecognized", base_context.clone()).await
                         }
                     }
                     else {
-                        event_signal.lock_it().call("unrecognized", base_context.clone())
+                        event_signal.lock_it().call("unrecognized", base_context.clone()).await
                     }
                 }
                 else {
-                    event_signal.lock_it().call("empty_reco", base_context.clone())
+                    event_signal.lock_it().call("empty_reco", base_context.clone()).await
                 }
             }
         };

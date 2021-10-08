@@ -2,7 +2,6 @@
 use std::unimplemented;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 
@@ -21,7 +20,7 @@ use crate::vars::{SKILLS_PATH_ERR_MSG, PYTHON_SDK_PATH};
 // Other crates
 use anyhow::{anyhow, Result};
 use pyo3::Python;
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use thiserror::Error;
 use lazy_static::lazy_static;
 use lily_common::other::false_val;
