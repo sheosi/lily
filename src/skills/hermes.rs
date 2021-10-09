@@ -1,4 +1,5 @@
 // Standard library
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 // This crate
@@ -10,14 +11,14 @@ use crate::skills::Loader;
 use crate::skills::hermes::messages::IntentMessage;
 
 // Other crates
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
 use lazy_static::lazy_static;
 use rmp_serde::decode;
 use rumqttc::{AsyncClient, QoS};
 use serde::Serialize;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use unic_langid::LanguageIdentifier;
 
 lazy_static!{
@@ -158,27 +159,44 @@ impl HermesApiIn {
     }
 
     pub async fn handle_tts_say(&self, payload: &Bytes) -> Result<()> {
-        let msg: messages::SayMessage = decode::from_read(std::io::Cursor::new(payload))?;
-        MSG_OUTPUT.with::<_,Result<()>>(|m|{match *m.borrow_mut() {
-            Some(ref mut output) => {
-                // Note: This clone could be workarounded
-                let l =msg.lang.and_then(|s|s.parse().ok()).unwrap_or(self.def_lang.clone());
-                output.answer(msg.text, &l, msg.site_id)
-            }
-            _=>{
-                Err(anyhow::anyhow!("No output channel"))
-            }
-        }})
+        if let Some(msg) = HERMES_API_INPUT.lock_it().expect("No Hermes API input").intercept_tts_say(payload) {
+            MSG_OUTPUT.with::<_,Result<()>>(|m|{match *m.borrow_mut() {
+                Some(ref mut output) => {
+                    // Note: This clone could be workarounded
+                    let l =msg.lang.and_then(|s|s.parse().ok()).unwrap_or(self.def_lang.clone());
+                    output.answer(msg.text, &l, msg.site_id)
+                }
+                _=>{
+                    Err(anyhow!("No output channel"))
+                }
+            }})
+        }
+        else {Ok(())}
     }
 }
 
 pub struct HermesApiInput {
-    common_in: mpsc::Receiver<(String, String)>,
+    tts_say_map: HashMap<String, oneshot::Sender<messages::SayMessage>>,
 }
 
 impl HermesApiInput {
-    pub async fn wait_answer(&mut self, topic: &str) -> Result<String> {
+    pub async fn wait_answer(&mut self, uuid: &str) -> String {
+        let (sender, receiver) = oneshot::channel();
+        self.tts_say_map.insert(uuid.to_string(), sender);
+        let ans = receiver.recv().await.expect("TTS Say channel dropped");
+        self.tts_say_map.remove(uuid);
+        ans
+    }
 
+    pub fn intercept_tts_say(&mut self, msg: Bytes) -> Option<messages::SayMessage> {
+        let msg: messages::SayMessage = serde_json::from_str(&msg);
+        if self.tts_say_map.contains_key(&msg.site_id) {
+            self.tts_say_map[&msg.site_id].send(msg);
+            None
+        }
+        else {
+            Some(msg)
+        }
     }
 }
 
