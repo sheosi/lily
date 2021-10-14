@@ -140,9 +140,9 @@ impl Loader for HermesLoader {
         base_actreg: &LocalActionRegistry,
         _base_queryreg: &LocalQueryRegistry,
         _langs: &Vec<LanguageIdentifier>) -> Result<()> {
-            
-        // For the time being we are going to put everything as a single skill called "hermes"
 
+        // For the time being we are going to put everything as a single skill called "hermes"
+        // TODO: Get all actions from somewhere
         let mut global_actions = base_actreg.get_global_mut();
         let actions: Vec<String> = Vec::new();
         for act_name in actions {

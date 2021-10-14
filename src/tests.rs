@@ -12,6 +12,7 @@ fn import_python_impl() {
     let python = gil.python();
 
     let res = python.import("_lily_impl");
+    println!("{:?}", res);
     assert!(res.is_ok());
 
 }

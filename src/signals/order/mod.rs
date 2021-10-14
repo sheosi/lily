@@ -18,7 +18,7 @@ use crate::exts::LockIt;
 use crate::mqtt::MqttApi;
 use crate::nlu::{EntityDef, IntentData, Nlu, NluManager, NluManagerStatic, NluResponseSlot};
 use crate::stt::DecodeRes;
-use crate::signals::{collections::NluMap, dynamic_nlu::EntityAddValueRequest, ActMap, Signal, SignalEventShared};
+use crate::signals::{collections::NluMap, dynamic_nlu::DynamicNluRequest, ActMap, Signal, SignalEventShared};
 use crate::vars::{mangle, MIN_SCORE_FOR_ACTION};
 use self::{mqtt::MSG_OUTPUT, server_actions::{on_event, on_nlu_request}, dev_mgmt::SessionManager};
 
@@ -56,17 +56,17 @@ pub struct SignalOrder<M: NluManager + NluManagerStatic + Debug + Send> {
     intent_map: ActMap,
     nlu: Arc<Mutex<NluMap<M>>>,
     demangled_names: HashMap<String, String>,
-    dyn_entities: Option<mpsc::Receiver<EntityAddValueRequest>>
+    dyn_nlu: Option<mpsc::Receiver<DynamicNluRequest>>
 }
 
 impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> SignalOrder<M> {
-    pub fn new(langs: Vec<LanguageIdentifier>, consumer: mpsc::Receiver<EntityAddValueRequest>) -> Self {
+    pub fn new(langs: Vec<LanguageIdentifier>, consumer: mpsc::Receiver<DynamicNluRequest>) -> Self {
         
         SignalOrder {
             intent_map: ActMap::new(),
             nlu: Arc::new(Mutex::new(NluMap::new(langs))),
             demangled_names: HashMap::new(),
-            dyn_entities: Some(consumer)
+            dyn_nlu: Some(consumer)
         }
     }
 
@@ -183,28 +183,40 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
 
         // Dyn entities data
         
-        async fn on_dyn_entity<M: NluManager + NluManagerStatic + Debug + Send + 'static>(
-            mut channel: mpsc::Receiver<EntityAddValueRequest>,
+        async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'static>(
+            mut channel: mpsc::Receiver<DynamicNluRequest>,
             shared_nlu: Arc<Mutex<NluMap<M>>>,
             curr_langs: Vec<LanguageIdentifier>,
         ) -> Result<()> {
             loop {
-                let request= channel.recv().await.unwrap();
-                let langs = if request.langs.is_empty(){
-                    curr_langs.clone()
-                }
-                else {
-                    request.langs
-                };
-
-                let mut m = shared_nlu.lock_it();
-                for lang in langs {
-                    let man = m.get_mut_nlu_man(&lang);
-                    let mangled = mangle(&request.skill, &request.entity);
-                    if let Err(e) = man.add_entity_value(&mangled, request.value.clone()) {
-                        error!("Failed to add value to entity {}", e);
+                match channel.recv().await.unwrap() {
+                    DynamicNluRequest::EntityAddValue(request) => {
+                        let langs = if request.langs.is_empty(){
+                            curr_langs.clone()
+                        }
+                        else {
+                            request.langs
+                        };
+        
+                        let mut m = shared_nlu.lock_it();
+                        for lang in langs {
+                            let man = m.get_mut_nlu_man(&lang);
+                            let mangled = mangle(&request.skill, &request.entity);
+                            if let Err(e) = man.add_entity_value(&mangled, request.value.clone()) {
+                                error!("Failed to add value to entity {}", e);
+                            }
+                        }
+                        SignalOrder::end_loading(&shared_nlu, &curr_langs)?;
                     }
-                    SignalOrder::end_loading(&shared_nlu, &curr_langs)?;
+                    DynamicNluRequest::AddIntent(request) => {        
+                        let mut m = shared_nlu.lock_it();
+                        for (lang, intent) in request.by_lang {
+                            let man = m.get_mut_nlu_man(&lang);
+                            let mangled = mangle(&request.skill, &request.intent_name);
+                            man.add_intent(&mangled,intent.into_utterances(&request.skill));
+                        }
+                        SignalOrder::end_loading(&shared_nlu, &curr_langs)?;
+                    }
                 }
             }
         }
@@ -212,8 +224,8 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
         let (nlu_sender, nlu_receiver) = tokio::sync::mpsc::channel(100);
         let (event_sender, event_receiver) = tokio::sync::mpsc::channel(100);
         let sessions = Arc::new(Mutex::new(SessionManager::new()));
-        let dyn_ent_fut = on_dyn_entity(
-            replace(&mut self.dyn_entities, None).expect("Dyn_entities already consumed"),
+        let dyn_ent_fut = on_dyn_nlu(
+            replace(&mut self.dyn_nlu, None).expect("Dyn_nlu already consumed"),
             self.nlu.clone(),
             curr_langs.clone()
         );
@@ -291,7 +303,7 @@ pub type CurrentNluManager = RasaNluManager;
 
 pub type SignalOrderCurrent = SignalOrder<CurrentNluManager>;
 
-pub fn new_signal_order(langs: Vec<LanguageIdentifier>, consumer: mpsc::Receiver<EntityAddValueRequest>) -> SignalOrder<CurrentNluManager> {
+pub fn new_signal_order(langs: Vec<LanguageIdentifier>, consumer: mpsc::Receiver<DynamicNluRequest>) -> SignalOrder<CurrentNluManager> {
     SignalOrder::new(langs, consumer)
 }
 

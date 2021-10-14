@@ -11,7 +11,8 @@ use std::fmt::Debug;
 
 // This crate
 use crate::signals::order::NluState;
-use crate::nlu::{EntityInstance, IntentData, NluManager, NluManagerStatic, NluUtterance, OrderKind};
+use crate::nlu::{IntentData, NluManager, NluManagerStatic, OrderKind};
+use crate::vars::mangle;
 
 // Other crates
 use anyhow::{anyhow, Result};
@@ -75,45 +76,19 @@ impl<M: NluManager + NluManagerStatic + Debug + Send> NluMap<M> {
         lang: &LanguageIdentifier,
     ) -> Result<()> {
         //First, register all slots
-        let mut slots_res:HashMap<String, EntityInstance> = HashMap::new();
+
         for (slot_name, slot_data) in sig_arg.slots.iter() {
-
             // Handle that slot types might be defined on the spot
-            let (ent_kind_name, example):(_, String) = match slot_data.slot_type.clone() {
-                OrderKind::Ref(name) => (name, "".into()),
-                OrderKind::Def(def) => {
-                    
-                    let name = format!("_{}__{}_", skill_name, slot_name);
-                    let example = def.data.first().as_ref().map(|d|d.value.clone()).unwrap_or("".into());
-                    self.map.get_mut(lang).expect("Language not registered").get_mut_nlu_man()
-                    .add_entity(name.clone(), def.clone());
-                    (name, example)
-                }
-            };
-
-            slots_res.insert(
-                slot_name.to_string(),
-                EntityInstance {
-                    kind: ent_kind_name,
-                    example,
-                },
-            );
+            if let OrderKind::Def(def)  = slot_data.slot_type.clone() {
+                let name = mangle(skill_name, slot_name);
+                self.map.get_mut(lang).expect("Language not registered").get_mut_nlu_man()
+                .add_entity(name.clone(), def.clone());
+            }
         }
 
-        // Now register all utterances
-        let utts = sig_arg.utts.data.into_iter().map(|utt|
-            if slots_res.is_empty() {
-                NluUtterance::Direct(utt)
-            }
-            else {
-                NluUtterance::WithEntities {
-                    text: utt,
-                    entities: slots_res.clone(),
-                }
-        }).collect();
 
         self.map.get_mut(lang).expect("Input language was not present before").get_mut_nlu_man()
-        .add_intent(intent_name, utts);
+        .add_intent(intent_name, sig_arg.into_utterances(skill_name));
                 
         Ok(())
     }

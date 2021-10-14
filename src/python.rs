@@ -7,8 +7,9 @@ use crate::actions::ActionSet;
 use crate::exts::LockIt;
 use crate::skills::{call_for_skill, PYTHON_LILY_SKILL};
 use crate::signals::{
+    dynamic_nlu::DynamicNluRequest,
     registries::{ACT_REG, POLL_SIGNAL, QUERY_REG},
-    order::{dynamic_nlu::{ENTITY_ADD_CHANNEL, EntityAddValueRequest}, dev_mgmt::CAPS_MANAGER}
+    order::{dynamic_nlu::{DYNAMIC_NLU_CHANNEL, EntityAddValueRequest}, dev_mgmt::CAPS_MANAGER}
 };
 use crate::vars::{PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_ADD_ENTITY_VALUE_MSG, NO_YAML_FLOAT_MSG};
 
@@ -303,7 +304,7 @@ fn add_entity_value(entity_name: String, value: String, langs: Option<Vec<String
     let langs = langs.py_excep::<PyValueError>()?;
 
     // Get channel and ready request
-    let mut m = ENTITY_ADD_CHANNEL.lock_it();
+    let mut m = DYNAMIC_NLU_CHANNEL.lock_it();
     let channel = m.as_mut().ok_or_else(||PyErr::new::<PyOSError, _>(NO_ADD_ENTITY_VALUE_MSG))?;
     let request = EntityAddValueRequest{
         skill: get_current_skill()?,
@@ -313,7 +314,7 @@ fn add_entity_value(entity_name: String, value: String, langs: Option<Vec<String
     };
 
     // Send request
-    channel.blocking_send(request).py_excep::<PyOSError>()?;
+    channel.blocking_send(DynamicNluRequest::EntityAddValue(request)).py_excep::<PyOSError>()?;
     Ok(())
 }
 

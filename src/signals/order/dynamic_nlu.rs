@@ -1,8 +1,9 @@
 // Standard library
-use std::sync::Mutex;
+use std::{collections::HashMap, sync::Mutex};
 
 // This crate
 use crate::exts::LockIt;
+use crate::nlu::IntentData;
 
 // Other crates
 use anyhow::Result;
@@ -11,7 +12,17 @@ use tokio::sync::mpsc;
 use unic_langid::LanguageIdentifier;
 
 lazy_static! {
-    pub static ref ENTITY_ADD_CHANNEL: Mutex<Option<mpsc::Sender<EntityAddValueRequest>>> =  Mutex::new(None);
+    pub static ref DYNAMIC_NLU_CHANNEL: Mutex<Option<mpsc::Sender<DynamicNluRequest>>> =  Mutex::new(None);
+}
+
+pub enum DynamicNluRequest {
+    AddIntent(AddIntentRequest),
+    EntityAddValue(EntityAddValueRequest)
+}
+pub struct AddIntentRequest {
+    pub by_lang: HashMap<LanguageIdentifier, IntentData>,
+    pub skill: String,
+    pub intent_name: String,
 }
 
 pub struct EntityAddValueRequest {
@@ -20,10 +31,10 @@ pub struct EntityAddValueRequest {
     pub value: String,
     pub langs: Vec<LanguageIdentifier>,
 }
-pub fn init_dynamic_entities() -> Result<mpsc::Receiver<EntityAddValueRequest>> {
+pub fn init_dynamic_nlu() -> Result<mpsc::Receiver<DynamicNluRequest>> {
     let (producer, consumer) = mpsc::channel(100);
 
-    (*ENTITY_ADD_CHANNEL.lock_it()) = Some(producer);
+    (*DYNAMIC_NLU_CHANNEL.lock_it()) = Some(producer);
 
     Ok(consumer)
 }

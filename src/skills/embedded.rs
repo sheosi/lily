@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 use crate::actions::{LocalActionRegistry, SayHelloAction};
 use crate::collections::GlobalRegSend;
 use crate::queries::{LocalQueryRegistry};
+use crate::signals::dynamic_nlu::DynamicNluRequest;
 use crate::signals::{ LocalSignalRegistry, new_signal_order, poll::PollQuery, Timer};
-use crate::signals::order::dynamic_nlu::EntityAddValueRequest;
 use crate::skills::Loader;
 
 // Other crates
@@ -15,11 +15,11 @@ use anyhow::Result;
 use tokio::sync::mpsc::Receiver;
 use unic_langid::LanguageIdentifier;
 pub struct EmbeddedLoader {
-    consumer: Option<Receiver<EntityAddValueRequest>>
+    consumer: Option<Receiver<DynamicNluRequest>>
 }
 
 impl EmbeddedLoader {
-    pub fn new(consumer: Receiver<EntityAddValueRequest>) -> Self {
+    pub fn new(consumer: Receiver<DynamicNluRequest>) -> Self {
         Self{consumer: Some(consumer)}
     }
 }

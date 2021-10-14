@@ -8,6 +8,7 @@ use crate::exts::StringList;
 #[cfg(feature="python_skills")]
 use crate::python::try_translate;
 use crate::signals::collections::Hook;
+use crate::vars::mangle;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -190,6 +191,43 @@ pub struct IntentData {
     pub utts:  StringList,
     pub slots: HashMap<String, SlotData>,
     pub hook: Hook
+}
+
+impl IntentData {
+    pub fn into_utterances(self, skill_name: &str)  -> Vec<NluUtterance> {
+        let mut slots_res:HashMap<String, EntityInstance> = HashMap::new();
+        for (slot_name, slot_data) in self.slots.iter() {
+
+            // Handle that slot types might be defined on the spot
+            let (ent_kind_name, example):(_, String) = match slot_data.slot_type.clone() {
+                OrderKind::Ref(name) => (name, "".into()),
+                OrderKind::Def(def) => {
+                    
+                    let name = mangle(skill_name, slot_name);
+                    let example = def.data.first().as_ref().map(|d|d.value.clone()).unwrap_or("".into());
+                    (name, example)
+                }
+            };
+
+            slots_res.insert(
+                slot_name.to_string(),
+                EntityInstance {
+                    kind: ent_kind_name,
+                    example,
+                },
+            );
+        }
+        self.utts.data.into_iter().map(|utt|
+            if slots_res.is_empty() {
+                NluUtterance::Direct(utt)
+            }
+            else {
+                NluUtterance::WithEntities {
+                    text: utt,
+                    entities: slots_res.clone(),
+                }
+        }).collect()
+    }
 }
 
 #[derive(Clone, Debug)]

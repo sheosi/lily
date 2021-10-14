@@ -14,7 +14,7 @@ use crate::actions::{ActionRegistry, LocalActionRegistry};
 use crate::exts::LockIt;
 use crate::queries::{LocalQueryRegistry, QueryRegistry};
 use crate::signals::{LocalSignalRegistry, SignalRegistry};
-use crate::signals::order::dynamic_nlu::EntityAddValueRequest;
+use crate::signals::order::dynamic_nlu::DynamicNluRequest;
 use self::{embedded::EmbeddedLoader, hermes::HermesLoader};
 
 #[cfg(feature = "python_skills")]
@@ -72,7 +72,7 @@ fn extract_name(path: &Path) -> Result<Rc<String>> {
 
 #[cfg(feature="python_skills")]
 fn get_loaders(
-    consumer: Receiver<EntityAddValueRequest>,
+    consumer: Receiver<DynamicNluRequest>,
     paths: Vec<PathBuf>
 ) ->Vec<Box<dyn Loader>> {
     vec![
@@ -93,7 +93,7 @@ fn get_loaders(
     ]
 }
 
-pub fn load_skills(paths: Vec<PathBuf>, curr_langs: &Vec<LanguageIdentifier>, consumer: Receiver<EntityAddValueRequest>) -> Result<SignalRegistry> {
+pub fn load_skills(paths: Vec<PathBuf>, curr_langs: &Vec<LanguageIdentifier>, consumer: Receiver<DynamicNluRequest>) -> Result<SignalRegistry> {
     // TODO: What the hell, local registries are ever filled?
     let mut loaders  = get_loaders(consumer, paths);
 

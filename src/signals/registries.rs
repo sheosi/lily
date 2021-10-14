@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use crate::actions::{ActionContext, LocalActionRegistry};
+use crate::actions::{Action, ActionContext, LocalActionRegistry};
 use crate::exts::LockIt;
 use crate::config::Config;
 use crate::collections::{BaseRegistrySend, GlobalRegSend, LocalBaseRegistrySend};
@@ -10,7 +10,7 @@ use crate::queries::LocalQueryRegistry;
 use crate::signals::poll::PollQuery;
 use crate::signals::{Signal, SignalEvent, SignalEventShared, SignalOrderCurrent, SignalRegistryShared, UserSignal};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use delegate::delegate;
 use lazy_static::lazy_static;
 use log::{error, warn};
@@ -180,3 +180,11 @@ impl LocalSignalRegistry {
     }}
 }
 
+pub fn dynamically_add_action(skill_name: String, action_name: &str, action: Arc<Mutex<dyn Action + Send>>) -> Result<()> {
+    let act_reg_mutex = ACT_REG.lock_it();
+    let local_skill = act_reg_mutex.get(&skill_name).ok_or_else(||anyhow!("Skill does not exist"))?;
+    local_skill.get_global_mut().insert(skill_name, action_name.to_owned(), action)?;
+    //TODO! What should we do with the local action itself?
+
+    Ok(())
+}
