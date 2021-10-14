@@ -12,7 +12,7 @@ use crate::python::add_py_folder;
 use crate::queries::{ActQuery, LocalQueryRegistry, PythonQuery};
 use crate::signals::{collections::Hook, ActSignal, LocalSignalRegistry, PythonSignal};
 use crate::signals::registries::{ACT_REG, QUERY_REG};
-use crate::skills::{call_for_skill, Loader};
+use crate::skills::{call_for_skill, SkillLoader};
 use crate::nlu::{EntityData, EntityDef, IntentData, OrderKind, SlotData};
 use crate::python::{try_translate, try_translate_all};
 use crate::vars::{SKILLS_PATH_ERR_MSG, PYTHON_SDK_PATH};
@@ -78,7 +78,7 @@ impl LocalLoader {
     }
 }
 
-impl Loader for LocalLoader {
+impl SkillLoader for LocalLoader {
 
     fn load_skills(&mut self,
         base_sigreg: &LocalSignalRegistry,

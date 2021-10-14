@@ -8,7 +8,7 @@ use crate::collections::GlobalRegSend;
 use crate::exts::LockIt;
 use crate::queries::LocalQueryRegistry;
 use crate::signals::{LocalSignalRegistry, order::mqtt::MSG_OUTPUT};
-use crate::skills::Loader;
+use crate::skills::SkillLoader;
 use crate::skills::hermes::messages::IntentMessage;
 
 // Other crates
@@ -134,7 +134,7 @@ impl HermesLoader {
     }
 }
 
-impl Loader for HermesLoader {
+impl SkillLoader for HermesLoader {
     fn load_skills(&mut self,
         _base_sigreg: &LocalSignalRegistry,
         base_actreg: &LocalActionRegistry,

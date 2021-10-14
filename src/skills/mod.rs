@@ -74,7 +74,7 @@ fn extract_name(path: &Path) -> Result<Rc<String>> {
 fn get_loaders(
     consumer: Receiver<DynamicNluRequest>,
     paths: Vec<PathBuf>
-) ->Vec<Box<dyn Loader>> {
+) ->Vec<Box<dyn SkillLoader>> {
     vec![
         Box::new(EmbeddedLoader::new(consumer)),
         Box::new(LocalLoader::new(paths)),
@@ -86,7 +86,7 @@ fn get_loaders(
 fn get_loaders(
     consumer: Receiver<EntityAddValueRequest>,
     paths: Vec<PathBuf>
-) ->Vec<Box<dyn Loader>> {
+) ->Vec<Box<dyn SkillLoader>> {
     vec![
         Box::new(EmbeddedLoader::new(consumer)),
         Box::new(HermesLoader::new())
@@ -118,7 +118,7 @@ pub fn load_skills(paths: Vec<PathBuf>, curr_langs: &Vec<LanguageIdentifier>, co
     Ok(res)
 }
 
-trait Loader {
+trait SkillLoader {
     fn load_skills(&mut self,
         base_sigreg: &LocalSignalRegistry,
         base_actreg: &LocalActionRegistry,

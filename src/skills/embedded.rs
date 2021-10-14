@@ -8,7 +8,7 @@ use crate::collections::GlobalRegSend;
 use crate::queries::{LocalQueryRegistry};
 use crate::signals::dynamic_nlu::DynamicNluRequest;
 use crate::signals::{ LocalSignalRegistry, new_signal_order, poll::PollQuery, Timer};
-use crate::skills::Loader;
+use crate::skills::SkillLoader;
 
 // Other crates
 use anyhow::Result;
@@ -24,7 +24,7 @@ impl EmbeddedLoader {
     }
 }
 
-impl Loader for EmbeddedLoader {
+impl SkillLoader for EmbeddedLoader {
     fn load_skills(&mut self, 
         base_sigreg: &LocalSignalRegistry,
         base_actreg: &LocalActionRegistry,
