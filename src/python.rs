@@ -73,6 +73,7 @@ pub fn python_init() -> Result<()> {
     let py_env = PYTHON_VIRTUALENV.resolve();
     std::fs::create_dir_all(&py_env)?;
     env::set_var("PYTHON_VIRTUALENV", py_env.as_os_str());
+    pyo3::prepare_freethreaded_python();
 
     let mod_name = std::ffi::CString::new("_lily_impl")?.into_raw();
     unsafe {assert!(pyo3::ffi::PyImport_AppendInittab(mod_name, Some(safe_lily_impl)) != -1);};
