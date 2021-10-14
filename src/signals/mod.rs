@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{ActionAnswer, ActionContext, ActionInstance, ActionSet};
+use crate::actions::{Action, ActionAnswer, ActionContext, ActionSet};
 use crate::config::Config;
 use crate::exts::LockIt;
 
@@ -97,13 +97,13 @@ pub struct ActSignal {
 }
 
 impl ActSignal {
-    pub fn new(s: Arc<Mutex<dyn UserSignal + Send>>, name: String) -> Box<Self> {
-        Box::new(Self{s, name})
+    pub fn new(s: Arc<Mutex<dyn UserSignal + Send>>, name: String) -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self{s, name}))
     }
 }
 
 #[async_trait(?Send)]
-impl ActionInstance for ActSignal {
+impl Action for ActSignal {
     async fn call(&self ,_context: &ActionContext) -> Result<ActionAnswer> {
         // TODO: In theory, Lily should ask which parameters for the signal and 
         // which action to be executed but we can't do that right now
@@ -112,9 +112,7 @@ impl ActionInstance for ActSignal {
         .get("embedded")
         .expect("Skill 'embedded' is somehow not available")
         .get("say_hello")
-        .expect("Embedded skill 'say_hello' is not available")
-        .lock_it()
-        .instance();
+        .expect("Embedded skill 'say_hello' is not available").clone();
 
         let acts = ActionSet::create(a);
 

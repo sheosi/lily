@@ -94,6 +94,7 @@ fn get_loaders(
 }
 
 pub fn load_skills(paths: Vec<PathBuf>, curr_langs: &Vec<LanguageIdentifier>, consumer: Receiver<EntityAddValueRequest>) -> Result<SignalRegistry> {
+    // TODO: What the hell, local registries are ever filled?
     let mut loaders  = get_loaders(consumer, paths);
 
     let global_sigreg = Arc::new(Mutex::new(SignalRegistry::new()));

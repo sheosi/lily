@@ -122,7 +122,11 @@ impl MqttApiOut {
         sessions: Arc<Mutex<SessionManager>>,
         client: Arc<Mutex<AsyncClient>>
     ) -> Result<()> {
-        self.satellite_server_out.handle_out(curr_langs, tts_conf, def_lang, sessions, client).await
+        let satellites = self.satellite_server_out.handle_out(curr_langs, tts_conf, def_lang, sessions, &client);
+        let hermes = self.hermes_out.handle_out(&client);
+        try_join!(satellites, hermes)?;
+        Ok(())
+
     }
     
 }

@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{Action, ActionAnswer, ActionContext, ActionInstance, LocalActionRegistry};
+use crate::actions::{Action, ActionAnswer, ActionContext, LocalActionRegistry};
+use crate::collections::GlobalRegSend;
 use crate::exts::LockIt;
 use crate::queries::LocalQueryRegistry;
 use crate::signals::{LocalSignalRegistry, order::mqtt::MSG_OUTPUT};
@@ -15,7 +16,6 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
 use lazy_static::lazy_static;
-use rmp_serde::decode;
 use rumqttc::{AsyncClient, QoS};
 use serde::Serialize;
 use tokio::sync::{mpsc, oneshot};
@@ -78,22 +78,26 @@ mod messages {
 
     #[derive(Serialize)]
     pub struct ObjectIntentMessage {
-        intentName: String,
-        confidenceScore: f32,
+        #[serde(rename="intentName")]
+        pub intent_name: String,
+        #[serde(rename="confidenceScore")]
+        pub confidence_score: f32,
 
         #[serde(default)]
-        slots: Vec<SlotIntentMessage>,
+        pub slots: Vec<SlotIntentMessage>,
     }
 
     #[derive(Serialize)]
     pub struct SlotIntentMessage {
-        entity: String,
-        slotName: String,
-        rawValue: String,
-        value: ValueSlotIntentMessage,
+        pub entity: String,
+        #[serde(rename="slotName")]
+        pub slot_name: String,
+        #[serde(rename="rawValue")]
+        pub raw_value: String,
+        pub value: ValueSlotIntentMessage,
 
         #[serde(default)]
-        range: Option<RangeSlotIntentMessage>,
+        pub range: Option<RangeSlotIntentMessage>,
     }
 
     #[derive(Serialize)]
@@ -133,10 +137,19 @@ impl HermesLoader {
 impl Loader for HermesLoader {
     fn load_skills(&mut self,
         _base_sigreg: &LocalSignalRegistry,
-        _base_actreg: &LocalActionRegistry,
+        base_actreg: &LocalActionRegistry,
         _base_queryreg: &LocalQueryRegistry,
         _langs: &Vec<LanguageIdentifier>) -> Result<()> {
+            
+        // For the time being we are going to put everything as a single skill called "hermes"
 
+        let mut global_actions = base_actreg.get_global_mut();
+        let actions: Vec<String> = Vec::new();
+        for act_name in actions {
+            let arc_act_name = Arc::new(act_name.clone());
+            let action = Arc::new(Mutex::new(HermesAction::new(arc_act_name.clone(), arc_act_name)));
+            global_actions.insert("hermes".into(), act_name.clone(), action.clone())?;
+        }
 
         Ok(())
     }
@@ -159,7 +172,7 @@ impl HermesApiIn {
     }
 
     pub async fn handle_tts_say(&self, payload: &Bytes) -> Result<()> {
-        if let Some(msg) = HERMES_API_INPUT.lock_it().expect("No Hermes API input").intercept_tts_say(payload) {
+        if let Ok(Some(msg)) = HERMES_API_INPUT.lock_it().as_mut().expect("No Hermes API input").intercept_tts_say(payload) {
             MSG_OUTPUT.with::<_,Result<()>>(|m|{match *m.borrow_mut() {
                 Some(ref mut output) => {
                     // Note: This clone could be workarounded
@@ -180,22 +193,21 @@ pub struct HermesApiInput {
 }
 
 impl HermesApiInput {
-    pub async fn wait_answer(&mut self, uuid: &str) -> String {
-        let (sender, receiver) = oneshot::channel();
+    pub async fn wait_answer(&mut self, uuid: &str) -> messages::SayMessage {
+        let (sender,mut receiver) = oneshot::channel();
         self.tts_say_map.insert(uuid.to_string(), sender);
-        let ans = receiver.recv().await.expect("TTS Say channel dropped");
-        self.tts_say_map.remove(uuid);
+        let ans = receiver.try_recv().expect("TTS Say channel dropped");
         ans
     }
 
-    pub fn intercept_tts_say(&mut self, msg: Bytes) -> Option<messages::SayMessage> {
-        let msg: messages::SayMessage = serde_json::from_str(&msg);
-        if self.tts_say_map.contains_key(&msg.site_id) {
-            self.tts_say_map[&msg.site_id].send(msg);
-            None
+    pub fn intercept_tts_say(&mut self, msg: &Bytes) -> Result<Option<messages::SayMessage>> {
+        let msg: messages::SayMessage = serde_json::from_reader(std::io::Cursor::new(msg))?;
+        if let Some(s) = self.tts_say_map.remove(&msg.site_id) {
+            s.send(msg).map_err(|_|anyhow!("TTS Say channel error"))?;
+            Ok(None)
         }
         else {
-            Some(msg)
+            Ok(Some(msg))
         }
     }
 }
@@ -211,6 +223,13 @@ impl HermesApiOut {
         HERMES_API_OUTPUT.lock_it().replace(output);
 
         Ok(Self {common_out})
+    }
+
+    pub async fn handle_out(&mut self, client: &Arc<Mutex<AsyncClient>>) -> Result<()> {
+        loop {
+            let (topic, payload) = self.common_out.recv().await.expect("Out channel broken");
+            client.lock_it().publish(topic, QoS::AtMostOnce, false, payload).await?;
+        }
     }
 }
 
@@ -241,36 +260,33 @@ impl HermesAction {
     }
 }
 
-impl Action for HermesAction {
-    fn instance(&self) -> Box<dyn ActionInstance + Send> {
-        Box::new(HermesActionInstance::new(self.name.clone(), self.intent_name.clone()))
-    }
-}
-
-pub struct HermesActionInstance {
-    name: Arc<String>,
-    intent_name: Arc<String>
-}
-
-impl HermesActionInstance {
-    pub fn new(name: Arc<String>, intent_name: Arc<String>) -> Self {
-        Self {name, intent_name}
-    }
-}
 
 #[async_trait(?Send)]
-impl ActionInstance for HermesActionInstance {
+impl Action for HermesAction {
     async fn call(&self ,context: &ActionContext) -> Result<ActionAnswer> {
         const ERR: &str = "ActionContext lacks mandatory element";
         
         let intent_name = (*self.intent_name).clone();
+        let val = context.get("slots").expect(ERR);
+        let grd = val.as_dict().unwrap();
         let msg = IntentMessage {
             id: None,
             input: context.get("intent").expect(ERR).as_dict().unwrap().get("input").expect(ERR).as_string().unwrap().to_string(),
             intent: messages::ObjectIntentMessage {
-                intentName: intent_name.clone(),
-                confidenceScore: 1.0,
-                slots: vec![]
+                intent_name: intent_name.clone(),
+                confidence_score: 1.0,
+                slots: grd.map.lock_it().iter().map(|(n,v)|{
+                    let val = v.as_string().unwrap().to_string();
+                    messages::SlotIntentMessage {
+                        raw_value: val.clone(),
+                        value: messages::ValueSlotIntentMessage {
+                            value: val
+                        },
+                        entity: n.to_string(),
+                        slot_name: n.clone(),
+                        range: None, // TODO: Actually get to pass this information
+                    }
+                }).collect()
             },
             site_id: context.get("satellite").expect(ERR).as_dict().unwrap().get("uuid").expect(ERR).as_string().unwrap().to_string(),
             session_id: None,
@@ -279,9 +295,8 @@ impl ActionInstance for HermesActionInstance {
             asr_confidence: None
             
         };
-        HERMES_API_OUTPUT.lock_it().as_ref().unwrap().send(format!("/hermes/intent/{}", intent_name), &msg);
-        let msg_str: String = HERMES_API_INPUT.lock_it().as_mut().unwrap().wait_answer("/hermes/tts/say").await?;
-        let msg: messages::SayMessage = serde_json::from_str(&msg_str)?;
+        HERMES_API_OUTPUT.lock_it().as_ref().unwrap().send(format!("/hermes/intent/{}", intent_name), &msg)?;
+        let msg = HERMES_API_INPUT.lock_it().as_mut().unwrap().wait_answer("/hermes/tts/say").await;
 
         // TODO: Check that it is for the same site
 

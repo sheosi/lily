@@ -89,7 +89,7 @@ impl MqttInterfaceOut {
         conf_tts: &TtsData,
         def_lang: Option<&LanguageIdentifier>,
         sessions: Arc<Mutex<SessionManager>>,
-        client: Arc<Mutex<AsyncClient>>,
+        client: &Arc<Mutex<AsyncClient>>,
 
     ) -> Result<()> {
         let voice_prefs: VoiceDescr = VoiceDescr {
@@ -105,7 +105,7 @@ impl MqttInterfaceOut {
 
         loop {
             let (msg_data, uuid_str) = self.common_out.recv().await.expect("Out channel broken");
-            Self::process_out(msg_data, uuid_str, &mut tts_set, &def_lang, &sessions, &client).await?;
+            Self::process_out(msg_data, uuid_str, &mut tts_set, &def_lang, &sessions, client).await?;
         }
     }
         

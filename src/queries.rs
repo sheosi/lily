@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::actions::{ActionAnswer, ActionContext, ActionInstance};
+use crate::actions::{Action, ActionAnswer, ActionContext};
 use crate::exts::LockIt;
 use crate::collections::{BaseRegistrySend, GlobalRegSend, LocalBaseRegistrySend};
 #[cfg(feature = "python_skills")]
@@ -150,13 +150,13 @@ pub struct ActQuery {
 }
 
 impl ActQuery {
-    pub fn new(q: Arc<Mutex<dyn Query + Send>>, name: String) -> Box<Self> {
-        Box::new(Self{q, name})
+    pub fn new(q: Arc<Mutex<dyn Query + Send>>, name: String) -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self{q, name}))
     }
 }
 
 #[async_trait(?Send)]
-impl ActionInstance for ActQuery {
+impl Action for ActQuery {
     async fn call(&self ,_context: &ActionContext) -> Result<ActionAnswer> {
         let data = HashMap::new();
         let a = match self.q.lock_it().execute(data) {

@@ -54,7 +54,7 @@ impl Signal for PollQuery {
             sleep(Duration::from_secs(30)).await;
             for task in &mut self.tasks {
                 if task.condition.check(&task.query, HashMap::new()) {
-                    task.act_set.lock_it().call_all(base_context);
+                    task.act_set.lock_it().call_all(base_context).await;
                 }
             }
         }

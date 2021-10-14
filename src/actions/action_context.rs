@@ -328,13 +328,13 @@ impl ActionContextKeysView {
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct ActionContext {
-    map: Arc<Mutex<HashMap<String, ContextElement>>>,
+    pub map: Arc<Mutex<HashMap<String, ContextElement>>>,
 }
 
 #[cfg(not(feature="python_skills"))]
 #[derive(Debug, Clone)]
 pub struct ActionContext {
-    map: Arc<Mutex<HashMap<String, ContextElement>>>,
+    pub map: Arc<Mutex<HashMap<String, ContextElement>>>,
 }
 
 impl ActionContext {

@@ -319,8 +319,8 @@ fn load_intents(
             for (intent_name, data) in skilldef.intents.into_iter() {
                 match data.hook.clone() {
                     Hook::Action(name) => {
-                        let action = actions.get(&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?.lock_it().instance();
-                        let act_set = ActionSet::create(action);
+                        let action = actions.get(&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?;
+                        let act_set = ActionSet::create(action.clone());
                         for lang in langs {
                             sig_order.lock_it().add_intent(
                                 data.clone().try_into_with_trans(lang)?,
@@ -376,8 +376,8 @@ fn load_intents(
             if !evs.is_empty() {
                 let sigevent = signals.get_sig_event();
                 let def_action = def_action.ok_or_else(||anyhow!("Skill contains events but no action linked"))?;
-                let action = actions.get(&def_action).ok_or_else(||anyhow!("Action '{}' does not exist", &def_action))?.lock_it().instance();
-                let act_set = ActionSet::create(action);
+                let action = actions.get(&def_action).ok_or_else(||anyhow!("Action '{}' does not exist", &def_action))?;
+                let act_set = ActionSet::create(action.clone());
                 for ev in evs {
                     sigevent.lock().unwrap().add(&ev, act_set.clone());
                 }

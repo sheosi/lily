@@ -331,9 +331,7 @@ fn add_task(q_name: String, a_name: String) -> PyResult<()> {
         .ok_or_else(||assertion("This skill adds no queries"))?;
 
         let action = r.get(&a_name)
-        .ok_or_else(||assertion("Action does not exist"))?
-        .lock_it()
-        .instance();
+        .ok_or_else(||assertion("Action does not exist"))?.clone();
 
         ActionSet::create(action)
     };

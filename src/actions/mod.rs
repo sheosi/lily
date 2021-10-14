@@ -86,13 +86,9 @@ impl ActionAnswer {
 }
 
 #[async_trait(?Send)]
-pub trait ActionInstance {
+pub trait Action {
     async fn call(&self, context: &ActionContext) -> Result<ActionAnswer>;
     fn get_name(&self) -> String;
-}
-
-pub trait Action {
-    fn instance(&self) -> Box<dyn ActionInstance + Send>;
 }
 
 pub trait ActionItemExt {
@@ -109,12 +105,14 @@ impl ActionItemExt for ActionItem {
 #[derive(Debug)]
 pub struct PythonAction {
     act_name: Py<PyAny>,
-    obj: PyObject,
+    obj: PyObject, // this is the class
     skill_path:Arc<PathBuf>
 }
 
 #[cfg(feature="python_skills")]
 impl PythonAction {
+
+    // Old PythonAction
     pub fn new(act_name: Py<PyAny>, obj: PyObject, skill_path: Arc<PathBuf>) -> Self {
         Self{act_name, obj, skill_path}
     }
@@ -176,37 +174,15 @@ impl PythonAction {
 }
 
 #[cfg(feature="python_skills")]
-impl Action for PythonAction {
-    fn instance(&self) -> Box<dyn ActionInstance + Send> {
-        Box::new(PythonActionInstance::new(
-            self.obj.clone(),
-            self.skill_path.clone()))
-    }
-}
-
-#[cfg(feature="python_skills")]
-pub struct PythonActionInstance {
-    obj: PyObject,
-    lily_skill_path: Arc<PathBuf>
-}
-
-#[cfg(feature="python_skills")]
-impl PythonActionInstance {
-    pub fn new (act_obj:Py<PyAny>, lily_skill_path:Arc<PathBuf>) -> Self {
-        Self{obj: act_obj, lily_skill_path}
-    }
-}
-
-#[cfg(feature="python_skills")]
 #[async_trait(?Send)]
-impl ActionInstance for PythonActionInstance {
+impl Action for PythonAction {
     async fn call(&self ,context: &ActionContext) -> Result<ActionAnswer> {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
         let trig_act = self.obj.getattr(py, "trigger_action")?;
-        std::env::set_current_dir(self.lily_skill_path.as_ref())?;
-        let r = call_for_skill(self.lily_skill_path.as_ref(),
+        std::env::set_current_dir(self.skill_path.as_ref())?;
+        let r = call_for_skill(self.skill_path.as_ref(),
         |_|trig_act.call(
             py,
             (context.clone(),),
@@ -225,19 +201,19 @@ impl ActionInstance for PythonActionInstance {
 
 
 pub struct ActionSet {
-    acts: Vec<Box<dyn ActionInstance + Send>>
+    acts: Vec<Arc<Mutex<dyn Action + Send>>>
 }
 
 impl fmt::Debug for ActionSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ActionRegistry")
-         .field("acts", &self.acts.iter().fold("".to_string(), |str, a|format!("{}{},",str,a.get_name())))
+         .field("acts", &self.acts.iter().fold("".to_string(), |str, a|format!("{}{},",str,a.lock_it().get_name())))
          .finish()
     }
 }
 
 impl ActionSet {
-    pub fn create(a: Box<dyn ActionInstance + Send>) -> Arc<Mutex<Self>> {
+    pub fn create(a: Arc<Mutex<dyn Action + Send>>) -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(Self {acts: vec![a]}))
     }
 
@@ -246,21 +222,21 @@ impl ActionSet {
     }
 
 
-    pub fn with(action: Box<dyn ActionInstance + Send>) -> Arc<Mutex<Self>> {
+    pub fn with(action: Arc<Mutex<dyn Action + Send>>) -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(Self {acts: vec![action]}))
     }
 
-    pub fn add_action(&mut self, action: Box<dyn ActionInstance + Send>) {
+    pub fn add_action(&mut self, action: Arc<Mutex<dyn Action + Send>>) {
         self.acts.push(action);
     }
 
     pub async fn call_all(&mut self, context: &ActionContext) -> Vec<ActionAnswer> {
         let mut res = Vec::new();
         for action in &self.acts {
-            match action.call(context).await {
+            match action.lock_it().call(context).await {
                 Ok(a) => res.push(a),
                 Err(e) =>  {
-                    error!("Action {} failed while being triggered: {}", &action.get_name(), e);
+                    error!("Action {} failed while being triggered: {}", &action.lock_it().get_name(), e);
                 }
             }
         }
@@ -286,7 +262,7 @@ impl PyActionSet {
 impl PyActionSet {
     fn call(&mut self, context: &ActionContext) -> Vec<ActionAnswer> {
         let handle = Handle::current();
-        handle.enter();
+        let _enter_grd= handle.enter();
         block_on(self.act_set.lock_it().call_all(context))
     }
 }
@@ -300,16 +276,8 @@ impl SayHelloAction {
     }
 }
 
-impl Action for SayHelloAction {
-    fn instance(&self) -> Box<dyn ActionInstance + Send> {
-        Box::new(SayHelloActionInstance{})
-    }
-}
-
-pub struct SayHelloActionInstance {}
-
 #[async_trait(?Send)]
-impl ActionInstance for SayHelloActionInstance {
+impl Action for SayHelloAction {
     async fn call(&self, _context: &ActionContext) -> Result<ActionAnswer> {
         ActionAnswer::send_text("Hello".into(), true)
     }

@@ -17,6 +17,7 @@ use delegate::delegate;
 pub struct BaseRegistrySend<A: ?std::marker::Sized> {
     map: HashMap<String, Arc<Mutex<A>>>
 }
+
 impl<A: ?std::marker::Sized> fmt::Debug for BaseRegistrySend<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("BaseRegistry")
