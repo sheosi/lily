@@ -3,11 +3,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{Action, ActionAnswer, ActionContext, LocalActionRegistry};
-use crate::collections::GlobalRegSend;
+use crate::actions::{Action, ActionAnswer, ActionContext, ACT_REG};
+use crate::collections::GlobalReg;
 use crate::exts::LockIt;
-use crate::queries::LocalQueryRegistry;
-use crate::signals::{LocalSignalRegistry, order::mqtt::MSG_OUTPUT};
+use crate::signals::order::mqtt::MSG_OUTPUT;
 use crate::skills::SkillLoader;
 use crate::skills::hermes::messages::IntentMessage;
 
@@ -136,19 +135,16 @@ impl HermesLoader {
 
 impl SkillLoader for HermesLoader {
     fn load_skills(&mut self,
-        _base_sigreg: &LocalSignalRegistry,
-        base_actreg: &LocalActionRegistry,
-        _base_queryreg: &LocalQueryRegistry,
         _langs: &Vec<LanguageIdentifier>) -> Result<()> {
 
         // For the time being we are going to put everything as a single skill called "hermes"
         // TODO: Get all actions from somewhere
-        let mut global_actions = base_actreg.get_global_mut();
+        let mut global_actions = ACT_REG.lock_it();
         let actions: Vec<String> = Vec::new();
         for act_name in actions {
             let arc_act_name = Arc::new(act_name.clone());
             let action = Arc::new(Mutex::new(HermesAction::new(arc_act_name.clone(), arc_act_name)));
-            global_actions.insert("hermes".into(), act_name.clone(), action.clone())?;
+            global_actions.insert("hermes".into(), &act_name, action.clone())?;
         }
 
         Ok(())

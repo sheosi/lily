@@ -6,12 +6,11 @@ use std::sync::{Arc, Mutex};
 
 
 // This crate
-use crate::actions::{ActionSet, LocalActionRegistry, PythonAction};
+use crate::actions::{ActionSet, ACT_REG, PythonAction};
 use crate::exts::{LockIt, StringList};
 use crate::python::add_py_folder;
-use crate::queries::{ActQuery, LocalQueryRegistry, PythonQuery};
-use crate::signals::{collections::Hook, ActSignal, LocalSignalRegistry, PythonSignal};
-use crate::signals::registries::{ACT_REG, QUERY_REG};
+use crate::queries::{ActQuery, PythonQuery, QUERY_REG};
+use crate::signals::{collections::Hook, ActSignal, PythonSignal, SIG_REG};
 use crate::skills::{call_for_skill, SkillLoader};
 use crate::nlu::{EntityData, EntityDef, IntentData, OrderKind, SlotData};
 use crate::python::{try_translate, try_translate_all};
@@ -37,53 +36,45 @@ pub struct LocalLoader {
 
 impl LocalLoader {
     fn load_package_python(py: Python, path: &Path,
+        skill_name: &str,
         skill_path: &Path,
-        base_sigreg: &LocalSignalRegistry,
-        base_actreg: &LocalActionRegistry,
-        base_queryreg: &LocalQueryRegistry
-    ) -> Result<(LocalSignalRegistry, LocalActionRegistry, LocalQueryRegistry)> {
+    ) -> Result<(Vec<String>, Vec<String>, Vec<String>)> {
 
         let (signal_classes, action_classes, query_classes) = add_py_folder(py, path)?;
-        let mut sigreg = base_sigreg.clone();
         let name = skill_path.file_name().ok_or_else(||anyhow!("Got a skill with no name"))?.to_string_lossy();
-        match PythonSignal::extend_and_init_classes_py_local(&mut sigreg, py, name.clone().into(), skill_path, signal_classes) {
-            Ok(()) =>{Ok(())}
+        let sigs = match PythonSignal::extend_and_init_classes_py(py, name.clone().into(), skill_path, signal_classes) {
+            Ok(sigs) =>{Ok(sigs)}
             Err(e) => {
                 Err(e.source)
             }
         }?;
 
-        let mut actreg = base_actreg.clone();
-        match PythonAction::extend_and_init_classes_local(&mut actreg, py, name.clone().into(), action_classes, Arc::new(skill_path.to_path_buf())) {
-            Ok(()) => {Ok(())}
-            Err(e) => {
-                // Also, drop all actions from this package
-                sigreg.minus(base_sigreg).remove_from_global();
-                Err(e.source)
-            }
-        }?;
-
-        let mut queryreg = base_queryreg.clone();
-        match PythonQuery::extend_and_init_classes_local(&mut queryreg, py,name.clone().into(), query_classes) {
-            Ok(()) => {Ok(())}
+        let acts= match PythonAction::extend_and_init_classes(py, name.clone().into(), action_classes, Arc::new(skill_path.to_path_buf())) {
+            Ok(acts) => {Ok(acts)}
             Err(e) => {
                 // Also, drop all actions from this package
-                sigreg.minus(base_sigreg).remove_from_global();
-                actreg.minus(base_actreg).remove_from_global();
+                SIG_REG.lock_it().remove_several(skill_name, &sigs)?;
                 Err(e.source)
             }
         }?;
 
-        Ok((sigreg, actreg, queryreg))
+        let queries = match PythonQuery::extend_and_init_classes(py,name.clone().into(), query_classes) {
+            Ok(queries) => {Ok(queries)}
+            Err(e) => {
+                // Also, drop all actions from this package
+                SIG_REG.lock_it().remove_several(skill_name, &sigs)?;
+                ACT_REG.lock_it().remove_several(skill_name, &acts)?;
+                Err(e.source)
+            }
+        }?;
+
+        Ok((sigs, acts, queries))
     }
 }
 
 impl SkillLoader for LocalLoader {
 
     fn load_skills(&mut self,
-        base_sigreg: &LocalSignalRegistry,
-        base_actreg: &LocalActionRegistry,
-        base_queryreg: &LocalQueryRegistry,
         curr_langs: &Vec<LanguageIdentifier>) -> Result<()>{
         {
             let gil = Python::acquire_gil();
@@ -97,36 +88,30 @@ impl SkillLoader for LocalLoader {
 
         let mut not_loaded = vec![];
 
-        let process_skill = |entry: &Path| -> Result<(), HalfBakedDoubleError> {
-            let mut skill_sigreg = base_sigreg.clone();
-            let mut skill_actreg = base_actreg.clone();
-            let mut skill_queryreg = base_queryreg.clone();
-            
-            let (local_sigreg, local_actreg, local_queryreg)= 
-                self.load_code(&entry, &skill_sigreg, &skill_actreg, &skill_queryreg).map_err(|e|{
-                    HalfBakedDoubleError::from((skill_sigreg, skill_actreg), e)
-                })?;
+        let process_skill = |entry: &Path| -> Result<(), HalfBakedDoubleError> {            
+            let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy().to_string();
 
-            skill_sigreg = local_sigreg;
-            skill_actreg = local_actreg;
-            skill_queryreg = local_queryreg;
+            let (sigs, acts, queries) = {
+                // Get GIL
+                let gil = Python::acquire_gil();
+                let py = gil.python();
+                Self::load_package_python(py, &entry.join("python"), &skill_name, &entry).map_err(|e|
+                    HalfBakedDoubleError::new(vec![], vec![], vec![], e)
+                )?
+            };
             
-    
-            let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy();
-            QUERY_REG.lock_it().insert( skill_name.to_string(), skill_queryreg.clone());
-            ACT_REG.lock_it().insert( skill_name.to_string(), skill_actreg.clone());
             {
                 // Get GIL
                 let gil = Python::acquire_gil();
                 let py = gil.python();
     
-                load_trans(py, &entry, curr_langs).map_err(|e|{
-                    HalfBakedDoubleError::from((skill_sigreg.clone(), skill_actreg.clone()), e)
+                load_trans(py, entry, curr_langs).map_err(|e|{
+                    HalfBakedDoubleError::new(sigs.clone(), acts.clone(), queries.clone(), e)
                 })?;
             }
     
-            load_intents(&mut skill_sigreg, &skill_actreg, &skill_queryreg, &entry, curr_langs).map_err(|e|{
-                HalfBakedDoubleError::from((skill_sigreg, skill_actreg), e)
+            load_intents(&entry, curr_langs).map_err(|e| {
+                HalfBakedDoubleError::new(sigs, acts, queries, e)
             })?;
             SKILL_PATH.lock_it().insert(skill_name.into(),Arc::new(entry.into()));
             Ok(())
@@ -145,12 +130,12 @@ impl SkillLoader for LocalLoader {
         for entry in skl_entries {
             match process_skill(&entry) {
                 Err(e) => {
-                    let (skill_sigreg, skill_actreg) = e.act_sig;
-                    skill_sigreg.minus(&base_sigreg).remove_from_global();
-                    skill_actreg.minus(&base_actreg).remove_from_global();
-                    let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy();
+                    let skill_name = entry.file_stem().expect("Couldn't get stem from file").to_string_lossy().to_string();
+                    SIG_REG.lock_it().remove_several(&skill_name, &e.signals)?;
+                    ACT_REG.lock_it().remove_several(&skill_name, &e.acts)?;
+                    
                     error!("Skill {} had a problem, won't be available. {}", skill_name, e.source);
-                    not_loaded.push(skill_name.into_owned());
+                    not_loaded.push(skill_name);
                 },
                 _ => ()
             }
@@ -166,13 +151,6 @@ impl SkillLoader for LocalLoader {
 impl LocalLoader {
     pub fn new(paths: Vec<PathBuf>) -> Self {
         Self{paths}
-    }
-
-    fn load_code(&self, skill_path: &Path, base_sigreg: &LocalSignalRegistry, base_actreg: &LocalActionRegistry, base_quereg: &LocalQueryRegistry) -> Result<(LocalSignalRegistry, LocalActionRegistry, LocalQueryRegistry)> {
-        // Get GIL
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-        Self::load_package_python(py, &skill_path.join("python"), &skill_path, base_sigreg, base_actreg, base_quereg)
     }
 }
 
@@ -250,22 +228,6 @@ impl YamlEntityDef {
     }
 }
 
-/** Thrown after an error while loading classes, 
-contains the error and the new classes*/
-#[derive(Debug, Error)]
-#[error("{source}")]
-pub struct HalfBakedDoubleError {
-    pub act_sig: (LocalSignalRegistry, LocalActionRegistry),
-
-    pub source: anyhow::Error,
-}
-
-impl HalfBakedDoubleError {
-    fn from(act_sig:(LocalSignalRegistry, LocalActionRegistry), source: anyhow::Error ) -> Self {
-        Self {act_sig, source}
-    }
-}
-
 fn load_trans(python: Python, skill_path: &Path, curr_langs: &Vec<LanguageIdentifier>) -> Result<()>{
     let lily_py_mod = python.import("lily_ext").map_err(|py_err|anyhow!("Python error while importing lily_ext: {:?}", py_err))?;
 
@@ -276,9 +238,6 @@ fn load_trans(python: Python, skill_path: &Path, curr_langs: &Vec<LanguageIdenti
 }
 
 fn load_intents(
-    signals: &LocalSignalRegistry,
-    actions: &LocalActionRegistry,
-    queries: &LocalQueryRegistry,
     path: &Path,
     langs: &Vec<LanguageIdentifier>) -> Result<()> {
     info!("Loading skill: {}", path.to_str().ok_or_else(|| anyhow!("Failed to get the str from path {:?}", path))?);
@@ -309,7 +268,9 @@ fn load_intents(
                 serde_yaml::from_str(yaml_str)?
             };
 
-            let sig_order = signals.get_sig_order().expect("Order signal was not initialized");
+            
+            let sig_grd = SIG_REG.lock_it();
+            let sig_order = sig_grd.get_sig_order().expect("Order signal was not initialized");
             for (type_name, data) in skilldef.types.into_iter() {
                 for lang in langs {
                     sig_order.lock_it().add_slot_type(type_name.clone(), data.clone().try_into_with_trans(lang)?, lang);
@@ -319,9 +280,11 @@ fn load_intents(
             for (intent_name, data) in skilldef.intents.into_iter() {
                 match data.hook.clone() {
                     Hook::Action(name) => {
-                        let action = actions.get(&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?;
+                        let action_grd = ACT_REG.lock_it();
+                        let action = action_grd.get(&skill_name,&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?;
                         let act_set = ActionSet::create(action.clone());
                         for lang in langs {
+                            // TODO! This shoudln't be handled here but in skill loading
                             sig_order.lock_it().add_intent(
                                 data.clone().try_into_with_trans(lang)?,
                                 &intent_name,
@@ -333,9 +296,11 @@ fn load_intents(
                     },
                     Hook::Query(name) => {
                         // Note: Some very minimal support for queries
-                        let q = queries.get(&name).ok_or_else(||anyhow!("Query '{}' does not exist", &name))?;
+                        let query_grd = QUERY_REG.lock_it();
+                        let q = query_grd.get(&skill_name, &name).ok_or_else(||anyhow!("Query '{}' does not exist", &name))?;
                         let act_set = ActionSet::create(ActQuery::new(q.clone(), name));
                         for lang in langs {
+                            // TODO! This shoudln't be handled here but in skill loading
                             sig_order.lock_it().add_intent(
                                 data.clone().try_into_with_trans(lang)?,
                                 &intent_name,
@@ -347,9 +312,10 @@ fn load_intents(
                     },
                     Hook::Signal(name) => {
                         // Note: Some very minimal support for signals
-                        let s = signals.get(&name).ok_or_else(||anyhow!("Signal '{}' does not exist", &name))?;
+                        let s = sig_grd.get(&skill_name, &name).ok_or_else(||anyhow!("Signal '{}' does not exist", &name))?;
                         let act_set = ActionSet::create(ActSignal::new(s.clone(), name));
                         for lang in langs {
+                            // TODO! This shoudln't be handled here but in skill loading
                             sig_order.lock_it().add_intent(
                                 data.clone().try_into_with_trans(lang)?,
                                 &intent_name,
@@ -374,9 +340,10 @@ fn load_intents(
             }
 
             if !evs.is_empty() {
-                let sigevent = signals.get_sig_event();
+                let sigevent = sig_grd.get_sig_event();
                 let def_action = def_action.ok_or_else(||anyhow!("Skill contains events but no action linked"))?;
-                let action = actions.get(&def_action).ok_or_else(||anyhow!("Action '{}' does not exist", &def_action))?;
+                let act_grd = ACT_REG.lock_it();
+                let action = act_grd.get(&skill_name, &def_action).ok_or_else(||anyhow!("Action '{}' does not exist", &def_action))?;
                 let act_set = ActionSet::create(action.clone());
                 for ev in evs {
                     sigevent.lock().unwrap().add(&ev, act_set.clone());
@@ -388,4 +355,22 @@ fn load_intents(
     })??;
 
     Ok(())
+}
+
+/** Thrown after an error while loading classes, 
+contains the error and the new classes*/
+#[derive(Debug, Error)]
+#[error("{source}")]
+pub struct HalfBakedDoubleError {
+    pub acts: Vec<String>,
+    pub queries: Vec<String>,
+    pub signals: Vec<String>,
+
+    pub source: anyhow::Error,
+}
+
+impl HalfBakedDoubleError {
+    fn new(acts: Vec<String>, queries: Vec<String>, signals: Vec<String>, source: anyhow::Error ) -> Self {
+        Self {acts, queries, signals, source}
+    }
 }

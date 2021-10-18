@@ -18,17 +18,21 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{Action, ActionAnswer, ActionContext, ActionSet};
+use crate::actions::{Action, ActionAnswer, ActionContext, ActionSet, ACT_REG};
 use crate::config::Config;
 use crate::exts::LockIt;
 
 // Other crates
 use anyhow::Result;
 use async_trait::async_trait;
+use lazy_static::lazy_static;
 use unic_langid::LanguageIdentifier;
 
 pub type SignalEventShared = Arc<Mutex<SignalEvent>>;
-pub type SignalRegistryShared = Arc<Mutex<SignalRegistry>>;
+
+lazy_static! {
+    pub static ref SIG_REG: Mutex<SignalRegistry> = Mutex::new(SignalRegistry::new());
+}
 
 #[derive(Debug)]
 // A especial signal to be called by the system whenever something happens
@@ -109,10 +113,9 @@ impl Action for ActSignal {
         // which action to be executed but we can't do that right now
         let m = HashMap::new();
         let a = ACT_REG.lock_it()
-        .get("embedded")
-        .expect("Skill 'embedded' is somehow not available")
-        .get("say_hello")
-        .expect("Embedded skill 'say_hello' is not available").clone();
+        .get("embedded", "say_hello")
+        .expect("Embedded skill 'say_hello' is not available")
+        .clone();
 
         let acts = ActionSet::create(a);
 

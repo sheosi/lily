@@ -3,12 +3,13 @@ use std::env;
 use std::path::Path;
 use std::process::Command;
 
-use crate::actions::ActionSet;
+use crate::actions::{ActionSet, ACT_REG};
 use crate::exts::LockIt;
+use crate::queries::QUERY_REG;
 use crate::skills::{call_for_skill, PYTHON_LILY_SKILL};
 use crate::signals::{
     dynamic_nlu::DynamicNluRequest,
-    registries::{ACT_REG, POLL_SIGNAL, QUERY_REG},
+    registries::POLL_SIGNAL,
     order::{dynamic_nlu::{DYNAMIC_NLU_CHANNEL, EntityAddValueRequest}, dev_mgmt::CAPS_MANAGER}
 };
 use crate::vars::{PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_ADD_ENTITY_VALUE_MSG, NO_YAML_FLOAT_MSG};
@@ -81,11 +82,9 @@ pub fn python_init() -> Result<()> {
 
     //Make sure we have all deps
     fn check_module_installed(pkg: &str, name_in_fs: &str) -> Result<()> {
-        if !python_has_module_path(&Path::new(name_in_fs))? {
-            if !Command::new("python3")
-                .args(&["-m", "pip", "install", pkg]).status()?.success() {
+        if !python_has_module_path(&Path::new(name_in_fs))? && !Command::new("python3")
+            .args(&["-m", "pip", "install", pkg]).status()?.success() {
                 log::warn!("Could not install mandatory Python module {}", pkg);
-            }
         }
 
         Ok(())
@@ -309,8 +308,7 @@ fn add_entity_value(entity_name: String, value: String, langs: Option<Vec<String
     let request = EntityAddValueRequest{
         skill: get_current_skill()?,
         entity: entity_name,
-        value: value,
-        langs
+        value, langs
     };
 
     // Send request
@@ -328,23 +326,17 @@ fn add_task(q_name: String, a_name: String) -> PyResult<()> {
 
     let acts = {
         let map =ACT_REG.lock_it();
-        let r = map
-        .get(&n)
-        .ok_or_else(||assertion("This skill adds no queries"))?;
-
-        let action = r.get(&a_name)
-        .ok_or_else(||assertion("Action does not exist"))?.clone();
+        let action = map
+        .get(&n, &a_name)
+        .ok_or_else(||assertion("This skill does not have requested action"))?
+        .clone();
 
         ActionSet::create(action)
     };
 
     let q = {
         let map = QUERY_REG.lock_it();
-        let r = map
-        .get(&n)
-        .ok_or_else(||assertion("This skill adds no skills"))?;
-
-        r.get(&q_name)
+        map.get(&n, &q_name)
         .ok_or_else(||assertion("Skill has no queries with the requested name"))?
         .clone()
     };

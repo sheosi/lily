@@ -7,13 +7,10 @@ pub mod hermes;
 use std::{cell::{Ref, RefCell}};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{ActionRegistry, LocalActionRegistry};
 use crate::exts::LockIt;
-use crate::queries::{LocalQueryRegistry, QueryRegistry};
-use crate::signals::{LocalSignalRegistry, SignalRegistry};
+use crate::signals::SIG_REG;
 use crate::signals::order::dynamic_nlu::DynamicNluRequest;
 use self::{embedded::EmbeddedLoader, hermes::HermesLoader};
 
@@ -93,36 +90,20 @@ fn get_loaders(
     ]
 }
 
-pub fn load_skills(paths: Vec<PathBuf>, curr_langs: &Vec<LanguageIdentifier>, consumer: Receiver<DynamicNluRequest>) -> Result<SignalRegistry> {
-    // TODO: What the hell, local registries are ever filled?
+pub fn load_skills(paths: Vec<PathBuf>, curr_langs: &Vec<LanguageIdentifier>, consumer: Receiver<DynamicNluRequest>) -> Result<()> {
     let mut loaders  = get_loaders(consumer, paths);
 
-    let global_sigreg = Arc::new(Mutex::new(SignalRegistry::new()));
-    let base_sigreg = LocalSignalRegistry::new(global_sigreg.clone());
-
-    let global_actreg = Arc::new(Mutex::new(ActionRegistry::new()));
-    let base_actreg = LocalActionRegistry::new(global_actreg.clone());
-
-    let global_queryreg = Arc::new(Mutex::new(QueryRegistry::new()));
-    let base_queryreg = LocalQueryRegistry::new(global_queryreg.clone());
-
     for loader in &mut loaders {
-        loader.load_skills(&base_sigreg, &base_actreg, &base_queryreg, curr_langs)?;
+        loader.load_skills(curr_langs)?;
     }
 
-    global_sigreg.lock_it().end_load(curr_langs)?;
+    SIG_REG.lock_it().end_load(curr_langs)?;
 
-    // This is overall stupid but haven't found any other (interesting way to do it)
-    // We need the variable to help lifetime analisys
-    let res = global_sigreg.lock_it().clone();
-    Ok(res)
+    Ok(())
 }
 
 trait SkillLoader {
     fn load_skills(&mut self,
-        base_sigreg: &LocalSignalRegistry,
-        base_actreg: &LocalActionRegistry,
-        base_queryreg: &LocalQueryRegistry,
         langs: &Vec<LanguageIdentifier>) -> Result<()>;
 }
 

@@ -3,7 +3,6 @@ mod action_context;
 pub use self::action_context::*;
 
 // Standard library
-use std::collections::HashMap;
 use std::fmt; // For Debug in LocalActionRegistry
 use std::fs::{self, File};
 use std::io::Read;
@@ -11,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::collections::{BaseRegistrySend, GlobalRegSend, LocalBaseRegistrySend};
+use crate::collections::{BaseRegistry, GlobalReg};
 use crate::exts::LockIt;
 use crate::skills::call_for_skill;
 #[cfg(feature="python_skills")]
@@ -21,6 +20,7 @@ use crate::python::{get_inst_class_name, HalfBakedError, PyException};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::executor::block_on;
+use lazy_static::lazy_static;
 use log::error;
 use lily_common::audio::Audio;
 #[cfg(feature="python_skills")]
@@ -31,10 +31,13 @@ use pyo3::prelude::{pyclass, pymethods};
 use pyo3::exceptions::PyOSError;
 use tokio::runtime::Handle;
 
-pub type ActionRegistryShared = Arc<Mutex<ActionRegistry>>;
-pub type ActionRegistry = BaseRegistrySend<dyn Action + Send>;
-pub type LocalActionRegistry = LocalBaseRegistrySend<dyn Action + Send, ActionRegistry>;
+pub type ActionRegistry = BaseRegistry<dyn Action + Send>;
 pub type ActionItem = Arc<Mutex<dyn Action + Send>>;
+
+lazy_static! {
+    pub static ref ACT_REG: Mutex<ActionRegistry> = Mutex::new(ActionRegistry::new());
+}
+
 #[derive(Clone)]
 pub enum MainAnswer {
     Sound(Audio),
@@ -117,27 +120,13 @@ impl PythonAction {
         Self{act_name, obj, skill_path}
     }
 
-    pub fn extend_and_init_classes_local(
-        act_reg: &mut LocalActionRegistry,
-        py:Python,
-        skill_name: String,
-        action_classes: Vec<(PyObject, PyObject)>,
-        skill_path: Arc<PathBuf>)
-        -> Result<(), HalfBakedError> {
-
-        let actions = Self::extend_and_init_classes(&mut act_reg.get_global_mut(), py, skill_name, action_classes, skill_path)?;
-        act_reg.extend_with_map(actions);
-        Ok(())
-    }
-
     // Imports all modules from that module and return the new actions
-    fn extend_and_init_classes(
-        act_reg: &mut ActionRegistry,
+    pub fn extend_and_init_classes(
         python: Python,
         skill_name: String,
         action_classes: Vec<(PyObject, PyObject)>,
-        skill_path: Arc<PathBuf>) -> Result<HashMap<String, ActionItem>, HalfBakedError> {
-
+        skill_path: Arc<PathBuf>) -> Result<Vec<String>, HalfBakedError> {
+        
         let process_list = || -> Result<_> {
             let mut act_to_add = vec![];
             for (key, val) in  &action_classes {
@@ -151,21 +140,19 @@ impl PythonAction {
 
         match process_list() {
             Ok(act_to_add) => {
-                let mut res = HashMap::new();
-
+                let acts = act_to_add.iter().map(|(n, _)| n.clone()).collect();
                 for (name, action) in act_to_add {
-                    res.insert(name.clone(), action.clone());
-                    if let Err (e) = act_reg.insert(skill_name.clone(),name, action) {
+                    if let Err (e) = ACT_REG.lock_it().insert(&skill_name,&name, action) {
                         error!("{}", e);
                     }
                 }
 
-                Ok(res)
+                Ok(acts)
             }
 
             Err(e) => {
                 Err(HalfBakedError::from(
-                    HalfBakedError::gen_diff(&act_reg.get_map_ref(), action_classes),
+                    HalfBakedError::gen_diff(ACT_REG.lock_it().get_map_ref(), action_classes),
                     e
                 ))
             }

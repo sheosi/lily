@@ -3,11 +3,11 @@ use std::mem::replace;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{LocalActionRegistry, SayHelloAction};
-use crate::collections::GlobalRegSend;
-use crate::queries::{LocalQueryRegistry};
+use crate::actions::{ACT_REG, SayHelloAction};
+use crate::collections::GlobalReg;
+use crate::exts::LockIt;
 use crate::signals::dynamic_nlu::DynamicNluRequest;
-use crate::signals::{ LocalSignalRegistry, new_signal_order, poll::PollQuery, Timer};
+use crate::signals::{SIG_REG,  new_signal_order, poll::PollQuery, Timer};
 use crate::skills::SkillLoader;
 
 // Other crates
@@ -26,18 +26,22 @@ impl EmbeddedLoader {
 
 impl SkillLoader for EmbeddedLoader {
     fn load_skills(&mut self, 
-        base_sigreg: &LocalSignalRegistry,
-        base_actreg: &LocalActionRegistry,
-        _base_queryreg: &LocalQueryRegistry,
         langs: &Vec<LanguageIdentifier>) -> Result<()> {
-        let mut mut_sigreg = base_sigreg.get_global_mut();
-        let mut mut_actreg = base_actreg.get_global_mut();
+
         let consumer = replace(&mut self.consumer, None).expect("Consumer already consumed");
         
-        mut_sigreg.set_order(Arc::new(Mutex::new(new_signal_order(langs.to_owned(), consumer))))?;
-        mut_sigreg.set_poll(Arc::new(Mutex::new(PollQuery::new())))?;
-        mut_sigreg.insert("embedded".into(),"timer".into(), Arc::new(Mutex::new(Timer::new())))?;
-        mut_actreg.insert("embedded".into(),"say_hello".into(), Arc::new(Mutex::new(SayHelloAction::new())))?;
+        {
+            let mut mut_sigreg = SIG_REG.lock_it();
+            mut_sigreg.set_order(Arc::new(Mutex::new(new_signal_order(langs.to_owned(), consumer))))?;
+            mut_sigreg.set_poll(Arc::new(Mutex::new(PollQuery::new())))?;
+            mut_sigreg.insert("embedded".into(),"timer".into(), Arc::new(Mutex::new(Timer::new())))?;
+        }
+
+        {
+            let mut mut_actreg = ACT_REG.lock_it();        
+            mut_actreg.insert("embedded".into(),"say_hello".into(), Arc::new(Mutex::new(SayHelloAction::new())))?;
+        }
+        
 
         Ok(())
     }

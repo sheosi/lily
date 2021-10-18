@@ -5,11 +5,12 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::actions::{ActionContext, ActionSet, PyActionSet};
-use crate::collections::GlobalRegSend;
+use crate::collections::GlobalReg;
 use crate::config::Config;
+use crate::exts::LockIt;
 use crate::skills::call_for_skill;
 use crate::python::HalfBakedError;
-use crate::signals::{LocalSignalRegistry, Signal, SignalEventShared, SignalRegistry, UserSignal};
+use crate::signals::{Signal, SignalEventShared, SIG_REG, UserSignal};
 
 use async_trait::async_trait;
 use anyhow::{anyhow, Result};
@@ -57,7 +58,7 @@ impl PythonSignal {
         }        
     }
 
-    pub fn extend_and_init_classes_py(reg: &mut SignalRegistry, py: Python, skill_name: String, skill_path: &Path, signal_classes: Vec<(PyObject,PyObject)>) -> Result<HashMap<String, Arc<Mutex<dyn UserSignal + Send>>>, HalfBakedError> {
+    pub fn extend_and_init_classes_py(py: Python, skill_name: String, skill_path: &Path, signal_classes: Vec<(PyObject,PyObject)>) -> Result<Vec<String>, HalfBakedError> {
         let skill_path = Arc::new(skill_path.to_owned());
     
         let process_list = || -> Result<_> {
@@ -74,13 +75,15 @@ impl PythonSignal {
             Ok(sig_to_add)
         };
     
+        let mut reg = SIG_REG.lock_it();
         match process_list()  {
             Ok(sig_to_add) => {
                 let mut res = HashMap::new();
+                let sigs = sig_to_add.iter().map(|(n,_)|n.clone()).collect();
                 let process = || -> Result<()> {
                     for (name, sigobj) in sig_to_add {
                         res.insert(name.clone(), sigobj.clone());
-                        reg.insert(skill_name.clone(), name, sigobj)?;
+                        reg.insert(&skill_name, &name, sigobj)?;
                     }
                     Ok(())
                 };
@@ -88,7 +91,7 @@ impl PythonSignal {
                     HalfBakedError::gen_diff(reg.get_map_ref(), signal_classes),
                     e
                 ))?;
-                Ok(res)
+                Ok(sigs)
             }
             Err(e) => {
                 // Process the rest of the list
@@ -99,19 +102,6 @@ impl PythonSignal {
             }
         }
     
-    }
-    
-    pub fn extend_and_init_classes_py_local(
-        reg: &mut LocalSignalRegistry,
-        py: Python,
-        skill_name: String,
-        skill_path: &Path,
-        signal_classes: Vec<(PyObject, PyObject)>
-    ) -> Result<(), HalfBakedError> {
-
-        let signals = Self::extend_and_init_classes_py(&mut reg.get_global_mut(), py, skill_name, skill_path, signal_classes)?;
-        reg.extend_with_map(signals);
-        Ok(())
     }
 }
 

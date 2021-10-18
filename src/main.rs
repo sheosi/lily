@@ -22,10 +22,11 @@ use std::rc::Rc;
 // This crate
 use crate::actions::ActionContext;
 use crate::config::Config;
+use crate::exts::LockIt;
 use crate::skills::load_skills;
 #[cfg(feature="python_skills")]
 use crate::python::{python_init, set_python_locale};
-use crate::signals::dynamic_nlu::init_dynamic_nlu;
+use crate::signals::{dynamic_nlu::init_dynamic_nlu, SIG_REG};
 use crate::vars::SKILLS_PATH;
 
 // Other crates
@@ -105,8 +106,10 @@ pub async fn main()  -> Result<()> {
 
     let consumer = init_dynamic_nlu()?;
 
-    let mut sigreg = load_skills(SKILLS_PATH.all(), &curr_langs, consumer)?;
-    sigreg.call_loops(&config, &ActionContext::new(), &curr_langs).await?;
+    load_skills(SKILLS_PATH.all(), &curr_langs, consumer)?;
+
+    //TODO!: This can very well be problematic since we access it later too.
+    SIG_REG.lock_it().call_loops(&config, &ActionContext::new(), &curr_langs).await?;
 
     Ok(())
 }
