@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Weak};
 
 // This crate
-use crate::collections::{BaseRegistry, GlobalReg};
+use crate::collections::BaseRegistry;
 use crate::exts::LockIt;
 use crate::skills::call_for_skill;
 #[cfg(feature="python_skills")]

@@ -111,7 +111,7 @@ impl Action for ActSignal {
         // TODO: In theory, Lily should ask which parameters for the signal and 
         // which action to be executed but we can't do that right now
         let m = HashMap::new();
-        let mut act_grd = ACT_REG.lock_it();
+        let act_grd = ACT_REG.lock_it();
         let act = act_grd.get("embedded", "say_hello")
         .expect("Embedded skill 'say_hello' is not available");
 

@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::actions::{Action, ActionAnswer, ActionContext};
 use crate::exts::LockIt;
-use crate::collections::{BaseRegistry, GlobalReg};
+use crate::collections::BaseRegistry;
 #[cfg(feature = "python_skills")]
 use crate::python::HalfBakedError;
 

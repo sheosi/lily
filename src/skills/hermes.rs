@@ -4,7 +4,6 @@ use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::actions::{Action, ActionAnswer, ActionContext, ACT_REG};
-use crate::collections::GlobalReg;
 use crate::exts::LockIt;
 use crate::signals::{order::mqtt::MSG_OUTPUT, SIG_REG};
 use crate::skills::SkillLoader;

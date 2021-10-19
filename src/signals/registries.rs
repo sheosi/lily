@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use crate::actions::{Action, ActionContext, ACT_REG};
 use crate::exts::LockIt;
 use crate::config::Config;
-use crate::collections::{BaseRegistry, GlobalReg};
+use crate::collections::BaseRegistry;
 use crate::signals::poll::PollQuery;
 use crate::signals::{Signal, SignalEvent, SignalEventShared, SignalOrderCurrent, UserSignal};
 
@@ -133,15 +133,9 @@ impl SignalRegistry {
     delegate!{to self.base{
         pub fn get_map_ref(&mut self) -> &HashMap<String,Arc<Mutex<dyn UserSignal + Send>>>;
         pub fn remove_several(&mut self, skill_name: &str, items: &Vec<String>) -> Result<()>;
+        pub fn insert(&mut self, skill_name: &str, sig_name: &str, signal: Arc<Mutex<dyn UserSignal + Send>>) -> Result<()>;
+        pub fn remove(&mut self, skill_name: &str, sig_name: &str) -> Result<()>;
     }}
-}
-
-impl GlobalReg<dyn UserSignal + Send> for SignalRegistry {
-    delegate!{to self.base{
-        fn insert(&mut self, skill_name: &str, sig_name: &str, signal: Arc<Mutex<dyn UserSignal + Send>>) -> Result<()>;
-        fn remove(&mut self, skill_name: &str, sig_name: &str) -> Result<()>;
-    }}
-    
 }
 
 pub fn dynamically_add_action(skill_name: &str, action_name: &str, action: Arc<Mutex<dyn Action + Send>>) -> Result<()> {

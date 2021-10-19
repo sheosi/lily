@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::actions::{ActionContext, ActionSet, PyActionSet};
-use crate::collections::GlobalReg;
 use crate::config::Config;
 use crate::exts::LockIt;
 use crate::skills::call_for_skill;

@@ -4,7 +4,6 @@ use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::actions::{ACT_REG, SayHelloAction};
-use crate::collections::GlobalReg;
 use crate::exts::LockIt;
 use crate::signals::dynamic_nlu::DynamicNluRequest;
 use crate::signals::{SIG_REG,  new_signal_order, poll::PollQuery, Timer};

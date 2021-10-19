@@ -62,16 +62,7 @@ impl<A: ?std::marker::Sized> BaseRegistry<A> {
         Ok(())
     }
 
-    delegate! {to self.map {
-        pub fn iter_mut(&mut self) -> IterMut<String,Arc<Mutex<A>>>;
-        #[call(remove)]
-        pub fn remove_mangled(&mut self, name: &str) -> Option<Arc<Mutex<A>>>;
-    }}
-}
-
-impl<A: ?std::marker::Sized> GlobalReg<A> for BaseRegistry<A> {
-
-    fn insert(&mut self, skill_name: &str, name: &str, object: Arc<Mutex<A>>) -> Result<()> {
+    pub fn insert(&mut self, skill_name: &str, name: &str, object: Arc<Mutex<A>>) -> Result<()> {
         let mangled = mangle(skill_name,name);
         match self.map.entry(mangled) {
             Entry::Vacant(v) => {v.insert(object);Ok(())}
@@ -79,16 +70,17 @@ impl<A: ?std::marker::Sized> GlobalReg<A> for BaseRegistry<A> {
         }
     }
 
-    fn remove(&mut self, skill_name: &str, name: &str) -> Result<()> {
+    pub fn remove(&mut self, skill_name: &str, name: &str) -> Result<()> {
         let mangled = mangle(skill_name,name);
         match self.map.remove(&mangled) {
             Some(_) => Ok(()),
             None => Err(anyhow!(format!("{}: {} does not exist", skill_name, name)))
         }
     }
-}
 
-pub trait GlobalReg<A: ?std::marker::Sized> {   
-    fn remove(&mut self, skill_name: &str, item: &str) -> Result<()>;
-    fn insert(&mut self, skill_name: &str, key: &str, value: Arc<Mutex<A>>) -> Result<()>;
+    delegate! {to self.map {
+        pub fn iter_mut(&mut self) -> IterMut<String,Arc<Mutex<A>>>;
+        #[call(remove)]
+        pub fn remove_mangled(&mut self, name: &str) -> Option<Arc<Mutex<A>>>;
+    }}
 }

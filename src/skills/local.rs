@@ -7,7 +7,6 @@ use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::actions::{ActionSet, ACT_REG, PythonAction};
-use crate::collections::GlobalReg;
 use crate::exts::{LockIt, StringList};
 use crate::python::add_py_folder;
 use crate::queries::{ActQuery, PythonQuery, QUERY_REG};
