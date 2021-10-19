@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::time::{Duration};
-use std::sync::{Arc, Mutex};
 
 use crate::actions::{ActionContext, ActionSet};
 use crate::config::Config;
-use crate::exts::LockIt;
 use crate::signals::{Signal, SignalEventShared, UserSignal};
 use crate::vars::UNEXPECTED_MSG;
 
@@ -18,7 +16,7 @@ use serde::{de::{self, Visitor}, Deserialize, Deserializer};
 use unic_langid::LanguageIdentifier;
 
 pub struct Timer {
-    timers: Vec<(TimerKind, Arc<Mutex<ActionSet>>)>,
+    timers: Vec<(TimerKind, ActionSet)>,
 }
 
 #[derive(Clone, Debug)]
@@ -82,14 +80,14 @@ impl Signal for Timer {
                 TimerKind::Once(dur) => {
                     spawn_local(async move {
                         sleep(dur).await;
-                        actions.lock_it().call_all(&base_context).await;
+                        actions.call_all(&base_context).await;
                     });
                 },
                 TimerKind::Every(dur) => {
                     spawn_local(async move {
                         loop {
                             sleep(dur).await;
-                            actions.lock_it().call_all(&base_context).await;
+                            actions.call_all(&base_context).await;
                         }
                     });
                 },
@@ -97,7 +95,7 @@ impl Signal for Timer {
                     spawn_local( async move {
                         let dur = date.inner.signed_duration_since(Utc::now()).to_std().expect(UNEXPECTED_MSG);
                         sleep(dur).await;
-                        actions.lock_it().call_all(&base_context).await;
+                        actions.call_all(&base_context).await;
                     });
                 }
             }
@@ -107,7 +105,7 @@ impl Signal for Timer {
 }
 #[async_trait(?Send)]
 impl UserSignal for Timer{
-    fn add(&mut self, data: HashMap<String,String>, _skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
+    fn add(&mut self, data: HashMap<String,String>, _skill_name: &str, act_set: ActionSet) -> Result<()> {
         Ok(self.timers.push((Self::from_data(data)?, act_set)))
     }
 }

@@ -45,7 +45,7 @@ impl SignalEvent {
         Self {event_map: ActMap::new()}
     }
 
-    pub fn add(&mut self, event_name: &str, act_set: Arc<Mutex<ActionSet>>) {
+    pub fn add(&mut self, event_name: &str, act_set: ActionSet) {
         self.event_map.add_mapping(event_name, act_set)
     }
 
@@ -60,7 +60,7 @@ impl SignalEvent {
 
 #[derive(Debug)]
 pub struct ActMap {
-    map: HashMap<String, Arc<Mutex<ActionSet>>>
+    map: HashMap<String, ActionSet>
 }
 
 impl ActMap {
@@ -68,15 +68,14 @@ impl ActMap {
         Self{map: HashMap::new()}
     }
 
-    pub fn add_mapping(&mut self, order_name: &str, act_set: Arc<Mutex<ActionSet>>) {
+    pub fn add_mapping(&mut self, order_name: &str, act_set: ActionSet) {
         let action_entry = self.map.entry(order_name.to_string()).or_insert(ActionSet::empty());
         *action_entry = act_set;
     }
 
     pub async fn call_mapping(&mut self, act_name: &str, context: &ActionContext) -> Option<Vec<ActionAnswer>>{
         if let Some(action_set) = self.map.get_mut(act_name) {
-            Some(action_set.
-                lock_it().call_all(context).await)
+            Some(action_set.call_all(context).await)
         }
         else {
             None
@@ -92,7 +91,7 @@ pub trait Signal {
 
 #[async_trait(?Send)]
 pub trait UserSignal: Signal {
-    fn add(&mut self, data: HashMap<String, String>, skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()>;
+    fn add(&mut self, data: HashMap<String, String>, skill_name: &str, act_set: ActionSet) -> Result<()>;
 }
 
 pub struct ActSignal {
@@ -112,12 +111,11 @@ impl Action for ActSignal {
         // TODO: In theory, Lily should ask which parameters for the signal and 
         // which action to be executed but we can't do that right now
         let m = HashMap::new();
-        let a = ACT_REG.lock_it()
-        .get("embedded", "say_hello")
-        .expect("Embedded skill 'say_hello' is not available")
-        .clone();
+        let mut act_grd = ACT_REG.lock_it();
+        let act = act_grd.get("embedded", "say_hello")
+        .expect("Embedded skill 'say_hello' is not available");
 
-        let acts = ActionSet::create(a);
+        let acts = ActionSet::create(Arc::downgrade(act));
 
         self.s.lock_it().add(m, "ActSignal",acts)?;
         ActionAnswer::send_text("Whenever this signals we'll say hello".into(), true)

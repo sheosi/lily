@@ -128,13 +128,13 @@ impl Signal for PythonSignal {
 
 impl UserSignal for PythonSignal {
     fn add(&mut self, data: HashMap<String, String>,
-        skill_name: &str, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
+        skill_name: &str, act_set: ActionSet) -> Result<()> {
 
         // Pass act_set to python so that Python signals can somehow call their respective actions
         let gil= Python::acquire_gil();
         let py = gil.python();
 
-        let actset = PyActionSet::from_arc(act_set);
+        let actset = PyActionSet::from_set(act_set);
         self.call_py_method(py, "add_sig_receptor", (data, skill_name, actset), true)
     }
 }

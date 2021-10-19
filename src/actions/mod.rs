@@ -7,7 +7,7 @@ use std::fmt; // For Debug in LocalActionRegistry
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 
 // This crate
 use crate::collections::{BaseRegistry, GlobalReg};
@@ -186,44 +186,39 @@ impl Action for PythonAction {
     }
 }
 
-
+#[derive(Clone)]
 pub struct ActionSet {
-    acts: Vec<Arc<Mutex<dyn Action + Send>>>
+    acts: Vec<Weak<Mutex<dyn Action + Send>>>
 }
 
 impl fmt::Debug for ActionSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ActionRegistry")
-         .field("acts", &self.acts.iter().fold("".to_string(), |str, a|format!("{}{},",str,a.lock_it().get_name())))
+         .field("acts", &self.acts.iter().fold("".to_string(), |str, a|format!("{}{},",str,a.upgrade().unwrap().lock_it().get_name())))
          .finish()
     }
 }
 
 impl ActionSet {
-    pub fn create(a: Arc<Mutex<dyn Action + Send>>) -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(Self {acts: vec![a]}))
+    pub fn create(a: Weak<Mutex<dyn Action + Send>>) -> Self {
+        Self {acts: vec![a]}
     }
 
-    pub fn empty() -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(Self {acts: vec![]}))
+    pub fn empty() -> Self {
+        Self {acts: vec![]}
     }
 
-
-    pub fn with(action: Arc<Mutex<dyn Action + Send>>) -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(Self {acts: vec![action]}))
-    }
-
-    pub fn add_action(&mut self, action: Arc<Mutex<dyn Action + Send>>) {
+    pub fn add_action(&mut self, action: Weak<Mutex<dyn Action + Send>>) {
         self.acts.push(action);
     }
 
-    pub async fn call_all(&mut self, context: &ActionContext) -> Vec<ActionAnswer> {
+    pub async fn call_all(&self, context: &ActionContext) -> Vec<ActionAnswer> {
         let mut res = Vec::new();
         for action in &self.acts {
-            match action.lock_it().call(context).await {
+            match action.upgrade().unwrap().lock_it().call(context).await {
                 Ok(a) => res.push(a),
                 Err(e) =>  {
-                    error!("Action {} failed while being triggered: {}", &action.lock_it().get_name(), e);
+                    error!("Action {} failed while being triggered: {}", &action.upgrade().unwrap().lock_it().get_name(), e);
                 }
             }
         }
@@ -234,12 +229,12 @@ impl ActionSet {
 #[cfg(feature="python_skills")]
 #[pyclass]
 pub struct PyActionSet {
-    act_set: Arc<Mutex<ActionSet>>
+    act_set: ActionSet
 }
 
 #[cfg(feature="python_skills")]
 impl PyActionSet {
-    pub fn from_arc(act_set: Arc<Mutex<ActionSet>>) -> Self {
+    pub fn from_set(act_set: ActionSet) -> Self {
         Self {act_set}
     }
 }
@@ -250,7 +245,7 @@ impl PyActionSet {
     fn call(&mut self, context: &ActionContext) -> Vec<ActionAnswer> {
         let handle = Handle::current();
         let _enter_grd= handle.enter();
-        block_on(self.act_set.lock_it().call_all(context))
+        block_on(self.act_set.call_all(context))
     }
 }
 

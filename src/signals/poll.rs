@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use crate::actions::{ActionContext, ActionSet};
 use crate::config::Config;
-use crate::exts::LockIt;
 use crate::queries::{Condition, Query};
 use crate::signals::{Signal, SignalEventShared};
 
@@ -24,11 +23,11 @@ impl std::fmt::Debug for UserTask {
 struct UserTask {
     query: Arc<Mutex<dyn Query + Send>>,
     condition: Condition,
-    act_set: Arc<Mutex<ActionSet>>,
+    act_set: ActionSet,
 }
 
 impl UserTask {
-    fn new(query: Arc<Mutex<dyn Query + Send>>, act_set: Arc<Mutex<ActionSet>>) -> Self {
+    fn new(query: Arc<Mutex<dyn Query + Send>>, act_set: ActionSet) -> Self {
         Self {query, act_set, condition: Condition::Changed(RefCell::new(Vec::new()))}
     }
 }
@@ -54,7 +53,7 @@ impl Signal for PollQuery {
             sleep(Duration::from_secs(30)).await;
             for task in &mut self.tasks {
                 if task.condition.check(&task.query, HashMap::new()) {
-                    task.act_set.lock_it().call_all(base_context).await;
+                    task.act_set.call_all(base_context).await;
                 }
             }
         }
@@ -62,7 +61,7 @@ impl Signal for PollQuery {
 }
 
 impl PollQuery {
-    pub fn add(&mut self, query: Arc<Mutex<dyn Query + Send>>, act_set: Arc<Mutex<ActionSet>>) -> Result<()> {
+    pub fn add(&mut self, query: Arc<Mutex<dyn Query + Send>>, act_set: ActionSet) -> Result<()> {
         let task = UserTask::new(query, act_set);
         self.tasks.push(task);
 

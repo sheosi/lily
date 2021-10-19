@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::actions::{ActionSet, ACT_REG, PythonAction};
+use crate::collections::GlobalReg;
 use crate::exts::{LockIt, StringList};
 use crate::python::add_py_folder;
 use crate::queries::{ActQuery, PythonQuery, QUERY_REG};
@@ -278,52 +279,67 @@ fn load_intents(
             }
             
             for (intent_name, data) in skilldef.intents.into_iter() {
+                let intent_trans = langs.into_iter().map(|l|{
+                    Ok((l, data.clone().try_into_with_trans(l)?))
+                }).collect::<Result<_>>()?;
+
                 match data.hook.clone() {
                     Hook::Action(name) => {
                         let action_grd = ACT_REG.lock_it();
                         let action = action_grd.get(&skill_name,&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?;
-                        let act_set = ActionSet::create(action.clone());
-                        for lang in langs {
-                            // TODO! This shoudln't be handled here but in skill loading
-                            sig_order.lock_it().add_intent(
-                                data.clone().try_into_with_trans(lang)?,
-                                &intent_name,
-                                &skill_name,
-                                act_set.clone(),
-                                lang
-                            )?;
-                        }
+
+                        // TODO! This shoudln't be handled here but in skill loading
+                        sig_order.lock_it().add_intent(
+                            intent_trans,
+                            &intent_name,
+                            &skill_name,
+                            ActionSet::create(Arc::downgrade(action))
+                        )?;
+                        
                     },
                     Hook::Query(name) => {
                         // Note: Some very minimal support for queries
                         let query_grd = QUERY_REG.lock_it();
                         let q = query_grd.get(&skill_name, &name).ok_or_else(||anyhow!("Query '{}' does not exist", &name))?;
-                        let act_set = ActionSet::create(ActQuery::new(q.clone(), name));
-                        for lang in langs {
-                            // TODO! This shoudln't be handled here but in skill loading
-                            sig_order.lock_it().add_intent(
-                                data.clone().try_into_with_trans(lang)?,
-                                &intent_name,
-                                &skill_name,
-                                act_set.clone(),
-                                lang
-                            )?;
-                        }
+
+                        let arc = ActQuery::new(q.clone(), name);
+                        let weak = Arc::downgrade(&arc);
+                        ACT_REG.lock_it().insert(
+                            &skill_name,
+                            &format!("{}_query_wrapper",intent_name),
+                            arc
+                        )?;
+                            
+                        
+                        // TODO! This shoudln't be handled here but in skill loading
+                        // TODO! Add functions for this to be handled elsewhere
+                        sig_order.lock_it().add_intent(
+                            intent_trans,
+                            &intent_name,
+                            &skill_name,
+                            ActionSet::create(weak)
+                        )?;
                     },
                     Hook::Signal(name) => {
                         // Note: Some very minimal support for signals
                         let s = sig_grd.get(&skill_name, &name).ok_or_else(||anyhow!("Signal '{}' does not exist", &name))?;
-                        let act_set = ActionSet::create(ActSignal::new(s.clone(), name));
-                        for lang in langs {
-                            // TODO! This shoudln't be handled here but in skill loading
-                            sig_order.lock_it().add_intent(
-                                data.clone().try_into_with_trans(lang)?,
-                                &intent_name,
-                                &skill_name,
-                                act_set.clone(),
-                                lang
-                            )?;
-                        }
+                        let arc = ActSignal::new(s.clone(), name);
+                        let weak = Arc::downgrade(&arc);
+                        ACT_REG.lock_it().insert(
+                            &skill_name,
+                            &format!("{}_signal_wrapper",intent_name),
+                            arc
+                        )?;
+                        
+                        // TODO! This shoudln't be handled here but in skill loading
+                        // TODO! Add functions for this to be handled elsewhere
+                        sig_order.lock_it().add_intent(
+                            intent_trans,
+                            &intent_name,
+                            &skill_name,
+                            ActionSet::create(weak)
+                        )?;
+                        
                         unimplemented!();
                     }
                 }
@@ -344,7 +360,8 @@ fn load_intents(
                 let def_action = def_action.ok_or_else(||anyhow!("Skill contains events but no action linked"))?;
                 let act_grd = ACT_REG.lock_it();
                 let action = act_grd.get(&skill_name, &def_action).ok_or_else(||anyhow!("Action '{}' does not exist", &def_action))?;
-                let act_set = ActionSet::create(action.clone());
+                let act_set = ActionSet::create(Arc::downgrade(action));
+
                 for ev in evs {
                     sigevent.lock().unwrap().add(&ev, act_set.clone());
                 }

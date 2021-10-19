@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use crate::actions::{Action, ActionAnswer, ActionContext, ACT_REG};
 use crate::collections::GlobalReg;
 use crate::exts::LockIt;
-use crate::signals::order::mqtt::MSG_OUTPUT;
+use crate::signals::{order::mqtt::MSG_OUTPUT, SIG_REG};
 use crate::skills::SkillLoader;
 use crate::skills::hermes::messages::IntentMessage;
 
@@ -138,13 +138,17 @@ impl SkillLoader for HermesLoader {
         _langs: &Vec<LanguageIdentifier>) -> Result<()> {
 
         // For the time being we are going to put everything as a single skill called "hermes"
-        // TODO: Get all actions from somewhere
-        let mut global_actions = ACT_REG.lock_it();
-        let actions: Vec<String> = Vec::new();
-        for act_name in actions {
-            let arc_act_name = Arc::new(act_name.clone());
-            let action = Arc::new(Mutex::new(HermesAction::new(arc_act_name.clone(), arc_act_name)));
-            global_actions.insert("hermes".into(), &act_name, action.clone())?;
+        // TODO: Get all intents from somewhere
+        let mut act_grd = ACT_REG.lock_it();
+        let sig_grd = SIG_REG.lock_it();
+        let sig_order = sig_grd.get_sig_order().expect("Order signal was not initialized");
+
+        let intents: Vec<String> = Vec::new();
+        for intent_name in intents {
+            let arc_intent_name = Arc::new(intent_name.clone());
+            let action = Arc::new(Mutex::new(HermesAction::new(arc_intent_name.clone(), arc_intent_name)));
+            act_grd.insert("hermes", &intent_name, action.clone())?;
+            // TODO! Add to sig order!
         }
 
         Ok(())
@@ -171,8 +175,7 @@ impl HermesApiIn {
         if let Ok(Some(msg)) = HERMES_API_INPUT.lock_it().as_mut().expect("No Hermes API input").intercept_tts_say(payload) {
             MSG_OUTPUT.with::<_,Result<()>>(|m|{match *m.borrow_mut() {
                 Some(ref mut output) => {
-                    // Note: This clone could be workarounded
-                    let l =msg.lang.and_then(|s|s.parse().ok()).unwrap_or(self.def_lang.clone());
+                    let l = msg.lang.and_then(|s|s.parse().ok()).unwrap_or_else(||self.def_lang.clone());
                     output.answer(msg.text, &l, msg.site_id)
                 }
                 _=>{
@@ -192,8 +195,7 @@ impl HermesApiInput {
     pub async fn wait_answer(&mut self, uuid: &str) -> messages::SayMessage {
         let (sender,mut receiver) = oneshot::channel();
         self.tts_say_map.insert(uuid.to_string(), sender);
-        let ans = receiver.try_recv().expect("TTS Say channel dropped");
-        ans
+        receiver.try_recv().expect("TTS Say channel dropped")
     }
 
     pub fn intercept_tts_say(&mut self, msg: &Bytes) -> Result<Option<messages::SayMessage>> {

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::env;
 use std::path::Path;
 use std::process::Command;
+use std::sync::Arc;
 
 use crate::actions::{ActionSet, ACT_REG};
 use crate::exts::LockIt;
@@ -328,10 +329,9 @@ fn add_task(q_name: String, a_name: String) -> PyResult<()> {
         let map =ACT_REG.lock_it();
         let action = map
         .get(&n, &a_name)
-        .ok_or_else(||assertion("This skill does not have requested action"))?
-        .clone();
+        .ok_or_else(||assertion("This skill does not have requested action"))?;
 
-        ActionSet::create(action)
+        ActionSet::create(Arc::downgrade(action))
     };
 
     let q = {
