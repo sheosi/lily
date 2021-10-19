@@ -134,7 +134,6 @@ impl SignalRegistry {
         pub fn get_map_ref(&mut self) -> &HashMap<String,Arc<Mutex<dyn UserSignal + Send>>>;
         pub fn remove_several(&mut self, skill_name: &str, items: &Vec<String>) -> Result<()>;
         pub fn insert(&mut self, skill_name: &str, sig_name: &str, signal: Arc<Mutex<dyn UserSignal + Send>>) -> Result<()>;
-        pub fn remove(&mut self, skill_name: &str, sig_name: &str) -> Result<()>;
     }}
 }
 

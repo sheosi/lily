@@ -1,6 +1,6 @@
 // Standard library
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::sync::{Mutex, Weak};
 
 // This crate
@@ -21,17 +21,21 @@ lazy_static! {
     pub static ref DYNAMIC_NLU_CHANNEL: Mutex<Option<mpsc::Sender<DynamicNluRequest>>> =  Mutex::new(None);
 }
 
+#[derive(Debug)]
 pub enum DynamicNluRequest {
     AddIntent(AddIntentRequest),
     EntityAddValue(EntityAddValueRequest),
     AddActionToIntent(AddActionToIntentRequest),
 }
+
+#[derive(Debug)]
 pub struct AddIntentRequest {
     pub by_lang: HashMap<LanguageIdentifier, IntentData>,
     pub skill: String,
     pub intent_name: String,
 }
 
+#[derive(Debug)]
 pub struct EntityAddValueRequest {
     pub skill: String,
     pub entity: String,
@@ -39,10 +43,20 @@ pub struct EntityAddValueRequest {
     pub langs: Vec<LanguageIdentifier>,
 }
 
+
 pub struct  AddActionToIntentRequest {
     pub skill: String,
     pub intent_name: String,
     pub action: Weak<Mutex<dyn Action + Send>>
+}
+
+impl Debug for AddActionToIntentRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AddActionToIntentRequest")
+         .field("skill", &self.skill)
+         .field("intent_name", &self.skill)
+         .finish()
+    }
 }
 
 pub fn init_dynamic_nlu() -> Result<mpsc::Receiver<DynamicNluRequest>> {

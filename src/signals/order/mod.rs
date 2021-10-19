@@ -9,16 +9,17 @@ mod server_actions;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::mem::replace;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 
 // This crate
-use crate::actions::{ActionAnswer, ActionContext, ActionSet, MainAnswer};
+use crate::actions::{Action, ActionAnswer, ActionContext, ActionSet, ACT_REG, MainAnswer};
 use crate::config::Config;
 use crate::exts::LockIt;
+use crate::queries::{ActQuery, Query};
 use crate::mqtt::MqttApi;
 use crate::nlu::{EntityDef, IntentData, Nlu, NluManager, NluManagerStatic, NluResponseSlot};
 use crate::stt::DecodeRes;
-use crate::signals::{collections::NluMap, dynamic_nlu::DynamicNluRequest, ActMap, Signal, SignalEventShared};
+use crate::signals::{collections::NluMap, dynamic_nlu::{AddActionToIntentRequest, DYNAMIC_NLU_CHANNEL, DynamicNluRequest}, ActMap, ActSignal, Signal, SignalEventShared, UserSignal};
 use crate::vars::{mangle, MIN_SCORE_FOR_ACTION};
 use self::{dynamic_nlu::on_dyn_nlu, mqtt::MSG_OUTPUT, server_actions::{on_event, on_nlu_request}, dev_mgmt::SessionManager};
 
@@ -35,6 +36,50 @@ use crate::nlu::SnipsNluManager;
 #[cfg(feature = "devel_rasa_nlu")]
 use crate::nlu::RasaNluManager;
 
+fn link_action_intent(intent_name: String, skill_name: String,
+    action: Weak<Mutex<dyn Action + Send>>) -> Result<()> {
+
+    Ok(())
+}
+
+fn link_signal_intent(intent_name: String, skill_name: String, signal_name: String,
+    signal: Arc<Mutex<dyn UserSignal + Send>>) -> Result<()> {
+    let arc = ActSignal::new(signal, signal_name);
+    let weak = Arc::downgrade(&arc);
+    ACT_REG.lock_it().insert(
+        &skill_name,
+        &format!("{}_signal_wrapper",intent_name),
+        arc
+    )?;
+    
+    DYNAMIC_NLU_CHANNEL.lock_it().as_ref().unwrap().try_send(DynamicNluRequest::AddActionToIntent(AddActionToIntentRequest{
+        skill: skill_name,
+        intent_name,
+        action: weak
+    }))?;
+
+    Ok(())
+}
+
+fn link_query_intent(intent_name: String, skill_name: String,
+    query_name: String, query: Arc<Mutex<dyn Query + Send>>) -> Result<()> {
+    
+    let arc = ActQuery::new(query, query_name);
+    let weak = Arc::downgrade(&arc);
+    ACT_REG.lock_it().insert(
+        &skill_name,
+        &format!("{}_query_wrapper",intent_name),
+        arc
+    )?;
+
+    DYNAMIC_NLU_CHANNEL.lock_it().as_ref().unwrap().try_send(DynamicNluRequest::AddActionToIntent(AddActionToIntentRequest{
+        skill: skill_name,
+        intent_name,
+        action:     weak
+    }))?;
+
+    Ok(())
+}
 
 #[derive(Debug)]
 pub struct NluState<M: NluManager + NluManagerStatic + Send> {
@@ -150,8 +195,9 @@ impl<M:NluManager + NluManagerStatic + Debug + Send>  SignalOrder<M> {
     fn demangle<'a>(&'a self, mangled: &str) -> &'a str {
         self.demangled_names.get(mangled).expect("Mangled name was not found")
     }
-    pub fn add_intent(&mut self, sig_arg: Vec<(&LanguageIdentifier,IntentData)>, intent_name: &str,
-        skill_name: &str, act_set: ActionSet) -> Result<()> {
+
+    fn add_intent(&mut self, sig_arg: Vec<(&LanguageIdentifier,IntentData)>, 
+        skill_name: &str, intent_name: &str, act_set: ActionSet) -> Result<()> {
         let mangled = mangle(skill_name, intent_name);
 
         {
@@ -163,6 +209,61 @@ impl<M:NluManager + NluManagerStatic + Debug + Send>  SignalOrder<M> {
 
         self.intent_map.lock_it().add_mapping(&mangled, act_set);
         self.demangled_names.insert(mangled, intent_name.to_string());
+        Ok(())
+    }
+
+    pub fn add_intent_signal(&mut self, sig_arg: Vec<(&LanguageIdentifier,IntentData)>, skill_name: &str, intent_name: &str,
+        signal_name: String, signal: Arc<Mutex<dyn UserSignal + Send>>) -> Result<()> {
+        
+        let arc = ActSignal::new(signal, signal_name);
+        let weak = Arc::downgrade(&arc);
+        ACT_REG.lock_it().insert(
+            &skill_name,
+            &format!("{}_signal_wrapper",intent_name),
+            arc
+        )?;
+        
+        self.add_intent(
+            sig_arg,
+            &skill_name,
+            &intent_name,
+            ActionSet::create(weak)
+        )?;
+        Ok(())
+    }
+
+    pub fn add_intent_action(&mut self, sig_arg: Vec<(&LanguageIdentifier,IntentData)>, skill_name: &str, intent_name: &str,
+        action: &Arc<Mutex<dyn Action + Send>>) -> Result<()> {
+        
+        let weak = Arc::downgrade(action);
+        
+        self.add_intent(
+            sig_arg,
+            &skill_name,
+            &intent_name,
+            ActionSet::create(weak)
+        )?;
+        Ok(())
+    }
+    
+    pub fn add_intent_query(&mut self, sig_arg: Vec<(&LanguageIdentifier,IntentData)>, skill_name: &str, intent_name: &str,
+        query_name: String, query: Arc<Mutex<dyn Query + Send>>) -> Result<()> {
+
+        let arc = ActQuery::new(query, query_name);
+        let weak = Arc::downgrade(&arc);
+        ACT_REG.lock_it().insert(
+            &skill_name,
+            &format!("{}_query_wrapper",intent_name),
+            arc
+        )?;
+
+        self.add_intent(
+            sig_arg,
+            &skill_name,
+            &intent_name,
+            ActionSet::create(weak)
+        )?;
+
         Ok(())
     }
 

@@ -287,12 +287,11 @@ fn load_intents(
                         let action_grd = ACT_REG.lock_it();
                         let action = action_grd.get(&skill_name,&name).ok_or_else(||anyhow!("Action '{}' does not exist", &name))?;
 
-                        // TODO! This shoudln't be handled here but in skill loading
-                        sig_order.lock_it().add_intent(
+                        sig_order.lock_it().add_intent_action(
                             intent_trans,
                             &intent_name,
                             &skill_name,
-                            ActionSet::create(Arc::downgrade(action))
+                            action
                         )?;
                         
                     },
@@ -301,45 +300,26 @@ fn load_intents(
                         let query_grd = QUERY_REG.lock_it();
                         let q = query_grd.get(&skill_name, &name).ok_or_else(||anyhow!("Query '{}' does not exist", &name))?;
 
-                        let arc = ActQuery::new(q.clone(), name);
-                        let weak = Arc::downgrade(&arc);
-                        ACT_REG.lock_it().insert(
+                        sig_order.lock_it().add_intent_query(
+                            intent_trans, 
                             &skill_name,
-                            &format!("{}_query_wrapper",intent_name),
-                            arc
-                        )?;
-                            
-                        
-                        // TODO! This shoudln't be handled here but in skill loading
-                        // TODO! Add functions for this to be handled elsewhere
-                        sig_order.lock_it().add_intent(
-                            intent_trans,
                             &intent_name,
-                            &skill_name,
-                            ActionSet::create(weak)
+                            name,
+                            q.to_owned()
                         )?;
+
                     },
                     Hook::Signal(name) => {
                         // Note: Some very minimal support for signals
                         let s = sig_grd.get(&skill_name, &name).ok_or_else(||anyhow!("Signal '{}' does not exist", &name))?;
-                        let arc = ActSignal::new(s.clone(), name);
-                        let weak = Arc::downgrade(&arc);
-                        ACT_REG.lock_it().insert(
-                            &skill_name,
-                            &format!("{}_signal_wrapper",intent_name),
-                            arc
-                        )?;
                         
-                        // TODO! This shoudln't be handled here but in skill loading
-                        // TODO! Add functions for this to be handled elsewhere
-                        sig_order.lock_it().add_intent(
+                        sig_order.lock_it().add_intent_signal(
                             intent_trans,
                             &intent_name,
                             &skill_name,
-                            ActionSet::create(weak)
+                            name,
+                            s.clone()
                         )?;
-                        
-                        unimplemented!();
                     }
                 }
                 
