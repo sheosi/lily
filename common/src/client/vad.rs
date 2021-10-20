@@ -16,7 +16,7 @@ pub struct SnowboyVad {
 #[cfg(feature="snowboy")]
 impl SnowboyVad {
 	pub fn new(res_path: &Path) -> Result<Self, VadError> {
-		let vad = rsnowboy::SnowboyVad::new(res_path.to_str().ok_or_else(|| VadError::NotUnicode)?);
+		let vad = rsnowboy::SnowboyVad::new(res_path.to_str().ok_or(VadError::NotUnicode)?);
 		Ok(Self {vad})
 	}
 }
@@ -32,7 +32,7 @@ impl Vad for SnowboyVad {
 		let vad_val = self.vad.run_short_array(&audio[0] as *const i16, audio.len() as i32, false);
 		if vad_val == -1 { // Maybe whe should do something worse with this is (return a result)
 			log::error!("Something happened in the Vad");
-			Err(VadError::Unknown.into())
+			Err(VadError::Unknown)
 		}
 		else {
 			Ok(vad_val == 0)

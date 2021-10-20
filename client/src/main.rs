@@ -41,14 +41,8 @@ enum ProgState<'a> {
 impl<'a> PartialEq for ProgState<'a> {
     fn eq(&self, other: &Self) -> bool {
         match self {
-            ProgState::PasiveListening => match other {
-                ProgState::PasiveListening => true,
-                _ => false,
-            },
-            ProgState::ActiveListening(_) => match other {
-                ProgState::ActiveListening(_) => true,
-                _ => false,
-            },
+            ProgState::PasiveListening => matches!(other, ProgState::PasiveListening),
+            ProgState::ActiveListening(_) => matches!(other, ProgState::ActiveListening(_))
         }
     }
 }
@@ -96,14 +90,12 @@ impl<V: Vad> ActiveListener<V> {
         if self.vad.is_someone_talking(audio.data)? {
             self.was_talking = true;
             Ok(ActiveState::Hearing(audio))
+        } else if self.was_talking {
+            self.vad.reset()?;
+            self.was_talking = false;
+            Ok(ActiveState::Done(audio))
         } else {
-            if self.was_talking {
-                self.vad.reset()?;
-                self.was_talking = false;
-                Ok(ActiveState::Done(audio))
-            } else {
-                Ok(ActiveState::NoOneTalking)
-            }
+            Ok(ActiveState::NoOneTalking)
         }
     }
 }
@@ -123,10 +115,10 @@ impl<'a> AudioRef<'a> {
     }
 }
 
-async fn send_audio<'a>(
+async fn send_audio(
     mqtt_name: &str,
     client: Rc<RefCell<AsyncClient>>,
-    data: AudioRef<'a>,
+    data: AudioRef<'_>,
     is_final: bool,
 ) -> anyhow::Result<()> {
     let msgpack_data = MsgRequest {
@@ -191,7 +183,7 @@ async fn receive(
                                 }
                                 Ok(())
                             })
-                            .unwrap_or(Err(anyhow!("Expected audio for this client")))?;
+                            .unwrap_or_else(|| Err(anyhow!("Expected audio for this client")))?;
                     }
                     /*_ if topic.ends_with("/session_end") => {
                         debug!("Received msg from server");
@@ -302,25 +294,22 @@ async fn user_listen(
                         pas_listener.set_from_conf(&config.borrow());
                     }
                     r = rec_guard.read_for_ms(interval) => {
-                        match r? {
-                            Some(d) => {
-                                let mic_data = AudioRef::from(d);
-                                if cfg!(debug_assertions) {
-                                    debugaudio.push(&mic_data);
-                                }
+                        if let Some(d) = r? {
 
-                                if pas_listener.process(mic_data)? {
-                                    current_state = ProgState::ActiveListening(rec_guard);
-
-                                    debug!("I'm listening for your command");
-
-                                    let msg_pack = encode::to_vec(&MsgEvent{satellite: mqtt_name.to_string(), event: "init_reco".into()})?;
-                                    client.borrow_mut().publish("lily/event", QoS::AtMostOnce, false, msg_pack).await?;
-                                }
-
+                            let mic_data = AudioRef::from(d);
+                            if cfg!(debug_assertions) {
+                                debugaudio.push(&mic_data);
                             }
-                            None => ()
-                        };
+
+                            if pas_listener.process(mic_data)? {
+                                current_state = ProgState::ActiveListening(rec_guard);
+
+                                debug!("I'm listening for your command");
+
+                                let msg_pack = encode::to_vec(&MsgEvent{satellite: mqtt_name.to_string(), event: "init_reco".into()})?;
+                                client.borrow_mut().publish("lily/event", QoS::AtMostOnce, false, msg_pack).await?;
+                            }
+                        }
                     }
                 }
             }
@@ -337,13 +326,13 @@ async fn user_listen(
                         .append_audio(&a2, DEFAULT_SAMPLES_PER_SECOND)
                         .unwrap();
                     activeaudio_raw
-                        .append_audio(&mic_data.data, DEFAULT_SAMPLES_PER_SECOND)
+                        .append_audio(mic_data.data, DEFAULT_SAMPLES_PER_SECOND)
                         .unwrap();
                 }
                 match act_listener.process(mic_data)? {
                     ActiveState::NoOneTalking => {}
                     ActiveState::Hearing(data) => {
-                        send_audio(mqtt_name.into(), client.clone(), data, false).await?
+                        send_audio(mqtt_name, client.clone(), data, false).await?
                     }
                     ActiveState::Done(data) => {
                         if cfg!(debug_assertions) {
@@ -356,7 +345,7 @@ async fn user_listen(
                             activeaudio.clear();
                             activeaudio_raw.clear();
                         }
-                        send_audio(mqtt_name.into(), client.clone(), data, true).await?;
+                        send_audio(mqtt_name, client.clone(), data, true).await?;
 
                         current_state = ProgState::PasiveListening;
                     }
@@ -413,7 +402,7 @@ pub async fn main() -> anyhow::Result<()> {
     init_log("lily-satellite".into());
     set_app_name("lily-satellite");
 
-    let config = ConfFile::load().unwrap_or(ConfFile::default());
+    let config = ConfFile::load().unwrap_or_else(|_| ConfFile::default());
     let mqtt_conn = {
         let mut old_conf = config.clone();
         let conn = ConnectionConfResolved::from(config.mqtt, || {

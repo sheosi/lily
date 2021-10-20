@@ -65,7 +65,7 @@ impl RecDevice {
         let stream = device.build_input_stream(
             &config,
             move |data: &[i16], _: &_| {
-                prod.push_slice(&data);
+                prod.push_slice(data);
             },
             err_fn
         )?;

@@ -87,7 +87,7 @@ pub fn make_mqtt_conn(conf: &ConnectionConfResolved, last_will: Option<LastWill>
     let url = Url::parse(
         &format!("http://{}",conf.url_str) // Let's add some protocol
     )?;
-    let host = url.host_str().ok_or(anyhow!("Coudln't get host from URL"))?;
+    let host = url.host_str().ok_or_else(||anyhow!("Coudln't get host from URL"))?;
     let port: u16 = url.port().unwrap_or(1883);
     
     // Init MQTT
