@@ -1,3 +1,4 @@
+#[cfg(feature = "python_skills")]
 use crate::python::python_init;
 
 #[cfg(feature = "python_skills")]
