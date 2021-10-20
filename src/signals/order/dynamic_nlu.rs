@@ -82,7 +82,7 @@ fn schedule_nlu_compilation<M: NluManager + NluManagerStatic + Debug + Send + 's
         spawn(async move {
             let next_compilation = *NEXT_NLU_COMPILATION.lock_it();
             while next_compilation > Instant::now() {
-                sleep_until(next_compilation);
+                sleep_until(next_compilation).await;
             }
             // Note: this on something like a multithreaded system might need a barrier
             // We uncheck this so soon since from now on bumping the time won't
@@ -123,7 +123,7 @@ pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'stati
                     }
                 }
 
-                schedule_nlu_compilation(shared_nlu, curr_langs.clone());
+                schedule_nlu_compilation(shared_nlu.clone(), curr_langs.clone());
             }
             DynamicNluRequest::AddIntent(request) => {     
                 let arc = shared_nlu.upgrade().unwrap();   
@@ -134,7 +134,7 @@ pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'stati
                     man.add_intent(&mangled,intent.into_utterances(&request.skill));
                 }
 
-                schedule_nlu_compilation(shared_nlu, curr_langs.clone());
+                schedule_nlu_compilation(shared_nlu.clone(), curr_langs.clone());
             }
             DynamicNluRequest::AddActionToIntent(request) => {
                 intent_map.upgrade().unwrap().lock_it().add_mapping(
