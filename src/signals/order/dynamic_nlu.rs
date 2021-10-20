@@ -8,17 +8,20 @@ use crate::actions::Action;
 use crate::exts::LockIt;
 use crate::nlu::{IntentData, NluManager, NluManagerStatic};
 use crate::signals::{ActionSet, ActMap, collections::NluMap, SignalOrder};
-use crate::vars::mangle;
+use crate::vars::{mangle, NLU_TRAINING_DELAY};
 
 // Other crates
 use anyhow::Result;
 use lazy_static::lazy_static;
 use log::error;
-use tokio::sync::mpsc;
+use tokio::time::sleep_until;
+use tokio::{spawn, sync::mpsc, time::{Duration, Instant}};
 use unic_langid::LanguageIdentifier;
 
 lazy_static! {
     pub static ref DYNAMIC_NLU_CHANNEL: Mutex<Option<mpsc::Sender<DynamicNluRequest>>> =  Mutex::new(None);
+    pub static ref NEXT_NLU_COMPILATION: Mutex<Instant> = Mutex::new(Instant::now());
+    pub static ref IS_NLU_COMPILATION_SCHEDULED: Mutex<bool> = Mutex::new(false);
 }
 
 #[derive(Debug)]
@@ -67,6 +70,33 @@ pub fn init_dynamic_nlu() -> Result<mpsc::Receiver<DynamicNluRequest>> {
     Ok(consumer)
 }
 
+fn schedule_nlu_compilation<M: NluManager + NluManagerStatic + Debug + Send + 'static>(
+    shared_nlu: Weak<Mutex<NluMap<M>>>,
+    curr_langs: Vec<LanguageIdentifier>
+) {
+    *NEXT_NLU_COMPILATION.lock_it() = Instant::now() + Duration::from_millis(NLU_TRAINING_DELAY);
+
+    if *IS_NLU_COMPILATION_SCHEDULED.lock_it() {
+        *IS_NLU_COMPILATION_SCHEDULED.lock_it() = true;
+
+        spawn(async move {
+            let next_compilation = *NEXT_NLU_COMPILATION.lock_it();
+            while next_compilation > Instant::now() {
+                sleep_until(next_compilation);
+            }
+            // Note: this on something like a multithreaded system might need a barrier
+            // We uncheck this so soon since from now on bumping the time won't
+            // be useful
+            *IS_NLU_COMPILATION_SCHEDULED.lock_it() = false;
+
+            let arc = shared_nlu.upgrade().unwrap();
+            if let Err(e) = SignalOrder::end_loading(&arc, &curr_langs) {
+                error!("Failed to end loading: {}", e);
+            }
+        });
+    }
+}
+
 pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'static>(
     mut channel: mpsc::Receiver<DynamicNluRequest>,
     shared_nlu: Weak<Mutex<NluMap<M>>>,
@@ -92,7 +122,8 @@ pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'stati
                         error!("Failed to add value to entity {}", e);
                     }
                 }
-                SignalOrder::end_loading(&arc, &curr_langs)?;
+
+                schedule_nlu_compilation(shared_nlu, curr_langs.clone());
             }
             DynamicNluRequest::AddIntent(request) => {     
                 let arc = shared_nlu.upgrade().unwrap();   
@@ -102,7 +133,8 @@ pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'stati
                     let mangled = mangle(&request.skill, &request.intent_name);
                     man.add_intent(&mangled,intent.into_utterances(&request.skill));
                 }
-                SignalOrder::end_loading(&arc, &curr_langs)?;
+
+                schedule_nlu_compilation(shared_nlu, curr_langs.clone());
             }
             DynamicNluRequest::AddActionToIntent(request) => {
                 intent_map.upgrade().unwrap().lock_it().add_mapping(
