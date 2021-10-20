@@ -81,8 +81,8 @@ fn get_loaders(
 
 #[cfg(not(feature="python_skills"))]
 fn get_loaders(
-    consumer: Receiver<EntityAddValueRequest>,
-    paths: Vec<PathBuf>
+    consumer: Receiver<DynamicNluRequest>,
+    _paths: Vec<PathBuf>
 ) ->Vec<Box<dyn SkillLoader>> {
     vec![
         Box::new(EmbeddedLoader::new(consumer)),

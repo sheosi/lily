@@ -362,6 +362,10 @@ impl ActionContext {
         self.map.lock_it().insert(key, ContextElement::Integer(value));
     }
 
+    pub fn get(&self, key: &str) -> Option<ContextElement> {
+        self.map.lock_it().get(key).cloned()
+    }
+
 }
 
 impl PartialEq for ActionContext {
@@ -465,7 +469,7 @@ impl ActionContext {
     }
 
     pub fn get(&self, key: &str) -> Option<ContextElement> {
-        self.map.lock_it().get(key).map(|a|a.clone())
+        self.map.lock_it().get(key).cloned()
     }
 
     pub fn has_key(&self, k: &str) -> bool {

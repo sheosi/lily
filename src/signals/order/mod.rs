@@ -38,6 +38,12 @@ use crate::nlu::RasaNluManager;
 
 fn link_action_intent(intent_name: String, skill_name: String,
     action: Weak<Mutex<dyn Action + Send>>) -> Result<()> {
+    
+    DYNAMIC_NLU_CHANNEL.lock_it().as_ref().unwrap().try_send(DynamicNluRequest::AddActionToIntent(AddActionToIntentRequest{
+        skill: skill_name,
+        intent_name,
+        action
+    }))?;
 
     Ok(())
 }
@@ -218,15 +224,15 @@ impl<M:NluManager + NluManagerStatic + Debug + Send>  SignalOrder<M> {
         let arc = ActSignal::new(signal, signal_name);
         let weak = Arc::downgrade(&arc);
         ACT_REG.lock_it().insert(
-            &skill_name,
+            skill_name,
             &format!("{}_signal_wrapper",intent_name),
             arc
         )?;
         
         self.add_intent(
             sig_arg,
-            &skill_name,
-            &intent_name,
+            skill_name,
+            intent_name,
             ActionSet::create(weak)
         )?;
         Ok(())

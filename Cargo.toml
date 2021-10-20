@@ -72,7 +72,7 @@ locale_config = "*" # Interact with the system locale, the * is suggested by it'
 fluent-langneg = "^0.13" # Language negotiation
 
 [features]
-default = ["python_skills"]
+default = []
 extra_langs_tts = ["espeak-ng-sys"]
 google_tts = ["google_translate_tts"]
 deepspeech_stt = ["deepspeech"]
