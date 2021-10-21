@@ -21,7 +21,7 @@ serde = {version = "^1.0", features = ["derive"]} # Serialization framework (use
 syslog = "^5.0" # Linux log interface
 url = "^2.2"
 
-rumqttc = "^0.8"
+rumqttc = "^0.9"
 anyhow = "^1.0" # For error handling overall in the app
 tokio = {version = "^1.9", features = ["time"], optional = true}
 rand = "^0.8" # Needs to be hold of for compatibility with cbindgen
