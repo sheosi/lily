@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 // This crate
 use crate::exts::LockIt;
+#[cfg(feature="python_skills")]
 use crate::vars::UNEXPECTED_MSG;
 
 // Other crates
@@ -52,6 +53,16 @@ impl ContextElement {
     pub fn as_integer(&self) -> Option<i32> {
         match self {
             ContextElement::Integer(i) => Some(*i),
+            _ => None
+        }
+    }
+
+    pub fn as_json_value(&self) -> Option<serde_json::Value> {
+        match self {
+            ContextElement::String(s) => Some(serde_json::Value::String(s.to_string())),
+            ContextElement::Decimal(d) => Some(serde_json::Value::Number(serde_json::Number::from_f64((*d).into()).unwrap())),
+            ContextElement::Integer(i) => Some(serde_json::Value::Number(serde_json::Number::from(*i))),
+            //ContextElement::Dict(d) => Some(serde_json::Value::Object(d.map)), // TODO!
             _ => None
         }
     }
@@ -334,6 +345,7 @@ pub struct ActionContext {
 #[cfg(not(feature="python_skills"))]
 #[derive(Debug, Clone)]
 pub struct ActionContext {
+    
     pub map: Arc<Mutex<HashMap<String, ContextElement>>>,
 }
 

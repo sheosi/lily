@@ -136,10 +136,3 @@ impl SignalRegistry {
         pub fn insert(&mut self, skill_name: &str, sig_name: &str, signal: Arc<Mutex<dyn UserSignal + Send>>) -> Result<()>;
     }}
 }
-
-pub fn dynamically_add_action(skill_name: &str, action_name: &str, action: Arc<Mutex<dyn Action + Send>>) -> Result<()> {
-    let mut act_reg_mutex = ACT_REG.lock_it();
-    act_reg_mutex.insert(skill_name, action_name, action)?;
-
-    Ok(())
-}

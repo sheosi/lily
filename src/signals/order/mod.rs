@@ -9,7 +9,7 @@ mod server_actions;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::mem::replace;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::actions::{Action, ActionAnswer, ActionContext, ActionSet, ACT_REG, MainAnswer};
@@ -19,7 +19,7 @@ use crate::queries::{ActQuery, Query};
 use crate::mqtt::MqttApi;
 use crate::nlu::{EntityDef, IntentData, Nlu, NluManager, NluManagerStatic, NluResponseSlot};
 use crate::stt::DecodeRes;
-use crate::signals::{collections::NluMap, dynamic_nlu::{AddActionToIntentRequest, DYNAMIC_NLU_CHANNEL, DynamicNluRequest}, ActMap, ActSignal, Signal, SignalEventShared, UserSignal};
+use crate::signals::{collections::NluMap, dynamic_nlu::DynamicNluRequest, ActMap, ActSignal, Signal, SignalEventShared, UserSignal};
 use crate::vars::{mangle, MIN_SCORE_FOR_ACTION};
 use self::{dynamic_nlu::on_dyn_nlu, mqtt::MSG_OUTPUT, server_actions::{on_event, on_nlu_request}, dev_mgmt::SessionManager};
 
@@ -35,57 +35,6 @@ use crate::nlu::SnipsNluManager;
 
 #[cfg(feature = "devel_rasa_nlu")]
 use crate::nlu::RasaNluManager;
-
-fn link_action_intent(intent_name: String, skill_name: String,
-    action: Weak<Mutex<dyn Action + Send>>) -> Result<()> {
-    
-    DYNAMIC_NLU_CHANNEL.lock_it().as_ref().unwrap().try_send(DynamicNluRequest::AddActionToIntent(AddActionToIntentRequest{
-        skill: skill_name,
-        intent_name,
-        action
-    }))?;
-
-    Ok(())
-}
-
-fn link_signal_intent(intent_name: String, skill_name: String, signal_name: String,
-    signal: Arc<Mutex<dyn UserSignal + Send>>) -> Result<()> {
-    let arc = ActSignal::new(signal, signal_name);
-    let weak = Arc::downgrade(&arc);
-    ACT_REG.lock_it().insert(
-        &skill_name,
-        &format!("{}_signal_wrapper",intent_name),
-        arc
-    )?;
-    
-    DYNAMIC_NLU_CHANNEL.lock_it().as_ref().unwrap().try_send(DynamicNluRequest::AddActionToIntent(AddActionToIntentRequest{
-        skill: skill_name,
-        intent_name,
-        action: weak
-    }))?;
-
-    Ok(())
-}
-
-fn link_query_intent(intent_name: String, skill_name: String,
-    query_name: String, query: Arc<Mutex<dyn Query + Send>>) -> Result<()> {
-    
-    let arc = ActQuery::new(query, query_name);
-    let weak = Arc::downgrade(&arc);
-    ACT_REG.lock_it().insert(
-        &skill_name,
-        &format!("{}_query_wrapper",intent_name),
-        arc
-    )?;
-
-    DYNAMIC_NLU_CHANNEL.lock_it().as_ref().unwrap().try_send(DynamicNluRequest::AddActionToIntent(AddActionToIntentRequest{
-        skill: skill_name,
-        intent_name,
-        action:     weak
-    }))?;
-
-    Ok(())
-}
 
 #[derive(Debug)]
 pub struct NluState<M: NluManager + NluManagerStatic + Send> {

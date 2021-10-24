@@ -24,11 +24,9 @@ lazy_static!{
     static ref HERMES_API_INPUT: Arc<Mutex<Option<HermesApiInput>>> = Arc::new(Mutex::new(None));
 }
 
-//TODO! XXX: In order for us to properly pipe the Action Answer, we need to intercept the inbound message
-//TODO! XXX: For that we need HermesApiInput and make it async, we need to make call (and most possibly it's trait)
-//TODO! XXX: async too.
 mod messages {
     use serde::{Deserialize, Serialize};
+    use serde_json::Value;
 
     #[derive(Deserialize)]
     pub struct SayMessage {
@@ -100,7 +98,7 @@ mod messages {
 
     #[derive(Serialize)]
     pub struct ValueSlotIntentMessage {
-        pub value: String, // TODO: This is supposed to be ANY in the definition
+        pub value: Value, // TODO: This is supposed to be ANY in the definition
     }
 
     #[derive(Serialize)]
@@ -273,9 +271,9 @@ impl Action for HermesAction {
                 intent_name: intent_name.clone(),
                 confidence_score: 1.0,
                 slots: grd.map.lock_it().iter().map(|(n,v)|{
-                    let val = v.as_string().unwrap().to_string();
+                    let val = v.as_json_value().unwrap();
                     messages::SlotIntentMessage {
-                        raw_value: val.clone(),
+                        raw_value: val.to_string(),
                         value: messages::ValueSlotIntentMessage {
                             value: val
                         },

@@ -1,13 +1,14 @@
 // Standard library
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
-use std::sync::{Mutex, Weak};
+use std::sync::{Arc, Mutex, Weak};
 
 // This crate
-use crate::actions::Action;
+use crate::actions::{ACT_REG, Action};
 use crate::exts::LockIt;
 use crate::nlu::{IntentData, NluManager, NluManagerStatic};
-use crate::signals::{ActionSet, ActMap, collections::NluMap, SignalOrder};
+use crate::queries::{ActQuery, Query};
+use crate::signals::{ActSignal, ActionSet, ActMap, collections::NluMap, SignalOrder, UserSignal};
 use crate::vars::{mangle, NLU_TRAINING_DELAY};
 
 // Other crates
@@ -144,4 +145,55 @@ pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'stati
             }
         }
     }
+}
+
+pub fn link_action_intent(intent_name: String, skill_name: String,
+    action: Weak<Mutex<dyn Action + Send>>) -> Result<()> {
+    
+    DYNAMIC_NLU_CHANNEL.lock_it().as_ref().unwrap().try_send(DynamicNluRequest::AddActionToIntent(AddActionToIntentRequest{
+        skill: skill_name,
+        intent_name,
+        action
+    }))?;
+
+    Ok(())
+}
+
+pub fn link_signal_intent(intent_name: String, skill_name: String, signal_name: String,
+    signal: Arc<Mutex<dyn UserSignal + Send>>) -> Result<()> {
+    let arc = ActSignal::new(signal, signal_name);
+    let weak = Arc::downgrade(&arc);
+    ACT_REG.lock_it().insert(
+        &skill_name,
+        &format!("{}_signal_wrapper",intent_name),
+        arc
+    )?;
+    
+    DYNAMIC_NLU_CHANNEL.lock_it().as_ref().unwrap().try_send(DynamicNluRequest::AddActionToIntent(AddActionToIntentRequest{
+        skill: skill_name,
+        intent_name,
+        action: weak
+    }))?;
+
+    Ok(())
+}
+
+pub fn link_query_intent(intent_name: String, skill_name: String,
+    query_name: String, query: Arc<Mutex<dyn Query + Send>>) -> Result<()> {
+    
+    let arc = ActQuery::new(query, query_name);
+    let weak = Arc::downgrade(&arc);
+    ACT_REG.lock_it().insert(
+        &skill_name,
+        &format!("{}_query_wrapper",intent_name),
+        arc
+    )?;
+
+    DYNAMIC_NLU_CHANNEL.lock_it().as_ref().unwrap().try_send(DynamicNluRequest::AddActionToIntent(AddActionToIntentRequest{
+        skill: skill_name,
+        intent_name,
+        action:     weak
+    }))?;
+
+    Ok(())
 }
