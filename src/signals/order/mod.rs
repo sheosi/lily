@@ -150,7 +150,7 @@ impl<M:NluManager + NluManagerStatic + Debug + Send>  SignalOrder<M> {
     fn demangle<'a>(&'a self, mangled: &str) -> &'a str {
         self.demangled_names.get(mangled).expect("Mangled name was not found")
     }
-
+    
     fn add_intent(&mut self, sig_arg: Vec<(&LanguageIdentifier,IntentData)>, 
         skill_name: &str, intent_name: &str, act_set: ActionSet) -> Result<()> {
         let mangled = mangle(skill_name, intent_name);
