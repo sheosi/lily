@@ -8,6 +8,7 @@ use crate::vars::POISON_MSG;
 
 use serde::{Deserialize, Deserializer, de::{self, SeqAccess, Visitor}, Serialize, Serializer, ser::SerializeSeq};
 use thiserror::Error;
+#[cfg(feature="python_skills")]
 use unic_langid::LanguageIdentifier;
 
 #[derive(Error, Debug, Clone)]

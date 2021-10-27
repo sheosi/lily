@@ -40,7 +40,7 @@ use pyo3::Python;
 
 fn get_locale_default() -> String {
     for (tag, val) in locale_config::Locale::user_default().tags() {
-        if let None = tag {
+        if tag.is_none() {
             return format!("{}", val)
         }
     }
@@ -57,7 +57,7 @@ fn set_py_locale(lang_id: &LanguageIdentifier) -> Result<()> {
 }
 
 #[cfg(not(feature="python_skills"))]
-fn set_py_locale(lang_id: &LanguageIdentifier) -> Result<()> {
+fn set_py_locale(_lang_id: &LanguageIdentifier) -> Result<()> {
     Ok(())
 }
 
@@ -81,7 +81,7 @@ pub async fn main()  -> Result<()> {
     }
 
     // Set config on global
-    let config = Config::load().unwrap_or(Config::default());
+    let config = Config::load().unwrap_or_default();
     crate::config::GLOBAL_CONF.with(|c|c.replace(Rc::new(config.clone())));
 
     // Show config on debug

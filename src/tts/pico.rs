@@ -80,7 +80,7 @@ impl Tts for PicoTts {
         // See `Engine::put_text()` for more details.
         let input = std::ffi::CString::new(input).expect("CString::new failed");
         let mut text_bytes = input.as_bytes_with_nul();
-        while text_bytes.len() > 0 {
+        while !text_bytes.is_empty() {
             let n_put = self.engine
                 .put_text(text_bytes)
                 .expect("pico_putTextUtf8 failed");

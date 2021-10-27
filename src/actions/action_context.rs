@@ -43,25 +43,10 @@ impl ContextElement {
         }
     }
 
-    pub fn as_decimal(&self) -> Option<f32> {
-        match self {
-            ContextElement::Decimal(d) => Some(*d),
-            _ => None
-        }
-    }
-
-    pub fn as_integer(&self) -> Option<i32> {
-        match self {
-            ContextElement::Integer(i) => Some(*i),
-            _ => None
-        }
-    }
-
     pub fn as_json_value(&self) -> Option<serde_json::Value> {
         match self {
             ContextElement::String(s) => Some(serde_json::Value::String(s.to_string())),
             ContextElement::Decimal(d) => Some(serde_json::Value::Number(serde_json::Number::from_f64((*d).into()).unwrap())),
-            ContextElement::Integer(i) => Some(serde_json::Value::Number(serde_json::Number::from(*i))),
             //ContextElement::Dict(d) => Some(serde_json::Value::Object(d.map)), // TODO!
             _ => None
         }
@@ -73,8 +58,7 @@ impl ContextElement {
 pub enum ContextElement {
     String(String),
     Dict(ActionContext),
-    Decimal(f32),
-    Integer(i32)
+    Decimal(f32)
 }
 
 #[cfg(feature="python_skills")]
@@ -89,13 +73,14 @@ impl IntoPy<PyObject> for ContextElement {
     }
 }
 
-
+#[cfg(feature="python_skills")]
 struct BaseIterator {
     inner: Arc<Mutex<HashMap<String, ContextElement>>>,
     count: usize,
     reversed: bool
 }
 
+#[cfg(feature="python_skills")]
 impl BaseIterator {
     fn new(inner: Arc<Mutex<HashMap<String, ContextElement>>>) -> Self {
         Self {
@@ -354,10 +339,6 @@ impl ActionContext {
         Self{map: Arc::new(Mutex::new(HashMap::new()))}
     }
 
-    pub fn set(&mut self, key: String, value: ContextElement) {
-        self.map.lock_it().insert(key, value);
-    }
-
     pub fn set_str(&mut self, key: String, value: String) {
         self.map.lock_it().insert(key, ContextElement::String(value));
     }
@@ -368,10 +349,6 @@ impl ActionContext {
 
     pub fn set_decimal(&mut self, key: String, value: f32) {
         self.map.lock_it().insert(key, ContextElement::Decimal(value));
-    }
-
-    pub fn set_integer(&mut self, key: String, value: i32) {
-        self.map.lock_it().insert(key, ContextElement::Integer(value));
     }
 
     pub fn get(&self, key: &str) -> Option<ContextElement> {

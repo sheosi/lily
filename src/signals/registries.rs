@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::actions::{Action, ActionContext, ACT_REG};
+use crate::actions::ActionContext;
 use crate::exts::LockIt;
 use crate::config::Config;
 use crate::collections::BaseRegistry;

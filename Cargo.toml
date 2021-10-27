@@ -14,12 +14,13 @@ yaml-rust = "^0.4" # Load configuration files from this program and skills
 serde_yaml = "^0.8" # Join serde and Yaml for loading conf and skills
 serde = { version = "^1.0", features = [
     "derive",
-] } # Serialization framework (used by serde_yaml and serde_json)
-maplit = "^1.0" # Literals for hasmaps, mostly used for the config of Rasa
-anyhow = "^1.0" # For error handling overall in the app
-thiserror = "^1.0" # For error handling in parts that can be made their own crate
-regex = "^1.5" # To parse configuration
-ctrlc = "^3.1" # To catch ctrl-c in all platforms and exit the program
+] }  # Serialization framework (used by serde_yaml and serde_json)
+maplit = "^1.0"  # Literals for hasmaps, mostly used for the config of Rasa
+anyhow = "^1.0"  # For error handling overall in the app
+thiserror = "^1.0"  # For error handling in parts that can be made their own crate
+regex = "^1.5"  # To parse configuration
+ctrlc = "^3.1"  # To catch ctrl-c in all platforms and exit the program
+
 # Some async deps
 tokio = { version = "^1.12", features = ["macros", "rt", "sync", "time"] }
 async-trait = "^0.1"
@@ -27,6 +28,7 @@ rumqttc = "^0.9"
 rmp-serde = "^0.15"
 bytes = "^1.1"
 futures = "^0.3"
+xtra = {version = "^0.5", features = ["with-tokio-1"] }  # Actor framework
 delegate = "^0.6"                                                         # Used for the registries using the base ones
 
 pocketsphinx = "^0.6.0"                            # Offline Stt
@@ -70,6 +72,7 @@ unic-langid = { version = "^0.9", features = [
 ] } # For parsing Unicode Language Identifiers
 locale_config = "*" # Interact with the system locale, the * is suggested by it's author
 fluent-langneg = "^0.13" # Language negotiation
+
 
 [features]
 default = []

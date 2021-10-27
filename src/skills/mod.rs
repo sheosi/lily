@@ -4,8 +4,10 @@ mod embedded;
 pub mod hermes;
 
 // Standard library
+#[cfg(feature = "python_skills")]
 use std::{cell::{Ref, RefCell}};
 use std::path::{Path, PathBuf};
+#[cfg(feature = "python_skills")]
 use std::rc::Rc;
 
 // This crate
@@ -22,26 +24,13 @@ use anyhow::{anyhow, Result};
 use tokio::sync::mpsc::Receiver;
 use unic_langid::LanguageIdentifier;
 
-thread_local! {
-    pub static PYTHON_LILY_SKILL: RefString = RefString::new("<None>");
-}
-
-pub fn call_for_skill<F, R>(path: &Path, f: F) -> Result<R> where F: FnOnce(Rc<String>) -> R {
-    let canon_path = path.canonicalize()?;
-    let skill_name = extract_name(&canon_path)?;
-    std::env::set_current_dir(&canon_path)?;
-    PYTHON_LILY_SKILL.with(|c| c.set(skill_name.clone()));
-    let r = f(skill_name);
-    PYTHON_LILY_SKILL.with(|c| c.clear());
-
-    Ok(r)
-}
-
+#[cfg(feature="python_skills")]
 pub struct RefString {
     current_val: RefCell<Rc<String>>,
     default_val: Rc<String>
 }
 
+#[cfg(feature="python_skills")]
 impl RefString {
     pub fn new(def: &str) -> Self {
         let default_val = Rc::new(def.to_owned());
@@ -59,12 +48,6 @@ impl RefString {
     pub fn borrow(&self) -> Ref<String> {
         Ref::map(self.current_val.borrow(), |r|r.as_ref())
     }
-}
-
-fn extract_name(path: &Path) -> Result<Rc<String>> {
-    let os_str = path.file_name().ok_or_else(||anyhow!("Can't get skill path's name"))?;
-    let skill_name_str = os_str.to_str().ok_or_else(||anyhow!("Can't transform skill path name to str"))?;
-    Ok(Rc::new(skill_name_str.to_string()))
 }
 
 #[cfg(feature="python_skills")]

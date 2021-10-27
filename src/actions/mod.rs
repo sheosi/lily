@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex, Weak};
 // This crate
 use crate::collections::BaseRegistry;
 use crate::exts::LockIt;
+#[cfg(feature="python_skills")]
 use crate::skills::call_for_skill;
 #[cfg(feature="python_skills")]
 use crate::python::{get_inst_class_name, HalfBakedError, PyException};
@@ -19,6 +20,7 @@ use crate::python::{get_inst_class_name, HalfBakedError, PyException};
 // Other crates
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+#[cfg(feature="python_skills")]
 use futures::executor::block_on;
 use lazy_static::lazy_static;
 use log::error;
@@ -29,6 +31,7 @@ use pyo3::{Py, PyAny, PyObject, PyResult, Python, types::PyTuple};
 use pyo3::prelude::{pyclass, pymethods};
 #[cfg(feature="python_skills")]
 use pyo3::exceptions::PyOSError;
+#[cfg(feature="python_skills")]
 use tokio::runtime::Handle;
 
 pub type ActionRegistry = BaseRegistry<dyn Action + Send>;

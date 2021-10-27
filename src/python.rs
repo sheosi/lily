@@ -24,6 +24,22 @@ use serde_yaml::Value;
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 
+thread_local! {
+    pub static PYTHON_LILY_SKILL: RefString = RefString::new("<None>");
+}
+
+pub fn call_for_skill<F, R>(path: &Path, f: F) -> Result<R> where F: FnOnce(Rc<String>) -> R {
+    let canon_path = path.canonicalize()?;
+    let skill_name = extract_name(&canon_path)?;
+    std::env::set_current_dir(&canon_path)?;
+    PYTHON_LILY_SKILL.with(|c| c.set(skill_name.clone()));
+    let r = f(skill_name);
+    PYTHON_LILY_SKILL.with(|c| c.clear());
+
+    Ok(r)
+}
+
+
 pub fn yaml_to_python(py: Python, yaml: &serde_yaml::Value) -> PyObject {
     // If for some reason we can't transform, just panic, but the odds should be really small
 
@@ -423,4 +439,10 @@ fn get_current_skill( ) -> PyResult<String> {
     PYTHON_LILY_SKILL.with(|n|
         Ok(n.borrow().clone())
     )
+}
+
+fn extract_name(path: &Path) -> Result<Rc<String>> {
+    let os_str = path.file_name().ok_or_else(||anyhow!("Can't get skill path's name"))?;
+    let skill_name_str = os_str.to_str().ok_or_else(||anyhow!("Can't transform skill path name to str"))?;
+    Ok(Rc::new(skill_name_str.to_string()))
 }
