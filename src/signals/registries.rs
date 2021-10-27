@@ -1,4 +1,5 @@
 // Standard library
+#[cfg(feature="python_skills")]
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -122,16 +123,20 @@ impl SignalRegistry {
         self.order.as_ref()
     }
 
+    #[cfg(feature="python_skills")]
     pub fn get_sig_event(&self) -> &Arc<Mutex<SignalEvent>> {
         &self.event
     }
 
+    #[cfg(feature="python_skills")]
     pub fn get<'a>(&'a self, skill_name: &str, item: &str) -> Option<&'a Arc<Mutex<dyn UserSignal + Send>>> {
         self.base.get(skill_name, item)
     }
 
     delegate!{to self.base{
+        #[cfg(feature="python_skills")]
         pub fn get_map_ref(&mut self) -> &HashMap<String,Arc<Mutex<dyn UserSignal + Send>>>;
+        #[cfg(feature="python_skills")]
         pub fn remove_several(&mut self, skill_name: &str, items: &Vec<String>) -> Result<()>;
         pub fn insert(&mut self, skill_name: &str, sig_name: &str, signal: Arc<Mutex<dyn UserSignal + Send>>) -> Result<()>;
     }}

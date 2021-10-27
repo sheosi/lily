@@ -56,7 +56,7 @@ impl<A: ?std::marker::Sized> BaseRegistry<A> {
 
     pub fn remove_several(&mut self, skill_name: &str, items: &Vec<String>) -> Result<()> {
         for item in items {
-            self.remove(skill_name, &item)?;
+            self.remove(skill_name, item)?;
         }
 
         Ok(())

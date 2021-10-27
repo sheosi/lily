@@ -446,3 +446,16 @@ fn extract_name(path: &Path) -> Result<Rc<String>> {
     let skill_name_str = os_str.to_str().ok_or_else(||anyhow!("Can't transform skill path name to str"))?;
     Ok(Rc::new(skill_name_str.to_string()))
 }
+
+fn get_package_path(&self, skill_name: &str, skill_path: &str) -> Option<&serde_yaml::Value> {
+    self.skills_conf.get(skill_name).and_then(|m| {
+        let mut curr_map = m;
+        for path_part in skill_path.split("/") {
+            match curr_map.get(path_part) {
+                Some(inner_data) => curr_map = inner_data,
+                None => return None
+            }
+        }
+        Some(curr_map)
+    })
+}
