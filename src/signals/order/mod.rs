@@ -12,7 +12,7 @@ use std::mem::replace;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{Action, ActionAnswer, ActionContext, ActionSet, ACT_REG, MainAnswer};
+use crate::actions::{Action, ActionAnswer, DynamicDict, ActionSet, ACT_REG, MainAnswer};
 use crate::config::Config;
 use crate::exts::LockIt;
 use crate::queries::{ActQuery, Query};
@@ -70,7 +70,7 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> SignalOrder<M> {
         }
     }
 
-    pub async fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &ActionContext, lang: &LanguageIdentifier, satellite: String) -> Result<bool> {
+    pub async fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &DynamicDict, lang: &LanguageIdentifier, satellite: String) -> Result<bool> {
         debug!("Heard from user: {:?}", decode_res);
 
         let ans = match decode_res {
@@ -89,10 +89,10 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> SignalOrder<M> {
                         if let Some(intent_name) = result.name {
                             info!("Let's call an action");
 
-                            let slots_data =  add_slots(&ActionContext::new(),result.slots);
+                            let slots_data =  add_slots(&DynamicDict::new(),result.slots);
 
                             let intent_data ={ 
-                                let mut intent_data = ActionContext::new();
+                                let mut intent_data = DynamicDict::new();
                                 intent_data.set_str("name".to_string(), self.demangle(&intent_name).to_string());
                                 intent_data.set_str("input".to_string(), decode_res.hypothesis);
                                 intent_data.set_dict("slots".to_string(), slots_data);
@@ -238,7 +238,7 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
     async fn event_loop(&mut self, 
         signal_event: SignalEventShared,
         config: &Config,
-        base_context: &ActionContext,
+        base_context: &DynamicDict,
         curr_langs: &Vec<LanguageIdentifier>
     ) -> Result<()> {
         let def_lang = curr_langs.get(0);
@@ -264,8 +264,8 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
     }
 }
 
-// ActionContext
-fn add_slots(base_context: &ActionContext, slots: Vec<NluResponseSlot>) -> ActionContext {
+// DynamicDict
+fn add_slots(base_context: &DynamicDict, slots: Vec<NluResponseSlot>) -> DynamicDict {
     let mut result = base_context.clone();
     for slot in slots.into_iter() {
         result.set_str(slot.name, slot.value);

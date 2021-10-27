@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::actions::ActionContext;
+use crate::actions::DynamicDict;
 use crate::exts::LockIt;
 use crate::config::Config;
 use crate::collections::BaseRegistry;
@@ -62,7 +62,7 @@ impl SignalRegistry {
 
     pub async fn call_loops(&mut self,
         config: &Config,
-        base_context: &ActionContext,
+        base_context: &DynamicDict,
         curr_lang: &Vec<LanguageIdentifier>
     ) -> Result<()> {
         let local = LocalSet::new();

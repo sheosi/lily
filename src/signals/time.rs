@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::time::{Duration};
 
-use crate::actions::{ActionContext, ActionSet};
+use crate::actions::{DynamicDict, ActionSet};
 use crate::config::Config;
 use crate::signals::{Signal, SignalEventShared, UserSignal};
 use crate::vars::UNEXPECTED_MSG;
@@ -70,7 +70,7 @@ impl Signal for Timer {
     fn end_load(&mut self, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         Ok(())
     }
-    async fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, base_context: &ActionContext, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
+    async fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, base_context: &DynamicDict, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         for (timer, actions) in &self.timers {
             let base_context = base_context.clone();
             let timer = timer.clone();

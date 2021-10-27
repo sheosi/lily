@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::{actions::ActionContext, stt::DecodeRes};
+use crate::{actions::DynamicDict, stt::DecodeRes};
 use crate::config::Config;
 use crate::exts::LockIt;
 use crate::nlu::{NluManager, NluManagerStatic};
@@ -42,7 +42,7 @@ pub async fn on_nlu_request<M: NluManager + NluManagerStatic + Debug + Send + 's
     signal_event: SignalEventShared,
     curr_langs: &Vec<LanguageIdentifier>,
     order: &mut SignalOrder<M>,
-    base_context: &ActionContext,
+    base_context: &DynamicDict,
     sessions: Arc<Mutex<SessionManager>>
 ) -> Result<()> {
     let mut stt_set = SttSet::new();
@@ -137,7 +137,7 @@ pub async fn on_event(
     mut channel: mpsc::Receiver<MsgEvent>,
     signal_event: SignalEventShared,
     def_lang: Option<&LanguageIdentifier>,
-    base_context: &ActionContext,
+    base_context: &DynamicDict,
 ) -> Result<()> {
     let def_lang = def_lang.unwrap();
     loop {
@@ -155,7 +155,7 @@ async fn do_received_order<M: NluManager + NluManagerStatic + Debug + Send + 'st
     order: &mut SignalOrder<M>,
     decoded: Option<DecodeRes>,
     signal_event: SignalEventShared,
-    context: &ActionContext,
+    context: &DynamicDict,
     lang: &LanguageIdentifier,
     satellite: String,
     sessions: &Arc<Mutex<SessionManager>>
@@ -178,11 +178,11 @@ async fn do_received_order<M: NluManager + NluManagerStatic + Debug + Send + 'st
     }
 }
 
-pub fn add_context_data(dict: &ActionContext, lang: &LanguageIdentifier, client: &str) -> ActionContext {
+pub fn add_context_data(dict: &DynamicDict, lang: &LanguageIdentifier, client: &str) -> DynamicDict {
     
     let mut new = dict.copy();
     new.set_str("locale".into(), lang.to_string());
-    let mut satellite = ActionContext::new();
+    let mut satellite = DynamicDict::new();
     satellite.set_str("uuid".to_string(), client.to_string());
     new.set_dict("satellite".into(), satellite);
 

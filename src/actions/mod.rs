@@ -93,7 +93,7 @@ impl ActionAnswer {
 
 #[async_trait(?Send)]
 pub trait Action {
-    async fn call(&self, context: &ActionContext) -> Result<ActionAnswer>;
+    async fn call(&self, context: &DynamicDict) -> Result<ActionAnswer>;
     fn get_name(&self) -> String;
 }
 
@@ -166,7 +166,7 @@ impl PythonAction {
 #[cfg(feature="python_skills")]
 #[async_trait(?Send)]
 impl Action for PythonAction {
-    async fn call(&self ,context: &ActionContext) -> Result<ActionAnswer> {
+    async fn call(&self ,context: &DynamicDict) -> Result<ActionAnswer> {
         let gil = Python::acquire_gil();
         let py = gil.python();
 
@@ -215,7 +215,7 @@ impl ActionSet {
         self.acts.push(action);
     }
 
-    pub async fn call_all(&self, context: &ActionContext) -> Vec<ActionAnswer> {
+    pub async fn call_all(&self, context: &DynamicDict) -> Vec<ActionAnswer> {
         let mut res = Vec::new();
         for action in &self.acts {
             match action.upgrade().unwrap().lock_it().call(context).await {
@@ -245,7 +245,7 @@ impl PyActionSet {
 #[cfg(feature="python_skills")]
 #[pymethods]
 impl PyActionSet {
-    fn call(&mut self, context: &ActionContext) -> Vec<ActionAnswer> {
+    fn call(&mut self, context: &DynamicDict) -> Vec<ActionAnswer> {
         let handle = Handle::current();
         let _enter_grd= handle.enter();
         block_on(self.act_set.call_all(context))
@@ -263,7 +263,7 @@ impl SayHelloAction {
 
 #[async_trait(?Send)]
 impl Action for SayHelloAction {
-    async fn call(&self, _context: &ActionContext) -> Result<ActionAnswer> {
+    async fn call(&self, _context: &DynamicDict) -> Result<ActionAnswer> {
         ActionAnswer::send_text("Hello".into(), true)
     }
 

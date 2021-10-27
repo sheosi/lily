@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{Action, ActionAnswer, ActionContext, ACT_REG};
+use crate::actions::{Action, ActionAnswer, DynamicDict, ACT_REG};
 use crate::exts::LockIt;
 use crate::signals::{order::mqtt::MSG_OUTPUT, SIG_REG};
 use crate::skills::SkillLoader;
@@ -258,8 +258,8 @@ impl HermesAction {
 
 #[async_trait(?Send)]
 impl Action for HermesAction {
-    async fn call(&self ,context: &ActionContext) -> Result<ActionAnswer> {
-        const ERR: &str = "ActionContext lacks mandatory element";
+    async fn call(&self ,context: &DynamicDict) -> Result<ActionAnswer> {
+        const ERR: &str = "DynamicDict lacks mandatory element";
         
         let intent_name = (*self.intent_name).clone();
         let val = context.get("slots").expect(ERR);

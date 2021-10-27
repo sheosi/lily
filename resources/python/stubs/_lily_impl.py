@@ -53,16 +53,16 @@ class PyActionSet:
         ...
 
 
-class ActionContext(Iterable):
+class DynamicDict(Iterable):
     """A dictionary replacement that only accepts str as key and value, implemented in Rust for interop.
     The only real change is that it doesn't accept None as a value, and methods are modified to reflect that"""
 
     @classmethod
-    def fromkeys(self, iterable: Iterable[str], value: str) -> 'ActionContext':
+    def fromkeys(self, iterable: Iterable[str], value: str) -> 'DynamicDict':
         ...
     
     def __contains__(self, item: str) -> bool:
-        """Implement 'key in ActionContext'"""
+        """Implement 'key in DynamicDict'"""
         ...
 
     def __delitem__(self, key):
@@ -73,7 +73,7 @@ class ActionContext(Iterable):
         ...
     
     def __eq__(self, other: Any) -> bool:
-        """Implement ActionContext == object"""
+        """Implement DynamicDict == object"""
         ...
 
     def __getitem__(self, key: str) -> str:
@@ -81,11 +81,11 @@ class ActionContext(Iterable):
         ...
 
     def __len__(self) -> int:
-        """Implement len(ActionContext)"""
+        """Implement len(DynamicDict)"""
         ...
 
-    def __lt__(self, other: 'ActionContext') -> bool:
-        """Implement '<' '>' for two ActionContexts"""
+    def __lt__(self, other: 'DynamicDict') -> bool:
+        """Implement '<' '>' for two DynamicDicts"""
         ...
 
     def __setitem__(self, key: str, item: str):
@@ -93,7 +93,7 @@ class ActionContext(Iterable):
         ...
 
     def __str__(self) -> str:
-        """Implement str(ActionContext)"""
+        """Implement str(DynamicDict)"""
         ...
 
     def __repr__(self) -> str:
@@ -105,7 +105,7 @@ class ActionContext(Iterable):
     def clear(self):
         ...
 
-    def copy(self) -> 'ActionContext':
+    def copy(self) -> 'DynamicDict':
         ...
 
     def get(self, key: str) -> str:
@@ -114,10 +114,10 @@ class ActionContext(Iterable):
     def has_key(self, k: str) -> bool:
         ...
 
-    def items(self) -> 'ActionContextItemsView':
+    def items(self) -> 'DynamicDictItemsView':
         ...
     
-    def keys(self) -> 'ActionContextKeysView':
+    def keys(self) -> 'DynamicDictKeysView':
         ...
     
     def pop(self, key: str, default: Optional[str]) -> str:
@@ -132,49 +132,49 @@ class ActionContext(Iterable):
     def update(self, *args, **kwargs):
         ...
 
-    def values(self) -> 'ActionContextValuesView':
+    def values(self) -> 'DynamicDictValuesView':
         ...
 
-class ActionContextItemsView(Iterable):
+class DynamicDictItemsView(Iterable):
     def __contains__(self, item: str) -> bool:
-        """Implement 'key in ActionContextItemsView'"""
+        """Implement 'key in DynamicDictItemsView'"""
         ...
 
     def __iter__(self) -> Iterator[Tuple[str,str]]:
         ...
 
     def __len__(self) -> int:
-        """Implement len(ActionContextItemsView)"""
+        """Implement len(DynamicDictItemsView)"""
         ...
 
     def __reversed__(self) -> Iterator[Tuple[str,str]]:
         ...
 
-class ActionContextKeysView(Iterable):
+class DynamicDictKeysView(Iterable):
     def __contains__(self, item: str) -> bool:
-        """Implement 'key in ActionContextKeysView'"""
+        """Implement 'key in DynamicDictKeysView'"""
         ...
 
     def __iter__(self) -> Iterator[str]:
         ...
 
     def __len__(self) -> int:
-        """Implement len(ActionContextKeysView)"""
+        """Implement len(DynamicDictKeysView)"""
         ...
 
     def __reversed__(self) -> Iterator[str]:
         ...
 
-class ActionContextValuesView(Iterable):
+class DynamicDictValuesView(Iterable):
     def __contains__(self, item: str) -> bool:
-        """Implement 'key in ActionContextValuesView'"""
+        """Implement 'key in DynamicDictValuesView'"""
         ...
 
     def __iter__(self) -> Iterator[str]:
         ...
 
     def __len__(self) -> int:
-        """Implement len(ActionContextValuesView)"""
+        """Implement len(DynamicDictValuesView)"""
         ...
 
     def __reversed__(self) -> Iterator[str]:

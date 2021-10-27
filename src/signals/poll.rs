@@ -4,7 +4,7 @@ use std::fmt;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::actions::{ActionContext, ActionSet};
+use crate::actions::{DynamicDict, ActionSet};
 use crate::config::Config;
 use crate::queries::{Condition, Query};
 use crate::signals::{Signal, SignalEventShared};
@@ -48,7 +48,7 @@ impl Signal for PollQuery {
     fn end_load(&mut self, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         Ok(())
     }
-    async fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, base_context: &ActionContext, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
+    async fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, base_context: &DynamicDict, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         loop {
             sleep(Duration::from_secs(30)).await;
             for task in &mut self.tasks {

@@ -25,8 +25,8 @@ _signal_classes: Dict[str, Any] = {}
 _query_classes:  Dict[str, Any] = {}
 skills_translations = {}
 
-#ActionContext = Dict[str, Union[str, 'ActionContext']] # Recursiveness not supported by mypy
-ActionContext = Dict[str, Any]
+#DynamicDict = Dict[str, Union[str, 'DynamicDict']] # Recursiveness not supported by mypy
+DynamicDict = Dict[str, Any]
 
 #pylint: disable=invalid-name
 class __ProtocolErrs:
@@ -309,7 +309,7 @@ def translate(trans_name: str, dict_args: Dict[str, Any]):
 
     return _translate_impl(trans_name, dict_args, dict_args["locale"])
 
-def answer(output: str, context: ActionContext) -> Optional[_lily_impl.ActionAnswer]:
+def answer(output: str, context: DynamicDict) -> Optional[_lily_impl.ActionAnswer]:
     """'output' will be returned for it to be shown directly to the user or
     voiced by the TTS engine according to what was originally used"""
     uuid = context["satellite"]["uuid"]
@@ -319,7 +319,7 @@ def answer(output: str, context: ActionContext) -> Optional[_lily_impl.ActionAns
         _lily_impl.log_error(f"Satellite '{uuid}' doesn't implement 'voice' capapbility, answer can't be sent")
         return None
 
-def answer_audio_file(file: str, context: ActionContext) -> Optional[_lily_impl.ActionAnswer]:
+def answer_audio_file(file: str, context: DynamicDict) -> Optional[_lily_impl.ActionAnswer]:
     """Returns an object that can be sent for the audio file 'file' (a path
     relative to the root of this skill) to be sent over to the satellite"""
     uuid = context["satellite"]["uuid"]

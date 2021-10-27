@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::actions::{Action, ActionAnswer, ActionContext};
+use crate::actions::{Action, ActionAnswer, DynamicDict};
 use crate::exts::LockIt;
 use crate::collections::BaseRegistry;
 #[cfg(feature = "python_skills")]
@@ -149,7 +149,7 @@ impl ActQuery {
 
 #[async_trait(?Send)]
 impl Action for ActQuery {
-    async fn call(&self ,_context: &ActionContext) -> Result<ActionAnswer> {
+    async fn call(&self ,_context: &DynamicDict) -> Result<ActionAnswer> {
         let data = HashMap::new();
         let a = match self.q.lock_it().execute(data) {
             Ok(v)=>v.into_iter().fold("".to_string(),|g,s|format!("{} {:?},", g, s)),

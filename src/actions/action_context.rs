@@ -20,34 +20,84 @@ use pyo3::mapping::PyMappingProtocol;
 use pyo3::sequence::PySequenceProtocol;
 
 #[cfg(feature="python_skills")]
-#[derive(Clone, Debug, FromPyObject, PartialEq)]
-pub enum ContextElement {
-    String(String),
-    Dict(ActionContext),
-    Decimal(f32),
-    Integer(i32)
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct DynamicDict {
+    pub map: Arc<Mutex<HashMap<String, DictElement>>>,
 }
 
-impl ContextElement {
+#[cfg(not(feature="python_skills"))]
+#[derive(Debug, Clone)]
+/// Just a basic dictionary implementation, this is used for compatibility both
+/// with Python and Rust
+pub struct DynamicDict {
+    pub map: Arc<Mutex<HashMap<String, DictElement>>>,
+}
+
+impl DynamicDict {
+    pub fn new() -> Self {
+        Self{map: Arc::new(Mutex::new(HashMap::new()))}
+    }
+
+    pub fn set_str(&mut self, key: String, value: String) {
+        self.map.lock_it().insert(key, DictElement::String(value));
+    }
+
+    pub fn set_dict(&mut self, key: String, value: DynamicDict) {
+        self.map.lock_it().insert(key, DictElement::Dict(value));
+    }
+
+    pub fn set_decimal(&mut self, key: String, value: f32) {
+        self.map.lock_it().insert(key, DictElement::Decimal(value));
+    }
+
+    pub fn get(&self, key: &str) -> Option<DictElement> {
+        self.map.lock_it().get(key).cloned()
+    }
+
+}
+
+#[cfg(not(feature = "python_skills"))]
+impl DynamicDict {
+    pub fn copy(&self) -> Self {
+        Self{map: Arc::new(Mutex::new(self.map.lock_it().clone()))}
+    }
+}
+
+impl PartialEq for DynamicDict {
+    fn eq(&self, other: &Self) -> bool {
+        *self.map.lock().unwrap() == *other.map.lock().unwrap()
+    }
+}
+
+#[cfg(feature="python_skills")]
+#[derive(Clone, Debug, FromPyObject, PartialEq)]
+pub enum DictElement {
+    String(String),
+    Dict(DynamicDict),
+    Decimal(f32)
+}
+
+impl DictElement {
     pub fn as_string(&self) -> Option<&str> {
         match self {
-            ContextElement::String(s) => Some(s),
+            DictElement::String(s) => Some(s),
             _ => None
         }
     }
 
-    pub fn as_dict(&self) -> Option<&ActionContext> {
+    pub fn as_dict(&self) -> Option<&DynamicDict> {
         match self {
-            ContextElement::Dict(d) => Some(d),
+            DictElement::Dict(d) => Some(d),
             _ => None
         }
     }
 
     pub fn as_json_value(&self) -> Option<serde_json::Value> {
         match self {
-            ContextElement::String(s) => Some(serde_json::Value::String(s.to_string())),
-            ContextElement::Decimal(d) => Some(serde_json::Value::Number(serde_json::Number::from_f64((*d).into()).unwrap())),
-            //ContextElement::Dict(d) => Some(serde_json::Value::Object(d.map)), // TODO!
+            DictElement::String(s) => Some(serde_json::Value::String(s.to_string())),
+            DictElement::Decimal(d) => Some(serde_json::Value::Number(serde_json::Number::from_f64((*d).into()).unwrap())),
+            //DictElement::Dict(d) => Some(serde_json::Value::Object(d.map)), // TODO!
             _ => None
         }
     }
@@ -55,34 +105,36 @@ impl ContextElement {
 
 #[cfg(not(feature="python_skills"))]
 #[derive(Clone, Debug, PartialEq)]
-pub enum ContextElement {
+pub enum DictElement {
     String(String),
-    Dict(ActionContext),
+    Dict(DynamicDict),
     Decimal(f32)
 }
 
+/***** Python classes *********************************************************/
+
 #[cfg(feature="python_skills")]
-impl IntoPy<PyObject> for ContextElement {
+impl IntoPy<PyObject> for DictElement {
     fn into_py(self, py: Python) -> PyObject {
         match self {
-            ContextElement::String(str)=>{str.into_py(py)},
-            ContextElement::Dict(c) =>{c.into_py(py)},
-            ContextElement::Decimal(f)=>{f.into_py(py)},
-            ContextElement::Integer(i)=>{i.into_py(py)}
+            DictElement::String(str)=>{str.into_py(py)},
+            DictElement::Dict(c) =>{c.into_py(py)},
+            DictElement::Decimal(f)=>{f.into_py(py)},
+            DictElement::Integer(i)=>{i.into_py(py)}
         }
     }
 }
 
 #[cfg(feature="python_skills")]
 struct BaseIterator {
-    inner: Arc<Mutex<HashMap<String, ContextElement>>>,
+    inner: Arc<Mutex<HashMap<String, DictElement>>>,
     count: usize,
     reversed: bool
 }
 
 #[cfg(feature="python_skills")]
 impl BaseIterator {
-    fn new(inner: Arc<Mutex<HashMap<String, ContextElement>>>) -> Self {
+    fn new(inner: Arc<Mutex<HashMap<String, DictElement>>>) -> Self {
         Self {
             inner,
             count: 0,
@@ -90,7 +142,7 @@ impl BaseIterator {
         }
     }
 
-    fn reversed(inner: Arc<Mutex<HashMap<String, ContextElement>>>) -> Self {
+    fn reversed(inner: Arc<Mutex<HashMap<String, DictElement>>>) -> Self {
         Self {
             count: inner.lock_it().len(),
             inner: inner.clone(),
@@ -108,32 +160,32 @@ impl BaseIterator {
         self.count = if self.reversed{self.count -1} else{self.count + 1};
         old_count
     }
-    fn get_inner(&self) -> MutexGuard<HashMap<String, ContextElement>> {
+    fn get_inner(&self) -> MutexGuard<HashMap<String, DictElement>> {
         self.inner.lock_it()
     }
 }
 
 #[cfg(feature="python_skills")]
 #[pyclass]
-pub struct ActionContextItemsIterator {
+pub struct DynamicDictItemsIterator {
     base: BaseIterator
 }
 
 #[cfg(feature="python_skills")]
-impl ActionContextItemsIterator {
-    fn new(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
+impl DynamicDictItemsIterator {
+    fn new(inner: Arc<Mutex<HashMap<String, DictElement>>>)-> Self {
         Self { base: BaseIterator::new(inner)}
     }
 
-    fn reversed(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
+    fn reversed(inner: Arc<Mutex<HashMap<String, DictElement>>>)-> Self {
         Self { base: BaseIterator::reversed(inner)}
     }
 }
 
 #[cfg(feature="python_skills")]
 #[pyproto]
-impl PyIterProtocol for ActionContextItemsIterator {
-    fn __iter__(slf: PyRefMut<Self>) -> Py<ActionContextItemsIterator> {
+impl PyIterProtocol for DynamicDictItemsIterator {
+    fn __iter__(slf: PyRefMut<Self>) -> Py<DynamicDictItemsIterator> {
         slf.into()
     }
 
@@ -149,25 +201,25 @@ impl PyIterProtocol for ActionContextItemsIterator {
 
 #[cfg(feature="python_skills")]
 #[pyclass]
-struct ActionContextValuesIterator {
+struct DynamicDictValuesIterator {
     base: BaseIterator
 }
 
 #[cfg(feature="python_skills")]
-impl ActionContextValuesIterator {
-    fn new(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
+impl DynamicDictValuesIterator {
+    fn new(inner: Arc<Mutex<HashMap<String, DictElement>>>)-> Self {
         Self { base: BaseIterator::new(inner)}
     }
 
-    fn reversed(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
+    fn reversed(inner: Arc<Mutex<HashMap<String, DictElement>>>)-> Self {
         Self { base: BaseIterator::reversed(inner)}
     }
 }
 
 #[cfg(feature="python_skills")]
 #[pyproto]
-impl PyIterProtocol for ActionContextValuesIterator {
-    fn __iter__(slf: PyRefMut<Self>) -> Py<ActionContextValuesIterator> {
+impl PyIterProtocol for DynamicDictValuesIterator {
+    fn __iter__(slf: PyRefMut<Self>) -> Py<DynamicDictValuesIterator> {
         slf.into()
     }
 
@@ -183,25 +235,25 @@ impl PyIterProtocol for ActionContextValuesIterator {
 
 #[cfg(feature="python_skills")]
 #[pyclass]
-struct ActionContextKeysIterator {
+struct DynamicDictKeysIterator {
     base: BaseIterator
 }
 
 #[cfg(feature="python_skills")]
-impl ActionContextKeysIterator {
-    fn new(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
+impl DynamicDictKeysIterator {
+    fn new(inner: Arc<Mutex<HashMap<String, DictElement>>>)-> Self {
         Self { base: BaseIterator::new(inner)}
     }
 
-    fn reversed(inner: Arc<Mutex<HashMap<String, ContextElement>>>)-> Self {
+    fn reversed(inner: Arc<Mutex<HashMap<String, DictElement>>>)-> Self {
         Self { base: BaseIterator::reversed(inner)}
     }
 }
 
 #[cfg(feature="python_skills")]
 #[pyproto]
-impl PyIterProtocol for ActionContextKeysIterator {
-    fn __iter__(slf: PyRefMut<Self>) -> Py<ActionContextKeysIterator> {
+impl PyIterProtocol for DynamicDictKeysIterator {
+    fn __iter__(slf: PyRefMut<Self>) -> Py<DynamicDictKeysIterator> {
         slf.into()
     }
 
@@ -217,45 +269,45 @@ impl PyIterProtocol for ActionContextKeysIterator {
 
 #[cfg(feature="python_skills")]
 #[pyclass]
-struct ActionContextItemsView {
-    inner: Arc<Mutex<HashMap<String, ContextElement>>>,
+struct DynamicDictItemsView {
+    inner: Arc<Mutex<HashMap<String, DictElement>>>,
 }
 
 #[cfg(feature="python_skills")]
-impl ActionContextItemsView {
-    fn from(ctx: &ActionContext) -> Self {
+impl DynamicDictItemsView {
+    fn from(ctx: &DynamicDict) -> Self {
         Self{inner: ctx.map.clone()}
     }
 }
 
 #[cfg(feature="python_skills")]
 #[pymethods]
-impl ActionContextItemsView {
+impl DynamicDictItemsView {
     fn __len__(&self) -> usize {
         self.inner.lock_it().len()
     }
     
-    fn __iter__(slf: PyRef<Self>) -> PyResult<Py<ActionContextItemsIterator>> {
-        Py::new(slf.py(),ActionContextItemsIterator::new(slf.inner.clone()))
+    fn __iter__(slf: PyRef<Self>) -> PyResult<Py<DynamicDictItemsIterator>> {
+        Py::new(slf.py(),DynamicDictItemsIterator::new(slf.inner.clone()))
     }
 
-    fn __reversed__(slf: PyRef<Self>) -> PyResult<Py<ActionContextItemsIterator>> {
-        Py::new(slf.py(),ActionContextItemsIterator::reversed(slf.inner.clone()))
+    fn __reversed__(slf: PyRef<Self>) -> PyResult<Py<DynamicDictItemsIterator>> {
+        Py::new(slf.py(),DynamicDictItemsIterator::reversed(slf.inner.clone()))
     }
 
 }
 
 #[cfg(feature="python_skills")]
 #[pyproto]
-impl PyIterProtocol for  ActionContextItemsView {
-    fn __iter__(slf: PyRef<Self>) -> PyResult<Py<ActionContextItemsIterator>> {
-        Py::new(slf.py(),ActionContextItemsIterator::new(slf.inner.clone()))
+impl PyIterProtocol for  DynamicDictItemsView {
+    fn __iter__(slf: PyRef<Self>) -> PyResult<Py<DynamicDictItemsIterator>> {
+        Py::new(slf.py(),DynamicDictItemsIterator::new(slf.inner.clone()))
     }
 }
 
 #[cfg(feature="python_skills")]
 #[pyproto]
-impl PySequenceProtocol for ActionContextItemsView {
+impl PySequenceProtocol for DynamicDictItemsView {
     fn __contains__(&self, k: &str) -> bool {
         self.inner.lock_it().contains_key(k)
     }
@@ -263,109 +315,67 @@ impl PySequenceProtocol for ActionContextItemsView {
 
 #[cfg(feature="python_skills")]
 #[pyclass]
-struct ActionContextValuesView {
-    inner: Arc<Mutex<HashMap<String, ContextElement>>>,
+struct DynamicDictValuesView {
+    inner: Arc<Mutex<HashMap<String, DictElement>>>,
 }
 
 #[cfg(feature="python_skills")]
-impl ActionContextValuesView {
-    fn from(ctx: &ActionContext) -> Self {
+impl DynamicDictValuesView {
+    fn from(ctx: &DynamicDict) -> Self {
         Self{inner: ctx.map.clone()}
     }
 }
 
 #[cfg(feature="python_skills")]
 #[pymethods]
-impl ActionContextValuesView {
+impl DynamicDictValuesView {
     fn __len__(&self) -> usize {
         self.inner.lock_it().len()
     }
     
-    fn __iter__(slf: PyRef<Self>) -> PyResult<Py<ActionContextValuesIterator>> {
-        Py::new(slf.py(),ActionContextValuesIterator::new(slf.inner.clone()))
+    fn __iter__(slf: PyRef<Self>) -> PyResult<Py<DynamicDictValuesIterator>> {
+        Py::new(slf.py(),DynamicDictValuesIterator::new(slf.inner.clone()))
     }
 
-    fn __reversed__(slf: PyRef<Self>) -> PyResult<Py<ActionContextValuesIterator>> {
-        Py::new(slf.py(),ActionContextValuesIterator::reversed(slf.inner.clone()))
+    fn __reversed__(slf: PyRef<Self>) -> PyResult<Py<DynamicDictValuesIterator>> {
+        Py::new(slf.py(),DynamicDictValuesIterator::reversed(slf.inner.clone()))
     }
 
 }
 
 #[cfg(feature="python_skills")]
 #[pyclass]
-struct ActionContextKeysView {
-    inner: Arc<Mutex<HashMap<String, ContextElement>>>,
+struct DynamicDictKeysView {
+    inner: Arc<Mutex<HashMap<String, DictElement>>>,
 }
 
 #[cfg(feature="python_skills")]
-impl ActionContextKeysView {
-    fn from(ctx: &ActionContext) -> Self {
+impl DynamicDictKeysView {
+    fn from(ctx: &DynamicDict) -> Self {
         Self{inner: ctx.map.clone()}
     }
 }
 
 #[cfg(feature="python_skills")]
 #[pymethods]
-impl ActionContextKeysView {
+impl DynamicDictKeysView {
     fn __len__(&self) -> usize {
         self.inner.lock_it().len()
     }
     
-    fn __iter__(slf: PyRef<Self>) -> PyResult<Py<ActionContextKeysIterator>> {
-        Py::new(slf.py(),ActionContextKeysIterator::new(slf.inner.clone()))
+    fn __iter__(slf: PyRef<Self>) -> PyResult<Py<DynamicDictKeysIterator>> {
+        Py::new(slf.py(),DynamicDictKeysIterator::new(slf.inner.clone()))
     }
 
-    fn __reversed__(slf: PyRef<Self>) -> PyResult<Py<ActionContextKeysIterator>> {
-        Py::new(slf.py(),ActionContextKeysIterator::reversed(slf.inner.clone()))
+    fn __reversed__(slf: PyRef<Self>) -> PyResult<Py<DynamicDictKeysIterator>> {
+        Py::new(slf.py(),DynamicDictKeysIterator::reversed(slf.inner.clone()))
     }
 
-}
-#[cfg(feature="python_skills")]
-#[pyclass]
-#[derive(Debug, Clone)]
-pub struct ActionContext {
-    pub map: Arc<Mutex<HashMap<String, ContextElement>>>,
-}
-
-#[cfg(not(feature="python_skills"))]
-#[derive(Debug, Clone)]
-pub struct ActionContext {
-    
-    pub map: Arc<Mutex<HashMap<String, ContextElement>>>,
-}
-
-impl ActionContext {
-    pub fn new() -> Self {
-        Self{map: Arc::new(Mutex::new(HashMap::new()))}
-    }
-
-    pub fn set_str(&mut self, key: String, value: String) {
-        self.map.lock_it().insert(key, ContextElement::String(value));
-    }
-
-    pub fn set_dict(&mut self, key: String, value: ActionContext) {
-        self.map.lock_it().insert(key, ContextElement::Dict(value));
-    }
-
-    pub fn set_decimal(&mut self, key: String, value: f32) {
-        self.map.lock_it().insert(key, ContextElement::Decimal(value));
-    }
-
-    pub fn get(&self, key: &str) -> Option<ContextElement> {
-        self.map.lock_it().get(key).cloned()
-    }
-
-}
-
-impl PartialEq for ActionContext {
-    fn eq(&self, other: &Self) -> bool {
-        *self.map.lock().unwrap() == *other.map.lock().unwrap()
-    }
 }
 
 #[cfg(feature="python_skills")]
 #[pyproto]
-impl PyMappingProtocol for ActionContext {
+impl PyMappingProtocol for DynamicDict {
     fn __delitem__(&mut self, key: &str) -> PyResult<()> {
         self.map.lock_it().remove(key).ok_or(PyErr::new::<PyAttributeError, _>(
             format!("Key: {} was not found in context", key)
@@ -373,7 +383,7 @@ impl PyMappingProtocol for ActionContext {
         Ok(())
     }
 
-    fn __getitem__(&self, key: &str) -> PyResult<ContextElement> {
+    fn __getitem__(&self, key: &str) -> PyResult<DictElement> {
         self.get(key).ok_or(PyErr::new::<PyAttributeError, _>(
             format!("Key: {} was not found in context", key)
         ))
@@ -383,14 +393,14 @@ impl PyMappingProtocol for ActionContext {
         self.map.lock_it().len()
     }
 
-    fn __setitem__(&mut self, key: String, item: ContextElement) {
+    fn __setitem__(&mut self, key: String, item: DictElement) {
         self.set(key,item);
     }
 }
 
 #[cfg(feature="python_skills")]
 #[pyproto]
-impl PyObjectProtocol for ActionContext {
+impl PyObjectProtocol for DynamicDict {
     fn __repr__(&self) -> String {
         // TODO: Maybe improve this one and make it more Pythonic
         format!("{:?}",self.map)
@@ -404,7 +414,7 @@ impl PyObjectProtocol for ActionContext {
 
 #[cfg(feature="python_skills")]
 #[pyproto]
-impl PySequenceProtocol for ActionContext {
+impl PySequenceProtocol for DynamicDict {
     fn __contains__(&self, k: &str) -> bool {
         self.map.lock_it().contains_key(k)
     }
@@ -412,18 +422,18 @@ impl PySequenceProtocol for ActionContext {
 
 #[cfg(feature="python_skills")]
 #[pyproto]
-impl PyIterProtocol for  ActionContext {
-    fn __iter__(slf: PyRef<Self>) -> PyResult<Py<ActionContextItemsIterator>> {
-        Py::new(slf.py(),ActionContextItemsIterator::new(slf.map.clone()))
+impl PyIterProtocol for  DynamicDict {
+    fn __iter__(slf: PyRef<Self>) -> PyResult<Py<DynamicDictItemsIterator>> {
+        Py::new(slf.py(),DynamicDictItemsIterator::new(slf.map.clone()))
     }
 }
 
 #[cfg(feature="python_skills")]
 #[pymethods]
-impl ActionContext {
+impl DynamicDict {
     // classmethods
     #[classmethod]
-    fn fromkeys(_cls: &PyType, py:Python, iterable: &PyAny, value: ContextElement) -> PyResult<ActionContext> {
+    fn fromkeys(_cls: &PyType, py:Python, iterable: &PyAny, value: DictElement) -> PyResult<DynamicDict> {
         let mut map = HashMap::new();
         let it = PyIterator::from_object(py,iterable.call_method("__iter__", (), None)?)?;
         for key in it {
@@ -435,18 +445,18 @@ impl ActionContext {
     }
 
     fn __eq__(&mut self, other: &PyAny) -> bool {
-        match other.extract::<ActionContext>() {
+        match other.extract::<DynamicDict>() {
             Ok(c) => *self.map.lock_it() == *c.map.lock_it(),
             Err(_) => false
         }
     }
 
-    fn __lt__(&mut self, other: PyRef<ActionContext>) -> bool {
+    fn __lt__(&mut self, other: PyRef<DynamicDict>) -> bool {
         self.map.lock_it().len() < other.map.lock_it().len()
     }
 
-    fn __reversed__(slf: PyRef<Self>) -> PyResult<Py<ActionContextItemsIterator>> {
-        Py::new(slf.py(),ActionContextItemsIterator::reversed(slf.map.clone()))
+    fn __reversed__(slf: PyRef<Self>) -> PyResult<Py<DynamicDictItemsIterator>> {
+        Py::new(slf.py(),DynamicDictItemsIterator::reversed(slf.map.clone()))
     }
 
     pub fn clear(&mut self) {
@@ -457,7 +467,7 @@ impl ActionContext {
         Self{map: Arc::new(Mutex::new(self.map.lock_it().clone()))}
     }
 
-    pub fn get(&self, key: &str) -> Option<ContextElement> {
+    pub fn get(&self, key: &str) -> Option<DictElement> {
         self.map.lock_it().get(key).cloned()
     }
 
@@ -465,35 +475,35 @@ impl ActionContext {
         self.map.lock_it().contains_key(k)
     }
 
-    fn items(&self) -> ActionContextItemsView {
-        ActionContextItemsView::from(self)
+    fn items(&self) -> DynamicDictItemsView {
+        DynamicDictItemsView::from(self)
     }
 
-    fn keys(&self) -> ActionContextKeysView {
-        ActionContextKeysView::from(self)
+    fn keys(&self) -> DynamicDictKeysView {
+        DynamicDictKeysView::from(self)
     }
 
     #[args(default = "None")]
-    fn pop(&self, key: &str, default: Option<ContextElement>) -> PyResult<ContextElement> {
+    fn pop(&self, key: &str, default: Option<DictElement>) -> PyResult<DictElement> {
         match self.map.lock_it().remove(key) {
             Some(val) => Ok(val.into()),
             None => match default {
                 Some(val) => Ok(val.into()),
-                None => Err(PyErr::new::<PyKeyError, _>("Tried to pop on an empty ActionContext and no default"))
+                None => Err(PyErr::new::<PyKeyError, _>("Tried to pop on an empty DynamicDict and no default"))
             }
         }
     }
 
-    fn popitem(&mut self) -> PyResult<(String, ContextElement)> {
+    fn popitem(&mut self) -> PyResult<(String, DictElement)> {
         match self.map.lock_it().keys().last() {
             Some(k) => {
                 Ok(self.map.lock_it().remove_entry(k).expect(UNEXPECTED_MSG))
             },
-            None => Err(PyErr::new::<PyKeyError, _>("Tried to 'popitem' on an empty ActionContext"))
+            None => Err(PyErr::new::<PyKeyError, _>("Tried to 'popitem' on an empty DynamicDict"))
         }        
     }
 
-    fn setdefault(&mut self, key:&str, default: ContextElement) -> ContextElement {
+    fn setdefault(&mut self, key:&str, default: DictElement) -> DictElement {
         match self.get(key) {
             Some(s) => s.into(),
             None => {self.set(key.into(), default.clone().into());default.into()}
@@ -501,10 +511,10 @@ impl ActionContext {
     }
 
     fn update(&mut self, args: &PyTuple, kwargs: Option<&PyDict>) -> PyResult<()>{
-        fn extend(map: &mut HashMap<String, ContextElement>, dict: &PyDict) -> PyResult<()> {
+        fn extend(map: &mut HashMap<String, DictElement>, dict: &PyDict) -> PyResult<()> {
             for (key, value) in dict {
                 let key: String = key.extract()?;
-                let value: ContextElement = value.extract()?;
+                let value: DictElement = value.extract()?;
 
                 map.insert(key, value);
             }
@@ -530,14 +540,7 @@ impl ActionContext {
         Ok(())
     }
 
-    fn values(&self) -> ActionContextValuesView {
-        ActionContextValuesView::from(self)
-    }
-}
-
-#[cfg(not(feature = "python_skills"))]
-impl ActionContext {
-    pub fn copy(&self) -> Self {
-        Self{map: Arc::new(Mutex::new(self.map.lock_it().clone()))}
+    fn values(&self) -> DynamicDictValuesView {
+        DynamicDictValuesView::from(self)
     }
 }
