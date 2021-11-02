@@ -3,8 +3,9 @@ use std::io::Cursor;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
+use crate::actions::SatelliteData;
 // This crate
-use crate::{actions::DynamicDict, stt::DecodeRes};
+use crate::{actions::{ActionContext, ContextData}, stt::DecodeRes};
 use crate::config::Config;
 use crate::exts::LockIt;
 use crate::nlu::{NluManager, NluManagerStatic};
@@ -42,7 +43,6 @@ pub async fn on_nlu_request<M: NluManager + NluManagerStatic + Debug + Send + 's
     signal_event: SignalEventShared,
     curr_langs: &Vec<LanguageIdentifier>,
     order: &mut SignalOrder<M>,
-    base_context: &DynamicDict,
     sessions: Arc<Mutex<SessionManager>>
 ) -> Result<()> {
     let mut stt_set = SttSet::new();
@@ -60,7 +60,6 @@ pub async fn on_nlu_request<M: NluManager + NluManagerStatic + Debug + Send + 's
         match msg_nlu.data {
             RequestData::Text(text) => {
                 let lang = &curr_langs[0];
-                let context = add_context_data(&base_context, lang, &msg_nlu.satellite);
                 let decoded = Some(DecodeRes{hypothesis: text, confidence: 1.0});
                 
 
@@ -68,7 +67,6 @@ pub async fn on_nlu_request<M: NluManager + NluManagerStatic + Debug + Send + 's
                     order,
                     decoded,
                     signal_event.clone(),
-                    &context,
                     lang,
                     msg_nlu.satellite,
                     &sessions
@@ -99,15 +97,13 @@ pub async fn on_nlu_request<M: NluManager + NluManagerStatic + Debug + Send + 's
                                     stt_audio.save_to_disk(&audio_debug_path)?;
                                     stt_audio.clear();
                                 }
-                                let satellite = msg_nlu.satellite.clone();
-                                let context = add_context_data(&base_context, stt.lang(), &satellite);
+                                
                                 match stt.end_decoding().await {
                                     Ok(decoded)=> {
                                         do_received_order(
                                             order,
                                             decoded,
                                             signal_event.clone(),
-                                            &context,
                                             stt.lang(),
                                             msg_nlu.satellite.clone(),
                                             &sessions
@@ -137,13 +133,18 @@ pub async fn on_event(
     mut channel: mpsc::Receiver<MsgEvent>,
     signal_event: SignalEventShared,
     def_lang: Option<&LanguageIdentifier>,
-    base_context: &DynamicDict,
 ) -> Result<()> {
     let def_lang = def_lang.unwrap();
     loop {
         let msg = channel.recv().await.expect("Channel closed!");
-        let context = add_context_data(base_context, &def_lang, &msg.satellite);
-        let ans = signal_event.lock_it().call(&msg.event, context.clone()).await;
+        let context = ActionContext{
+            locale: def_lang.to_string(),
+            satellite: Some(SatelliteData{
+                uuid: msg.satellite.to_string()
+            }),
+            data: ContextData::Event{event:"".into()}
+        };
+        let ans = signal_event.lock_it().call(&msg.event, context).await;
         if let Err(e) = process_answers(ans,&def_lang,msg.satellite) {
             error!("Occurred a problem while processing event: {}", e);
         }
@@ -155,7 +156,6 @@ async fn do_received_order<M: NluManager + NluManagerStatic + Debug + Send + 'st
     order: &mut SignalOrder<M>,
     decoded: Option<DecodeRes>,
     signal_event: SignalEventShared,
-    context: &DynamicDict,
     lang: &LanguageIdentifier,
     satellite: String,
     sessions: &Arc<Mutex<SessionManager>>
@@ -163,7 +163,6 @@ async fn do_received_order<M: NluManager + NluManagerStatic + Debug + Send + 'st
     match order.received_order(
         decoded, 
         signal_event,
-        context,
         lang,
         satellite.clone()
     ).await {
@@ -176,17 +175,6 @@ async fn do_received_order<M: NluManager + NluManagerStatic + Debug + Send + 'st
         }
         Err(e) => {error!("Actions processing had an error: {}", e)}
     }
-}
-
-pub fn add_context_data(dict: &DynamicDict, lang: &LanguageIdentifier, client: &str) -> DynamicDict {
-    
-    let mut new = dict.copy();
-    new.set_str("locale".into(), lang.to_string());
-    let mut satellite = DynamicDict::new();
-    satellite.set_str("uuid".to_string(), client.to_string());
-    new.set_dict("satellite".into(), satellite);
-
-    new
 }
 
 #[derive(Debug)]

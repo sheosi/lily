@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{Action, ActionAnswer, DynamicDict, ACT_REG};
+use crate::actions::{Action, ActionAnswer, ActionContext, ACT_REG};
 use crate::exts::LockIt;
 use crate::signals::{order::mqtt::MSG_OUTPUT, SIG_REG};
 use crate::skills::SkillLoader;
@@ -258,24 +258,22 @@ impl HermesAction {
 
 #[async_trait(?Send)]
 impl Action for HermesAction {
-    async fn call(&self ,context: &DynamicDict) -> Result<ActionAnswer> {
+    async fn call(&self ,context: &ActionContext) -> Result<ActionAnswer> {
         const ERR: &str = "DynamicDict lacks mandatory element";
         
         let intent_name = (*self.intent_name).clone();
-        let val = context.get("slots").expect(ERR);
-        let grd = val.as_dict().unwrap();
+        let intent_data = context.data.as_intent().expect(ERR);
         let msg = IntentMessage {
             id: None,
-            input: context.get("intent").expect(ERR).as_dict().unwrap().get("input").expect(ERR).as_string().unwrap().to_string(),
+            input: intent_data.input.clone(),
             intent: messages::ObjectIntentMessage {
                 intent_name: intent_name.clone(),
                 confidence_score: 1.0,
-                slots: grd.map.lock_it().iter().map(|(n,v)|{
-                    let val = v.as_json_value().unwrap();
+                slots: intent_data.slots.iter().map(|(n,v)|{
                     messages::SlotIntentMessage {
-                        raw_value: val.to_string(),
+                        raw_value: v.to_string(),
                         value: messages::ValueSlotIntentMessage {
-                            value: val
+                            value: serde_json::Value::String(v.to_string())
                         },
                         entity: n.to_string(),
                         slot_name: n.clone(),
@@ -283,7 +281,7 @@ impl Action for HermesAction {
                     }
                 }).collect()
             },
-            site_id: context.get("satellite").expect(ERR).as_dict().unwrap().get("uuid").expect(ERR).as_string().unwrap().to_string(),
+            site_id: context.satellite.as_ref().expect(ERR).uuid.clone(),
             session_id: None,
             custom_data: None,
             asr_tokens: vec![],

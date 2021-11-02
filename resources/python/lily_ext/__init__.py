@@ -26,7 +26,7 @@ _query_classes:  Dict[str, Any] = {}
 skills_translations = {}
 
 #DynamicDict = Dict[str, Union[str, 'DynamicDict']] # Recursiveness not supported by mypy
-DynamicDict = Dict[str, Any]
+DynamicDict = Dict[str, Any]    
 
 #pylint: disable=invalid-name
 class __ProtocolErrs:
@@ -148,7 +148,7 @@ class SignalProtocol:
     #    finalization, optimization or resource liberation needed. *Optional*"""
 
 
-    def event_loop(self, base_context: Dict[str, str], curr_lang: str):
+    def event_loop(self, curr_lang: str):
         """Start custom event loop, for the time being it is recomended that
         you start your own thread as Lily doesn't do it (this will change in the
         future)"""

@@ -12,7 +12,7 @@ use std::mem::replace;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{Action, ActionAnswer, DynamicDict, ActionSet, ACT_REG, MainAnswer};
+use crate::actions::{ACT_REG, Action, ActionAnswer, ActionContext, ActionSet, ContextData, MainAnswer, SatelliteData};
 use crate::config::Config;
 use crate::exts::LockIt;
 use crate::queries::{ActQuery, Query};
@@ -70,11 +70,19 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> SignalOrder<M> {
         }
     }
 
-    pub async fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, base_context: &DynamicDict, lang: &LanguageIdentifier, satellite: String) -> Result<bool> {
+    pub async fn received_order(&mut self, decode_res: Option<DecodeRes>, event_signal: SignalEventShared, lang: &LanguageIdentifier, satellite: String) -> Result<bool> {
         debug!("Heard from user: {:?}", decode_res);
 
+        fn make_context(lang: &LanguageIdentifier, uuid: String) -> ActionContext {
+            ActionContext {
+                locale: lang.to_string(),
+                satellite: Some(SatelliteData {uuid}),
+                data: ContextData::Event{event: "__TO_FILL_THIS__".to_string()}
+            }
+        }
+
         let ans = match decode_res {
-            None => event_signal.lock_it().call("empty_reco", base_context.clone()).await,
+            None => event_signal.lock_it().call("empty_reco", make_context(lang, satellite.clone())).await,
             Some(decode_res) => {
 
                 if !decode_res.hypothesis.is_empty() {
@@ -89,36 +97,30 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> SignalOrder<M> {
                         if let Some(intent_name) = result.name {
                             info!("Let's call an action");
 
-                            let slots_data =  add_slots(&DynamicDict::new(),result.slots);
-
-                            let intent_data ={ 
-                                let mut intent_data = DynamicDict::new();
-                                intent_data.set_str("name".to_string(), self.demangle(&intent_name).to_string());
-                                intent_data.set_str("input".to_string(), decode_res.hypothesis);
-                                intent_data.set_dict("slots".to_string(), slots_data);
-                                intent_data.set_decimal("confidence".to_string(), result.confidence);
-                                intent_data
+                            let intent_data = crate::actions::IntentData {
+                                name:  self.demangle(&intent_name).to_string(),
+                                input: decode_res.hypothesis,
+                                slots: add_slots(result.slots),
+                                confidence: result.confidence
                             };
 
-                            let mut intent_context = base_context.clone();
-                            intent_context.set_str("type".to_string(), "intent".to_string());
-                            intent_context.set_dict("intent".to_string(), intent_data);
-                            
+                            let mut intent_context = make_context(lang, satellite.clone());
+                            intent_context.data = ContextData::Intent{intent: intent_data};
                             
                             let answers = self.intent_map.lock_it().call_mapping(&intent_name, &intent_context).await;
                             info!("Action called");
                             answers
                         }
                         else {
-                            event_signal.lock_it().call("unrecognized", base_context.clone()).await
+                            event_signal.lock_it().call("unrecognized", make_context(lang, satellite.clone())).await
                         }
                     }
                     else {
-                        event_signal.lock_it().call("unrecognized", base_context.clone()).await
+                        event_signal.lock_it().call("unrecognized", make_context(lang, satellite.clone())).await
                     }
                 }
                 else {
-                    event_signal.lock_it().call("empty_reco", base_context.clone()).await
+                    event_signal.lock_it().call("empty_reco", make_context(lang, satellite.clone())).await
                 }
             }
         };
@@ -238,7 +240,6 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
     async fn event_loop(&mut self, 
         signal_event: SignalEventShared,
         config: &Config,
-        base_context: &DynamicDict,
         curr_langs: &Vec<LanguageIdentifier>
     ) -> Result<()> {
         let def_lang = curr_langs.get(0);
@@ -258,17 +259,17 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
         select!{
             e = dyn_ent_fut => {Err(anyhow!("Dynamic entitying failed: {:?}",e))}
             e = mqtt.api_loop(config, curr_langs, def_lang, sessions.clone(), nlu_sender, event_sender) => {e}
-            e = on_nlu_request(config, nlu_receiver, signal_event.clone(), curr_langs, self, base_context, sessions) => {Err(anyhow!("Nlu request failed: {:?}", e))}
-            e = on_event(event_receiver, signal_event, def_lang, base_context) => {Err(anyhow!("Event handling failed: {:?}", e))}
+            e = on_nlu_request(config, nlu_receiver, signal_event.clone(), curr_langs, self, sessions) => {Err(anyhow!("Nlu request failed: {:?}", e))}
+            e = on_event(event_receiver, signal_event, def_lang) => {Err(anyhow!("Event handling failed: {:?}", e))}
         }
     }
 }
 
 // DynamicDict
-fn add_slots(base_context: &DynamicDict, slots: Vec<NluResponseSlot>) -> DynamicDict {
-    let mut result = base_context.clone();
+fn add_slots(slots: Vec<NluResponseSlot>) -> HashMap<String, String> {
+    let mut result = HashMap::new();
     for slot in slots.into_iter() {
-        result.set_str(slot.name, slot.value);
+        result.insert(slot.name, slot.value);
     }
 
     result

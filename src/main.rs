@@ -20,7 +20,6 @@ use std::rc::Rc;
 
 
 // This crate
-use crate::actions::DynamicDict;
 use crate::config::Config;
 use crate::exts::LockIt;
 use crate::skills::load_skills;
@@ -109,7 +108,7 @@ pub async fn main()  -> Result<()> {
     load_skills(SKILLS_PATH.all(), &curr_langs, consumer)?;
 
     //TODO!: This can very well be problematic since we access it later too.
-    SIG_REG.lock_it().call_loops(&config, &DynamicDict::new(), &curr_langs).await?;
+    SIG_REG.lock_it().call_loops(&config, &curr_langs).await?;
 
     Ok(())
 }

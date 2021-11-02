@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::time::{Duration};
 
-use crate::actions::{DynamicDict, ActionSet};
+use crate::actions::{ActionContext, ActionSet, ContextData};
 use crate::config::Config;
 use crate::signals::{Signal, SignalEventShared, UserSignal};
 use crate::vars::UNEXPECTED_MSG;
@@ -70,32 +70,41 @@ impl Signal for Timer {
     fn end_load(&mut self, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
         Ok(())
     }
-    async fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, base_context: &DynamicDict, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
+    async fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
+        fn make_context(lang: &LanguageIdentifier) -> ActionContext {
+            ActionContext {
+                locale: lang.to_string(),
+                satellite: None,
+                data: ContextData::Event{event: "timer".to_string()}
+            }
+        }
         for (timer, actions) in &self.timers {
-            let base_context = base_context.clone();
             let timer = timer.clone();
             let actions = actions.clone();
 
             match timer {
                 TimerKind::Once(dur) => {
+                    let def_lang = curr_lang[0].clone();
                     spawn_local(async move {
                         sleep(dur).await;
-                        actions.call_all(&base_context).await;
+                        actions.call_all(&make_context(&def_lang)).await;
                     });
                 },
                 TimerKind::Every(dur) => {
+                    let def_lang = curr_lang[0].clone();
                     spawn_local(async move {
                         loop {
                             sleep(dur).await;
-                            actions.call_all(&base_context).await;
+                            actions.call_all(&make_context(&def_lang)).await;
                         }
                     });
                 },
                 TimerKind::On(date) => {
+                    let def_lang = curr_lang[0].clone();
                     spawn_local( async move {
                         let dur = date.inner.signed_duration_since(Utc::now()).to_std().expect(UNEXPECTED_MSG);
                         sleep(dur).await;
-                        actions.call_all(&base_context).await;
+                        actions.call_all(&make_context(&def_lang)).await;
                     });
                 }
             }

@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::actions::DynamicDict;
 use crate::exts::LockIt;
 use crate::config::Config;
 use crate::collections::BaseRegistry;
@@ -62,7 +61,6 @@ impl SignalRegistry {
 
     pub async fn call_loops(&mut self,
         config: &Config,
-        base_context: &DynamicDict,
         curr_lang: &Vec<LanguageIdentifier>
     ) -> Result<()> {
         let local = LocalSet::new();
@@ -70,12 +68,11 @@ impl SignalRegistry {
         let spawn_on_local = |n: String, s:Arc<Mutex<dyn Signal + Send>>| {            
             let event = self.event.clone();
             let config = config.clone();
-            let base_context = base_context.clone();
             let curr_lang = curr_lang.clone();
 
             local.spawn_local(async move {
 
-                let res = s.lock_it().event_loop(event, &config, &base_context, &curr_lang).await;
+                let res = s.lock_it().event_loop(event, &config, &curr_lang).await;
                 if let Err(e) = res {
                     error!("Signal '{}' had an error: {}", n, e.to_string());
                 }
@@ -85,12 +82,11 @@ impl SignalRegistry {
         let spawn_on_local_u = |n: String, s:Arc<Mutex<dyn UserSignal + Send>>| {
             let event = self.event.clone();
             let config = config.clone();
-            let base_context = base_context.clone();
             let curr_lang = curr_lang.clone();
             
             local.spawn_local(async move {
 
-                let res = s.lock_it().event_loop(event, &config, &base_context, &curr_lang).await;
+                let res = s.lock_it().event_loop(event, &config, &curr_lang).await;
                 if let Err(e) = res {
                     error!("Signal '{}' had an error: {}", n, e.to_string());
                 }

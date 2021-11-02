@@ -7,7 +7,7 @@ and other utilities)"""
 
 # pylint: disable=unused-argument
 
-from typing import Any, Dict, Iterator, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterator, Iterable, List, Optional, Tuple, Union
 
 def conf(conf_name: str) -> Any:
     """Gets some conf value, can contain '/' which will be interpreted as
@@ -52,9 +52,8 @@ class PyActionSet:
         """Calls all the actions in the set"""
         ...
 
-
 class DynamicDict(Iterable):
-    """A dictionary replacement that only accepts str as key and value, implemented in Rust for interop.
+    """A dictionary replacement that only accepts str as key and str, another DynamicDict or a float as values, implemented in Rust for interop.
     The only real change is that it doesn't accept None as a value, and methods are modified to reflect that"""
 
     @classmethod
@@ -179,6 +178,25 @@ class DynamicDictValuesView(Iterable):
 
     def __reversed__(self) -> Iterator[str]:
         ...
+
+class SatelliteData:
+    """Data referring to a satellite"""
+    uuid: str
+
+class IntentData:
+    """Data referring to an intent"""
+    input: str
+    name: str
+    confidence: float
+    slots: Dict[str, str]
+
+class ActionContext:
+    """Represents how an action is called, e.g: Input made by user, confidence,
+    slots ,if it was en event..."""
+
+    locale: str
+    satellite: Optional[SatelliteData]
+    data: Union[str,IntentData]
 
 class ActionAnswer():
     @staticmethod
