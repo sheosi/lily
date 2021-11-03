@@ -12,7 +12,7 @@ use std::mem::replace;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{ACT_REG, Action, ActionAnswer, ActionContext, ActionSet, ContextData, MainAnswer, SatelliteData};
+use crate::actions::{ACT_REG, Action, ActionAnswer, ActionContext, ActionSet, ContextData, DynamicDict, MainAnswer, SatelliteData};
 use crate::config::Config;
 use crate::exts::LockIt;
 use crate::queries::{ActQuery, Query};
@@ -266,10 +266,10 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
 }
 
 // DynamicDict
-fn add_slots(slots: Vec<NluResponseSlot>) -> HashMap<String, String> {
-    let mut result = HashMap::new();
+fn add_slots(slots: Vec<NluResponseSlot>) -> DynamicDict {
+    let mut result = DynamicDict::new();
     for slot in slots.into_iter() {
-        result.insert(slot.name, slot.value);
+        result.set_str(slot.name, slot.value);
     }
 
     result

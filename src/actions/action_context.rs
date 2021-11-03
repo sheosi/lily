@@ -74,13 +74,16 @@ pub struct IntentData {
     pub input: String,
     pub name: String,
     pub confidence: f32,
-    pub slots: HashMap<String, String>,
+    pub slots: DynamicDict,
 }
 
 #[cfg(feature="python_skills")]
 #[pyclass]
 pub struct IntentData {
-    pub input: String
+    pub input: String,
+    pub name: String,
+    pub confidence: f32,
+    pub slots: DynamicDict,
 }
 
 #[cfg(feature="python_skills")]
