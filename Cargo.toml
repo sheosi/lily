@@ -84,7 +84,7 @@ devel_rasa_nlu = []
 unused = []
 
 [workspace]
-members = ["client", "common", "skill_util"]
+members = ["client", "common"]
 
 [package.metadata.deb]
 maintainer = "Sergio Tortosa Benedito <sertorbe@gmail.com>"
