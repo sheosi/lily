@@ -17,6 +17,8 @@ pub const NLU_RASA_PATH: PathRef = PathRef::user_cfg("data/nlu/rasa");
 
 #[cfg(debug_assertions)]
 pub const PS_LOG_PATH: PathRef = PathRef::user_cfg("logs/pocketsphinx.log");
+#[cfg(not(debug_assertions))]
+pub const PS_LOG_PATH: PathRef = PathRef::user_cfg("logs/pocketsphinx.log");
 
 pub const MAIN_CONF_PATH: PathRef = PathRef::user_cfg("conf.yaml");
 #[cfg(feature = "python_skills")]
