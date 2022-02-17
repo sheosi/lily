@@ -50,12 +50,12 @@ And you'll be good to go.
 
 *On Debian:*
 ```shell
-sudo apt install libssl-dev libasound2-dev libpocketsphinx-dev libsphinxbase-dev python3-all-dev clang libgsl-dev
+sudo apt install libssl-dev libasound2-dev libpocketsphinx-dev libsphinxbase-dev clang libgsl-dev
 ```
 
 *On Fedora:*
 ```shell
-sudo dnf install openssl-devel alsa-lib-devel pocketsphinx-devel python3-devel clang-libs llvm-devel clang gsl-devel
+sudo dnf install openssl-devel alsa-lib-devel pocketsphinx-devel clang-libs llvm-devel clang gsl-devel libtool
 ```
 
 *Optional* dependency for feature `extra_langs_tts` (Languages not provided by Pico Tts for local Tts):
@@ -69,6 +69,19 @@ sudo apt install libespeak-ng-dev
 ```shell
 sudo dnf install espeak-ng-devel
 ```
+
+*Optional* dependency for old integrated `python_skills`:
+
+*Debian*
+```shell
+sudo apt install python3-all-dev
+```
+
+*Fedora*
+```shell
+ sudo dnf install python3-devel
+ ```
+
 
 Note: The first time that you use a language it needs to be downloaded by the NLU, so it needs internet at that time. Also, installing them as system would make this download fail, and you would need to install the languages on your own, for english: `snips-nlu download en`
 
