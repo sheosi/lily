@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::other::ConnectionConf;
 use crate::vars::DEFAULT_HOTWORD_SENSITIVITY;
 
@@ -95,7 +97,7 @@ pub fn make_mqtt_conn(conf: &ConnectionConfResolved, last_will: Option<LastWill>
     if let Some(will) = last_will {
         mqttoptions.set_last_will(will);
     }
-    mqttoptions.set_keep_alive(5);
+    mqttoptions.set_keep_alive(Duration::from_secs(5));
     const MAX_PACKET_SIZE: usize = 100 * 1024 * 1024*8;
     mqttoptions.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
     match &conf.user_pass {

@@ -24,8 +24,8 @@ ctrlc = "^3.2"  # To catch ctrl-c in all platforms and exit the program
 # Some async deps
 tokio = { version = "^1.16", features = ["macros", "rt", "sync", "time"] }
 async-trait = "^0.1"
-rumqttc = "^0.9"
-rmp-serde = "^0.15"
+rumqttc = "^0.10"
+rmp-serde = "^1.0"
 bytes = "^1.1"
 futures = "^0.3"
 xtra = {version = "^0.5", features = ["with-tokio-1"] }  # Actor framework
@@ -56,10 +56,10 @@ reqwest = { version = "^0.11", features = [
 ] } # HTTP client
 url = "^2.2"
 base64 = "^0.13" # For sending data to the online TTS and STT
-tungstenite = { version = "^0.14", features = [
+tungstenite = { version = "^0.16", features = [
     "native-tls",
 ] } # Web sockets for online STT, each version needs to be compatible with tokio-tungstenite
-tokio-tungstenite = { version = "^0.15", features = ["native-tls"] }
+tokio-tungstenite = { version = "^0.16", features = ["native-tls"] }
 
 chrono = "^0.4"
 
