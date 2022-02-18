@@ -36,6 +36,7 @@ jobs:
       run: cargo test --verbose
 
   auto-merge:
+    needs: build
     permissions:
       pull-requests: write
       contents: write
