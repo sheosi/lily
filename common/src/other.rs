@@ -1,12 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub fn init_log(name: String) {
-    let formatter = syslog::Formatter3164 {
-        facility: syslog::Facility::LOG_USER,
-        hostname: None,
-        process: name,
-        pid: 0,
-    };
+    use simplelog::*;
 
     // Use Debug log level for debug compilations
     let log_level = if cfg!(debug_assertions) {
@@ -16,10 +11,12 @@ pub fn init_log(name: String) {
         log::LevelFilter::Info
     };
 
-    let logger = syslog::unix(formatter).expect("could not connect to syslog");
-    log::set_boxed_logger(Box::new(syslog::BasicLogger::new(logger)))
-            .map(|()| log::set_max_level(log_level)).ok();
-    //simple_logger::init()?;
+    TermLogger::init(
+        log_level,
+        Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto
+    ).unwrap();
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
