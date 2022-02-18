@@ -34,3 +34,15 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+
+  auto-merge:
+    permissions:
+      pull-requests: write
+      contents: write
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: fastify/github-action-merge-dependabot@v3.0.0
+        with:
+          target: minor
+          github-token: ${{ secrets.GITHUB_TOKEN }}
