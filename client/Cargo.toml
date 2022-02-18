@@ -11,7 +11,7 @@ description = "Voice-based satellite (client) for Lily"
 
 [dependencies]
 tokio = {version="^1.16", features = ["rt", "macros", "sync", "io-util"]}
-rmp-serde = "^0.15"
+rmp-serde = "^1.0"
 rsnowboy = {git = "https://github.com/sheosi/rsnowboy"} # Hotword detector
 serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
 lily_common = {path = "../common"}
