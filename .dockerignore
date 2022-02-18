@@ -1,0 +1,16 @@
+# Binaries
+target
+debug_run
+client/debug_run
+client/packaging
+
+# Client debug audios
+client/*.ogg 
+
+
+# Unused projects
+skill_util
+
+# Config folders
+.*
+
