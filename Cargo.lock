@@ -582,9 +582,9 @@ dependencies = [
 
 [[package]]
 name = "deepspeech"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87be57d4f74825849465e0971828dd11f37662f7d5836876e10954a04692c91a"
+checksum = "df0b66a369b405e6b91b9630459d67ff4ea97652e1c51b9d0cc415cf71a91e44"
 dependencies = [
  "deepspeech-sys",
  "libc",
