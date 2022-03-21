@@ -12,27 +12,13 @@ use std::sync::{Arc, Mutex, Weak};
 // This crate
 use crate::collections::BaseRegistry;
 use crate::exts::LockIt;
-#[cfg(feature="python_skills")]
-use crate::python::call_for_skill;
-#[cfg(feature="python_skills")]
-use crate::python::{get_inst_class_name, HalfBakedError, PyException};
 
 // Other crates
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-#[cfg(feature="python_skills")]
-use futures::executor::block_on;
 use lazy_static::lazy_static;
 use log::error;
 use lily_common::audio::Audio;
-#[cfg(feature="python_skills")]
-use pyo3::{Py, PyAny, PyObject, PyResult, Python, types::PyTuple};
-#[cfg(feature="python_skills")]
-use pyo3::prelude::{pyclass, pymethods};
-#[cfg(feature="python_skills")]
-use pyo3::exceptions::PyOSError;
-#[cfg(feature="python_skills")]
-use tokio::runtime::Handle;
 
 pub type ActionRegistry = BaseRegistry<dyn Action + Send>;
 pub type ActionItem = Arc<Mutex<dyn Action + Send>>;
@@ -47,15 +33,6 @@ pub enum MainAnswer {
     Text(String)
 }
 
-#[cfg(feature="python_skills")]
-#[pyclass]
-#[derive(Clone)]
-pub struct ActionAnswer {
-    pub answer: MainAnswer,
-    pub should_end_session: bool
-}
-
-#[cfg(not(feature="python_skills"))]
 #[derive(Clone)]
 pub struct ActionAnswer {
     pub answer: MainAnswer,
@@ -76,20 +53,7 @@ impl ActionAnswer {
     }
 }
 
-#[cfg(feature="python_skills")]
-#[pymethods]
-impl ActionAnswer {
-    #[staticmethod]
-    #[args(end_session="true")]
-    pub fn load_audio(path: &str, end_session: bool) -> PyResult<Self> {
-        Self::audio_file(Path::new(path), end_session).py_excep::<PyOSError>()
-    }
-    #[staticmethod]
-    #[args(end_session="true")]
-    pub fn text(text: String, end_session: bool) -> PyResult<Self> {
-        Self::send_text(text, end_session).py_excep::<PyOSError>()
-    }
-}
+
 
 #[async_trait(?Send)]
 pub trait Action {
@@ -107,87 +71,6 @@ impl ActionItemExt for ActionItem {
     }
 }
 
-#[cfg(feature="python_skills")]
-#[derive(Debug)]
-pub struct PythonAction {
-    act_name: Py<PyAny>,
-    obj: PyObject, // this is the class
-    skill_path:Arc<PathBuf>
-}
-
-#[cfg(feature="python_skills")]
-impl PythonAction {
-
-    // Old PythonAction
-    pub fn new(act_name: Py<PyAny>, obj: PyObject, skill_path: Arc<PathBuf>) -> Self {
-        Self{act_name, obj, skill_path}
-    }
-
-    // Imports all modules from that module and return the new actions
-    pub fn extend_and_init_classes(
-        python: Python,
-        skill_name: String,
-        action_classes: Vec<(PyObject, PyObject)>,
-        skill_path: Arc<PathBuf>) -> Result<Vec<String>, HalfBakedError> {
-        
-        let process_list = || -> Result<_> {
-            let mut act_to_add = vec![];
-            for (key, val) in  &action_classes {
-                let name = key.to_string();
-                let pyobj = val.call(python, PyTuple::empty(python), None).map_err(|py_err|anyhow!("Python error while instancing action \"{}\": {:?}", name, py_err.to_string()))?;
-                let rc: ActionItem = Arc::new(Mutex::new(PythonAction::new(key.to_owned(),pyobj, skill_path.clone())));
-                act_to_add.push((name,rc));
-            }
-            Ok(act_to_add)
-        };
-
-        match process_list() {
-            Ok(act_to_add) => {
-                let acts = act_to_add.iter().map(|(n, _)| n.clone()).collect();
-                for (name, action) in act_to_add {
-                    if let Err (e) = ACT_REG.lock_it().insert(&skill_name,&name, action) {
-                        error!("{}", e);
-                    }
-                }
-
-                Ok(acts)
-            }
-
-            Err(e) => {
-                Err(HalfBakedError::from(
-                    HalfBakedError::gen_diff(ACT_REG.lock_it().get_map_ref(), action_classes),
-                    e
-                ))
-            }
-        }
-    }
-}
-
-#[cfg(feature="python_skills")]
-#[async_trait(?Send)]
-impl Action for PythonAction {
-    async fn call(&self ,context: &ActionContext) -> Result<ActionAnswer> {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-
-        let trig_act = self.obj.getattr(py, "trigger_action")?;
-        std::env::set_current_dir(self.skill_path.as_ref())?;
-        let r = call_for_skill(self.skill_path.as_ref(),
-        |_|trig_act.call(
-            py,
-            (context.clone(),),
-            None)
-        ).py_excep::<PyOSError>()??;
-
-        Ok(r.extract(py)?)
-    }
-    fn get_name(&self) -> String {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-
-        get_inst_class_name(py, &self.obj).expect("Python object has not class name")
-    }
-}
 
 #[derive(Clone)]
 pub struct ActionSet {
@@ -226,29 +109,6 @@ impl ActionSet {
             }
         }
         res
-    }
-}
-
-#[cfg(feature="python_skills")]
-#[pyclass]
-pub struct PyActionSet {
-    act_set: ActionSet
-}
-
-#[cfg(feature="python_skills")]
-impl PyActionSet {
-    pub fn from_set(act_set: ActionSet) -> Self {
-        Self {act_set}
-    }
-}
-
-#[cfg(feature="python_skills")]
-#[pymethods]
-impl PyActionSet {
-    fn call(&mut self, context: &ActionContext) -> Vec<ActionAnswer> {
-        let handle = Handle::current();
-        let _enter_grd= handle.enter();
-        block_on(self.act_set.call_all(context))
     }
 }
 

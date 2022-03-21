@@ -2,11 +2,8 @@ use std::collections::HashMap;
 use std::convert::Into;
 use std::fmt::{self, Debug};
 use std::path::{Path, PathBuf};
-#[cfg(not(feature = "python_skills"))]
 use std::process::Command;
 
-#[cfg(feature = "python_skills")]
-use crate::python::python_has_module_path;
 use crate::nlu::compare_sets_and_train;
 use crate::nlu::{EntityDef, Nlu, NluManager, NluManagerStatic, NluResponse, NluResponseSlot, NluUtterance};
 use crate::vars::{NLU_ENGINE_PATH, NLU_TRAIN_SET_PATH};
@@ -144,7 +141,6 @@ fn split_captures<'a>(re: &'a Regex, input: &'a str) ->  Vec<(&'a str, SplitCapK
     result
 }
 
-#[cfg(not(feature = "python_skills"))]
 // Python-less fallback
 fn python_has_module_path(module_path: &Path) -> Result<bool> {
     fn get_python_path() -> Result<Vec<String>> {

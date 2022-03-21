@@ -3,8 +3,6 @@ mod config;
 mod nlu;
 mod exts;
 mod mqtt;
-#[cfg(feature="python_skills")]
-mod python;
 mod skills;
 mod collections;
 mod queries;
@@ -23,8 +21,6 @@ use std::rc::Rc;
 use crate::config::Config;
 use crate::exts::LockIt;
 use crate::skills::load_skills;
-#[cfg(feature="python_skills")]
-use crate::python::{python_init, set_python_locale};
 use crate::signals::SIG_REG;
 use crate::vars::SKILLS_PATH;
 
@@ -33,9 +29,6 @@ use anyhow::Result;
 use lily_common::other::init_log;
 use lily_common::vars::set_app_name;
 use unic_langid::LanguageIdentifier;
-
-#[cfg(feature="python_skills")]
-use pyo3::Python;
 
 fn get_locale_default() -> String {
     for (tag, val) in locale_config::Locale::user_default().tags() {
@@ -47,23 +40,6 @@ fn get_locale_default() -> String {
     "".to_string()
 }
 
-#[cfg(feature="python_skills")]
-fn set_py_locale(lang_id: &LanguageIdentifier) -> Result<()> {
-    let gil = Python::acquire_gil();
-    let py = gil.python();
-
-    set_python_locale(py, lang_id)
-}
-
-#[cfg(not(feature="python_skills"))]
-fn set_py_locale(_lang_id: &LanguageIdentifier) -> Result<()> {
-    Ok(())
-}
-
-#[cfg(not(feature="python_skills"))]
-fn python_init()-> Result<()> {
-    Ok(())
-}
 
 #[tokio::main(flavor="current_thread")]
 pub async fn main()  -> Result<()> {
@@ -74,10 +50,6 @@ pub async fn main()  -> Result<()> {
 
     set_app_name("lily");
     init_log("lily".into());
-
-    if cfg!(feature = "python_skills") {
-        python_init()?;
-    }
 
     // Set config on global
     let config = Config::load().unwrap_or_default();
@@ -98,10 +70,6 @@ pub async fn main()  -> Result<()> {
 
         as_str.into_iter().filter(|i|i.len()>0).map(|i|i.parse().expect(&format!("Locale parsing of \"{}\" failed",&i))).collect()
     };
-
-    if cfg!(feature = "python_skills") {
-        set_py_locale(&curr_langs[0])?;
-    }
 
     load_skills(SKILLS_PATH.all(), &curr_langs)?;
 

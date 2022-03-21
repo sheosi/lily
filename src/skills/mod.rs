@@ -1,5 +1,3 @@
-#[cfg(feature = "python_skills")]
-pub mod local;
 mod embedded;
 pub mod hermes;
 
@@ -15,9 +13,6 @@ use crate::queries::{ActQuery, Query};
 use crate::signals::{ActSignal, SIG_REG, Signal, UserSignal};
 use crate::signals::order::dynamic_nlu;
 use self::{embedded::EmbeddedLoader, hermes::HermesLoader, vap::VapLoader};
-
-#[cfg(feature = "python_skills")]
-use self::local::LocalLoader;
 
 // Other crates
 use anyhow::Result;
@@ -101,19 +96,6 @@ pub fn register_skill(skill_name: &str,
     Ok(())
 }
 
-#[cfg(feature="python_skills")]
-fn get_loaders(
-    paths: Vec<PathBuf>
-) ->Vec<Box<dyn SkillLoader>> {
-    vec![
-        Box::new(EmbeddedLoader::new()),
-        Box::new(LocalLoader::new(paths)),
-        Box::new(HermesLoader::new()),
-        Box::new(VapLoader::new())
-    ]
-}
-
-#[cfg(not(feature="python_skills"))]
 fn get_loaders(
     _paths: Vec<PathBuf>
 ) ->Vec<Box<dyn SkillLoader>> {

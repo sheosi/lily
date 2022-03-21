@@ -1,7 +1,5 @@
 pub mod order;
 pub mod poll;
-#[cfg(feature="python_skills")]
-pub mod python_sigs;
 pub mod registries;
 pub mod time;
 
@@ -9,9 +7,6 @@ pub use self::order::*;
 pub use self::poll::*;
 pub use self::registries::*;
 pub use self::time::*;
-
-#[cfg(feature="python_skills")]
-pub use self::python_sigs::*;
 
 // Standard library
 use std::collections::HashMap;

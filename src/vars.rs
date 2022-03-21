@@ -5,8 +5,6 @@ pub const STT_DATA_PATH: PathRef = PathRef::own("stt");
 #[cfg(feature = "deepspeech_stt")]
 pub const DEEPSPEECH_DATA_PATH: PathRef = PathRef::own("stt/deepspeech");
 pub const PICO_DATA_PATH: PathRef = PathRef::own("tts");
-#[cfg(feature = "python_skills")]
-pub const PYTHON_SDK_PATH: PathRef = PathRef::own("python");
 
 #[cfg(not(feature = "devel_rasa_nlu"))]
 pub const NLU_ENGINE_PATH: PathRef = PathRef::user_cfg("data/nlu/engine");
@@ -21,8 +19,6 @@ pub const PS_LOG_PATH: PathRef = PathRef::user_cfg("logs/pocketsphinx.log");
 pub const PS_LOG_PATH: PathRef = PathRef::user_cfg("logs/pocketsphinx.log");
 
 pub const MAIN_CONF_PATH: PathRef = PathRef::user_cfg("conf.yaml");
-#[cfg(feature = "python_skills")]
-pub const PYTHON_VIRTUALENV: PathRef = PathRef::user_cfg("data/python_env");
 pub const SKILLS_PATH: MultipathRef = MultipathRef::new(&[
     PathRef::user_cfg("skills"),
     PathRef::own("skills")
@@ -30,12 +26,6 @@ pub const SKILLS_PATH: MultipathRef = MultipathRef::new(&[
 
 
 // Messages
-#[cfg(feature = "python_skills")]
-pub const SKILLS_PATH_ERR_MSG: &str = "Skills folder can't be read";
-#[cfg(feature = "python_skills")]
-pub const PYDICT_SET_ERR_MSG :&str = "Failed while assigning an entry in PyDict";
-#[cfg(feature = "python_skills")]
-pub const NO_YAML_FLOAT_MSG: &str = "This shouldn't happen, a Yaml Value was checked as a number which is not an u64 was not an f64 either";
 pub const NO_COMPATIBLE_LANG_MSG: &str = "Lang negotiation failed, even though a default lang was provided";
 #[cfg(feature = "deepspeech_stt")]
 pub const ALPHA_BETA_MSG: &str = "Setting alpha and beta failed, though this shouldn't happen";
