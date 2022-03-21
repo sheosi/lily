@@ -14,7 +14,7 @@ use crate::exts::LockIt;
 use crate::queries::{ActQuery, Query};
 use crate::signals::{ActSignal, SIG_REG, Signal, UserSignal};
 use crate::signals::order::dynamic_nlu;
-use self::{embedded::EmbeddedLoader, hermes::HermesLoader, vap::VapLoader};
+use self::{embedded::EmbeddedLoader, hermes::HermesLoader};
 
 #[cfg(feature = "python_skills")]
 use self::local::LocalLoader;
@@ -77,9 +77,9 @@ fn link_query_intent(intent_name: String, skill_name: String,
 
 
 pub fn register_skill(skill_name: &str,
-    actions: HashMap<String, (String, Arc<Mutex<dyn Action + Send>>)>,
-    signals: HashMap<String, (String, Arc<Mutex<dyn UserSignal + Send>>)>,
-    queries: HashMap<String, (String, Arc<Mutex<dyn Query + Send>>)>) -> Result<()> {
+    actions: HashMap<String, (HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn Action + Send>>)>,
+    signals: HashMap<String, (HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn UserSignal + Send>>)>,
+    queries: HashMap<String, (HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn Query + Send>>)>) -> Result<()> {
     
     // TODO! add utterances
     for (name, (utts, action)) in actions {
@@ -88,14 +88,32 @@ pub fn register_skill(skill_name: &str,
             name, 
             skill_name.to_string(),
             weak)?;
+        
+        add_intent(
+            skill_name.into(),
+            name,
+            utts,
+        )?;
     }
 
     for (name, (utts, signal)) in signals {
         link_signal_intent(name, skill_name.into(), "TODO!".into(), signal);
+
+        add_intent(
+            skill_name.into(),
+            name,
+            utts,
+        )?;
     }
 
     for (name, (utts , query)) in queries {
         link_query_intent(name, skill_name.into(), "TODO!".into(), query);
+
+        add_intent(
+            skill_name.into(),
+            name,
+            utts,
+        )?;
     }
 
     Ok(())
@@ -109,7 +127,7 @@ fn get_loaders(
         Box::new(EmbeddedLoader::new()),
         Box::new(LocalLoader::new(paths)),
         Box::new(HermesLoader::new()),
-        Box::new(VapLoader::new())
+        //Box::new(VapLoader::new())
     ]
 }
 
@@ -120,7 +138,7 @@ fn get_loaders(
     vec![
         Box::new(EmbeddedLoader::new()),
         Box::new(HermesLoader::new()),
-        Box::new(VapLoader::new())
+        //Box::new(VapLoader::new())
     ]
 }
 
