@@ -1,18 +1,17 @@
 // Standard library
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Mutex, Weak};
 
 // This crate
-use crate::actions::{ACT_REG, Action};
+use crate::actions::Action;
 use crate::exts::LockIt;
 use crate::nlu::{IntentData, NluManager, NluManagerStatic};
-use crate::queries::{ActQuery, Query};
-use crate::signals::{ActSignal, ActionSet, ActMap, collections::NluMap, SignalOrder, UserSignal};
-use crate::vars::{mangle, NLU_TRAINING_DELAY};
+use crate::signals::{ActionSet, ActMap, collections::NluMap, SignalOrder};
+use crate::vars::{mangle, NO_ADD_ENTITY_VALUE_MSG, NLU_TRAINING_DELAY};
 
 // Other crates
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use lazy_static::lazy_static;
 use log::error;
 use tokio::time::sleep_until;
@@ -20,27 +19,27 @@ use tokio::{spawn, sync::mpsc, time::{Duration, Instant}};
 use unic_langid::LanguageIdentifier;
 
 lazy_static! {
-    pub static ref DYNAMIC_NLU_CHANNEL: Mutex<Option<mpsc::Sender<DynamicNluRequest>>> =  Mutex::new(None);
+    static ref DYNAMIC_NLU_CHANNEL: Mutex<Option<mpsc::Sender<DynamicNluRequest>>> =  Mutex::new(None);
     pub static ref NEXT_NLU_COMPILATION: Mutex<Instant> = Mutex::new(Instant::now());
     pub static ref IS_NLU_COMPILATION_SCHEDULED: Mutex<bool> = Mutex::new(false);
 }
 
 #[derive(Debug)]
-pub enum DynamicNluRequest {
+enum DynamicNluRequest {
     AddIntent(AddIntentRequest),
     EntityAddValue(EntityAddValueRequest),
     AddActionToIntent(AddActionToIntentRequest),
 }
 
 #[derive(Debug)]
-pub struct AddIntentRequest {
+struct AddIntentRequest {
     pub by_lang: HashMap<LanguageIdentifier, IntentData>,
     pub skill: String,
     pub intent_name: String,
 }
 
 #[derive(Debug)]
-pub struct EntityAddValueRequest {
+struct EntityAddValueRequest {
     pub skill: String,
     pub entity: String,
     pub value: String,
@@ -48,7 +47,7 @@ pub struct EntityAddValueRequest {
 }
 
 
-pub struct  AddActionToIntentRequest {
+struct  AddActionToIntentRequest {
     pub skill: String,
     pub intent_name: String,
     pub action: Weak<Mutex<dyn Action + Send>>
@@ -63,7 +62,7 @@ impl Debug for AddActionToIntentRequest {
     }
 }
 
-pub fn init_dynamic_nlu() -> Result<mpsc::Receiver<DynamicNluRequest>> {
+fn init_dynamic_nlu() -> Result<mpsc::Receiver<DynamicNluRequest>> {
     let (producer, consumer) = mpsc::channel(100);
 
     (*DYNAMIC_NLU_CHANNEL.lock_it()) = Some(producer);
@@ -99,11 +98,11 @@ fn schedule_nlu_compilation<M: NluManager + NluManagerStatic + Debug + Send + 's
 }
 
 pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'static>(
-    mut channel: mpsc::Receiver<DynamicNluRequest>,
     shared_nlu: Weak<Mutex<NluMap<M>>>,
     intent_map: Weak<Mutex<ActMap>>,
     curr_langs: Vec<LanguageIdentifier>,
 ) -> Result<()> {
+    let mut channel = init_dynamic_nlu()?;
     loop {
         match channel.recv().await.unwrap() {
             DynamicNluRequest::EntityAddValue(request) => {
@@ -150,50 +149,40 @@ pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'stati
 pub fn link_action_intent(intent_name: String, skill_name: String,
     action: Weak<Mutex<dyn Action + Send>>) -> Result<()> {
     
-    DYNAMIC_NLU_CHANNEL.lock_it().as_ref().unwrap().try_send(DynamicNluRequest::AddActionToIntent(AddActionToIntentRequest{
+    DYNAMIC_NLU_CHANNEL.lock_it().as_ref().unwrap().try_send(DynamicNluRequest::AddActionToIntent(AddActionToIntentRequest {
         skill: skill_name,
         intent_name,
         action
-    }))?;
-
-    Ok(())
+    })).map_err(|e|anyhow!("Failed to send intent: {}", e))
 }
 
-pub fn link_signal_intent(intent_name: String, skill_name: String, signal_name: String,
-    signal: Arc<Mutex<dyn UserSignal + Send>>) -> Result<()> {
-    let arc = ActSignal::new(signal, signal_name);
-    let weak = Arc::downgrade(&arc);
-    ACT_REG.lock_it().insert(
-        &skill_name,
-        &format!("{}_signal_wrapper",intent_name),
-        arc
-    )?;
+pub fn add_entity_value(
+    skill_name: String,
+    entity_name: String,
+    value: String,
+    langs: Vec<LanguageIdentifier>) -> Result<()> {
     
-    DYNAMIC_NLU_CHANNEL.lock_it().as_ref().unwrap().try_send(DynamicNluRequest::AddActionToIntent(AddActionToIntentRequest{
-        skill: skill_name,
-        intent_name,
-        action: weak
-    }))?;
 
-    Ok(())
+    // Get channel and ready request
+    let request = EntityAddValueRequest{
+        skill: skill_name,
+        entity: entity_name,
+        value, langs
+    };
+
+    send_in_channel(DynamicNluRequest::EntityAddValue(request))
 }
 
-pub fn link_query_intent(intent_name: String, skill_name: String,
-    query_name: String, query: Arc<Mutex<dyn Query + Send>>) -> Result<()> {
+/*pub fn add_intent() -> Result<()> {
     
-    let arc = ActQuery::new(query, query_name);
-    let weak = Arc::downgrade(&arc);
-    ACT_REG.lock_it().insert(
-        &skill_name,
-        &format!("{}_query_wrapper",intent_name),
-        arc
-    )?;
+}*/
 
-    DYNAMIC_NLU_CHANNEL.lock_it().as_ref().unwrap().try_send(DynamicNluRequest::AddActionToIntent(AddActionToIntentRequest{
-        skill: skill_name,
-        intent_name,
-        action:     weak
-    }))?;
+fn send_in_channel(request: DynamicNluRequest) -> Result<()> {
+    // Get channel and ready request
+    let mut m = DYNAMIC_NLU_CHANNEL.lock_it();
+    let channel = m.as_mut().ok_or_else(||anyhow!(NO_ADD_ENTITY_VALUE_MSG))?;
 
+    // Send request
+    channel.blocking_send(request)?;
     Ok(())
 }

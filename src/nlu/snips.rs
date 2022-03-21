@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 #[cfg(not(feature = "python_skills"))]
 use std::process::Command;
 
-use crate::exts::StringList;
 #[cfg(feature = "python_skills")]
 use crate::python::python_has_module_path;
 use crate::nlu::compare_sets_and_train;
@@ -221,7 +220,7 @@ impl NluManager for SnipsNluManager {
         let def = self.entities.get_mut(name).ok_or_else(||{
             anyhow!("Entity {} does not exist", name)
         })?;
-        def.data.push(EntityData{value, synonyms: StringList::new()});
+        def.data.push(EntityData{value, synonyms: vec![]});
         Ok(())
     }
 

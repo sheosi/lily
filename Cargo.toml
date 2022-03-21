@@ -30,6 +30,8 @@ bytes = "^1.1"
 futures = "^0.3"
 xtra = {version = "^0.5", features = ["with-tokio-1"] }  # Actor framework
 delegate = "^0.6"                                                         # Used for the registries using the base ones
+vap-skill-register = {git="https://github.com/secretsauceai/voice-assistant-protocol/"}
+coap-lite = "^0.7"
 
 pocketsphinx = "^0.6.0"                            # Offline Stt
 deepspeech = { version = "^0.9", optional = true } # More correct and better (also slower) Stt

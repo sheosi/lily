@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex, Weak};
 use crate::collections::BaseRegistry;
 use crate::exts::LockIt;
 #[cfg(feature="python_skills")]
-use crate::skills::call_for_skill;
+use crate::python::call_for_skill;
 #[cfg(feature="python_skills")]
 use crate::python::{get_inst_class_name, HalfBakedError, PyException};
 

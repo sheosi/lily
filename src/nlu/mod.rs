@@ -4,13 +4,10 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-use crate::exts::StringList;
-#[cfg(feature="python_skills")]
-use crate::python::try_translate;
 use crate::signals::collections::Hook;
 use crate::vars::mangle;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use serde::Serialize;
@@ -25,13 +22,6 @@ pub use self::snips::*;
 mod rasa;
 #[cfg(feature="devel_rasa_nlu")]
 pub use self::rasa::*;
-
-#[cfg(feature="unused")]
-use std::marker::PhantomData;
-#[cfg(feature="unused")]
-use std::format;
-#[cfg(feature="unused")]
-use serde::de::{MapAccess, Visitor};
 
 pub trait NluManager {
     type NluType: Nlu + Debug + Send;
@@ -80,75 +70,9 @@ pub struct EntityInstance {
 pub struct EntityData {
     pub value: String,
     #[serde(default)]
-    pub synonyms: StringList
+    pub synonyms: Vec<String>
 }
 
-impl EntityData {
-    #[cfg(feature="python_skills")]
-    pub fn into_translation(self, lang: &LanguageIdentifier) -> Result<Self> {
-        let l_str = lang.to_string();
-        let value = try_translate(&self.value, &l_str)?;
-        let synonyms = self.synonyms.into_translation(lang)
-        .map_err(|v|anyhow!("Translation of '{}' failed", v.join("\"")))?;
-
-        Ok(EntityData {value,synonyms: StringList::from_vec(synonyms)})
-    }
-
-    #[cfg(feature="python_skills")]
-    pub fn to_translation(&self, lang: &LanguageIdentifier) -> Result<Self> {
-        let l_str = lang.to_string();
-        let value = try_translate(&self.value, &l_str)?;
-        let synonyms = self.synonyms.to_translation(lang)
-        .map_err(|v|anyhow!("Translation of '{}' failed", v.join("\"")))?;
-
-        Ok(EntityData {value,synonyms: StringList::from_vec(synonyms)})
-    }
-}
-
-#[cfg(feature="unused")]
-fn string_or_struct<'de, T, D>(deserializer: D) -> Result<T, D::Error>
-where
-    T: Deserialize<'de> + FromStr<Err = Void>,
-    D: Deserializer<'de>,
-{
-        // This is a Visitor that forwards string types to T's `FromStr` impl and
-    // forwards map types to T's `Deserialize` impl. The `PhantomData` is to
-    // keep the compiler from complaining about T being an unused generic type
-    // parameter. We need T in order to know the Value type for the Visitor
-    // impl.
-    struct StringOrStruct<T>(PhantomData<fn() -> T>);
-
-    impl<'de, T> Visitor<'de> for StringOrStruct<T>
-    where
-        T: Deserialize<'de> + FromStr<Err = Void>,
-    {
-        type Value = T;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("string or map")
-        }
-
-        fn visit_str<E>(self, value: &str) -> Result<T, E>
-        where
-            E: de::Error,
-        {
-            Ok(FromStr::from_str(value).unwrap())
-        }
-
-        fn visit_map<M>(self, map: M) -> Result<T, M::Error>
-        where
-            M: MapAccess<'de>,
-        {
-            // `MapAccessDeserializer` is a wrapper that turns a `MapAccess`
-            // into a `Deserializer`, allowing it to be used as the input to T's
-            // `Deserialize` implementation. T then deserializes itself using
-            // the entries from the map visitor.
-            Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))
-        }
-    }
-
-    deserializer.deserialize_any(StringOrStruct(PhantomData))
-}
 
 #[derive(Clone, Debug)]
 pub struct EntityDef {
@@ -161,24 +85,6 @@ impl EntityDef {
     pub fn new(data: Vec<EntityData>, automatically_extensible: bool) -> Self {
         Self {data, automatically_extensible}
     }
-    
-    #[cfg(feature="python_skills")]
-    pub fn into_translation(self, lang: &LanguageIdentifier) -> Result<EntityDef> {
-        let data_res: Result<Vec<_>,_> = self.data.into_iter().map(|d|d.into_translation(lang)).collect();
-        Ok(EntityDef {
-            data: data_res?,
-            automatically_extensible: self.automatically_extensible
-        })
-    }
-
-    #[cfg(feature="python_skills")]
-    pub fn to_translation(&self, lang: &LanguageIdentifier) -> Result<EntityDef> {
-        let data_res: Result<Vec<_>,_> = self.data.iter().map(|d|d.to_translation(lang)).collect();
-        Ok(EntityDef {
-            data: data_res?,
-            automatically_extensible: self.automatically_extensible
-        })
-    }
 }
 #[derive(Debug, Clone)]
 pub enum OrderKind {
@@ -188,7 +94,7 @@ pub enum OrderKind {
 
 #[derive(Clone, Debug)]
 pub struct IntentData {
-    pub utts:  StringList,
+    pub utts:  Vec<String>,
     pub slots: HashMap<String, SlotData>,
     pub hook: Hook
 }
@@ -217,7 +123,7 @@ impl IntentData {
                 },
             );
         }
-        self.utts.data.into_iter().map(|utt|
+        self.utts.into_iter().map(|utt|
             if slots_res.is_empty() {
                 NluUtterance::Direct(utt)
             }

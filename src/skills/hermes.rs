@@ -130,6 +130,7 @@ impl HermesLoader {
     }
 }
 
+#[async_trait(?Send)]
 impl SkillLoader for HermesLoader {
     fn load_skills(&mut self,
         _langs: &Vec<LanguageIdentifier>) -> Result<()> {
@@ -148,6 +149,11 @@ impl SkillLoader for HermesLoader {
             // TODO! Add to sig order!
         }
 
+        Ok(())
+    }
+
+
+    async fn run_loader(&mut self) -> Result<()> {
         Ok(())
     }
 }
