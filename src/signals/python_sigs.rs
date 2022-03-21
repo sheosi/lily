@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use crate::actions::{DynamicDict, ActionSet, PyActionSet};
 use crate::config::Config;
 use crate::exts::LockIt;
-use crate::skills::call_for_skill;
+use crate::python::call_for_skill;
 use crate::python::HalfBakedError;
 use crate::signals::{Signal, SignalEventShared, SIG_REG, UserSignal};
 
@@ -113,12 +113,14 @@ impl Signal for PythonSignal {
         let curr_langs: Vec<String> = curr_langs.into_iter().map(|i|i.to_string()).collect();
         self.call_py_method(py, "end_load", (curr_langs,), false)
     }
+
     async fn event_loop(&mut self, _signal_event: SignalEventShared,
-        _config: &Config, base_context: &DynamicDict,
+        _config: &Config,
         curr_langs: &Vec<LanguageIdentifier>) -> Result<()> {
 
         let gil= Python::acquire_gil();
         let py = gil.python();
+        let base_context= DynamicDict::new(py);
 
         let curr_langs: Vec<String> = curr_langs.into_iter().map(|i|i.to_string()).collect();
         self.call_py_method(py, "event_loop", (base_context.to_owned(), curr_langs), true)

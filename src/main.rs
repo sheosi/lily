@@ -25,7 +25,7 @@ use crate::exts::LockIt;
 use crate::skills::load_skills;
 #[cfg(feature="python_skills")]
 use crate::python::{python_init, set_python_locale};
-use crate::signals::{dynamic_nlu::init_dynamic_nlu, SIG_REG};
+use crate::signals::SIG_REG;
 use crate::vars::SKILLS_PATH;
 
 // Other crates
@@ -96,16 +96,14 @@ pub async fn main()  -> Result<()> {
                 vec![get_locale_default()]
             };
 
-        as_str.into_iter().map(|i|i.parse().expect("Locale parsing failed")).collect()
+        as_str.into_iter().filter(|i|i.len()>0).map(|i|i.parse().expect(&format!("Locale parsing of \"{}\" failed",&i))).collect()
     };
 
     if cfg!(feature = "python_skills") {
         set_py_locale(&curr_langs[0])?;
     }
 
-    let consumer = init_dynamic_nlu()?;
-
-    load_skills(SKILLS_PATH.all(), &curr_langs, consumer)?;
+    load_skills(SKILLS_PATH.all(), &curr_langs)?;
 
     //TODO!: This can very well be problematic since we access it later too.
     SIG_REG.lock_it().call_loops(&config, &curr_langs).await?;

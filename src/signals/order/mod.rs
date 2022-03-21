@@ -8,7 +8,6 @@ mod server_actions;
 // Standard library
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::mem::replace;
 use std::sync::{Arc, Mutex};
 
 // This crate
@@ -19,7 +18,7 @@ use crate::queries::{ActQuery, Query};
 use crate::mqtt::MqttApi;
 use crate::nlu::{EntityDef, IntentData, Nlu, NluManager, NluManagerStatic, NluResponseSlot};
 use crate::stt::DecodeRes;
-use crate::signals::{collections::NluMap, dynamic_nlu::DynamicNluRequest, ActMap, ActSignal, Signal, SignalEventShared, UserSignal};
+use crate::signals::{collections::NluMap, ActMap, ActSignal, Signal, SignalEventShared, UserSignal};
 use crate::vars::{mangle, MIN_SCORE_FOR_ACTION};
 use self::{dynamic_nlu::on_dyn_nlu, mqtt::MSG_OUTPUT, server_actions::{on_event, on_nlu_request}, dev_mgmt::SessionManager};
 
@@ -56,17 +55,15 @@ pub struct SignalOrder<M: NluManager + NluManagerStatic + Debug + Send> {
     intent_map: Arc<Mutex<ActMap>>,
     nlu: Arc<Mutex<NluMap<M>>>,
     demangled_names: HashMap<String, String>,
-    dyn_nlu: Option<mpsc::Receiver<DynamicNluRequest>>
 }
 
 impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> SignalOrder<M> {
-    pub fn new(langs: Vec<LanguageIdentifier>, consumer: mpsc::Receiver<DynamicNluRequest>) -> Self {
+    pub fn new(langs: Vec<LanguageIdentifier>) -> Self {
         
         SignalOrder {
             intent_map: Arc::new(Mutex::new(ActMap::new())),
             nlu: Arc::new(Mutex::new(NluMap::new(langs))),
-            demangled_names: HashMap::new(),
-            dyn_nlu: Some(consumer)
+            demangled_names: HashMap::new()
         }
     }
 
@@ -247,11 +244,10 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
         
         
 
-        let (nlu_sender, nlu_receiver) = tokio::sync::mpsc::channel(100);
-        let (event_sender, event_receiver) = tokio::sync::mpsc::channel(100);
+        let (nlu_sender, nlu_receiver) = mpsc::channel(100);
+        let (event_sender, event_receiver) = mpsc::channel(100);
         let sessions = Arc::new(Mutex::new(SessionManager::new()));
         let dyn_ent_fut = on_dyn_nlu(
-            replace(&mut self.dyn_nlu, None).expect("Dyn_nlu already consumed"),
             Arc::downgrade(&self.nlu),
             Arc::downgrade(&self.intent_map),
             curr_langs.clone()
@@ -330,7 +326,7 @@ pub type CurrentNluManager = RasaNluManager;
 
 pub type SignalOrderCurrent = SignalOrder<CurrentNluManager>;
 
-pub fn new_signal_order(langs: Vec<LanguageIdentifier>, consumer: mpsc::Receiver<DynamicNluRequest>) -> SignalOrder<CurrentNluManager> {
-    SignalOrder::new(langs, consumer)
+pub fn new_signal_order(langs: Vec<LanguageIdentifier>) -> SignalOrder<CurrentNluManager> {
+    SignalOrder::new(langs)
 }
 

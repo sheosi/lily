@@ -1,25 +1,25 @@
 // Standard library
-use std::unimplemented;
 use std::collections::HashMap;
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 
 // This crate
 use crate::actions::{ActionSet, ACT_REG, PythonAction};
-use crate::exts::{LockIt, StringList};
+use crate::exts::LockIt;
 use crate::python::add_py_folder;
-use crate::queries::{ActQuery, PythonQuery, QUERY_REG};
-use crate::signals::{collections::Hook, ActSignal, PythonSignal, SIG_REG};
-use crate::skills::{call_for_skill, SkillLoader};
+use crate::queries::{PythonQuery, QUERY_REG};
+use crate::signals::{collections::Hook, PythonSignal, SIG_REG};
+use crate::skills::{SkillLoader, register_skill};
 use crate::nlu::{EntityData, EntityDef, IntentData, OrderKind, SlotData};
-use crate::python::{try_translate, try_translate_all};
+use crate::python::{call_for_skill,try_translate, try_translate_all};
 use crate::vars::{SKILLS_PATH_ERR_MSG, PYTHON_SDK_PATH};
 
 // Other crates
 use anyhow::{anyhow, Result};
 use pyo3::Python;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, de::{self, SeqAccess, Visitor}, Serialize, Serializer, ser::SerializeSeq};
 use thiserror::Error;
 use lazy_static::lazy_static;
 use lily_common::other::false_val;
@@ -42,31 +42,14 @@ impl LocalLoader {
 
         let (signal_classes, action_classes, query_classes) = add_py_folder(py, path)?;
         let name = skill_path.file_name().ok_or_else(||anyhow!("Got a skill with no name"))?.to_string_lossy();
-        let sigs = match PythonSignal::extend_and_init_classes_py(py, name.clone().into(), skill_path, signal_classes) {
-            Ok(sigs) =>{Ok(sigs)}
-            Err(e) => {
-                Err(e.source)
-            }
-        }?;
+        let sigs = PythonSignal::extend_and_init_classes_py(py, name.clone().into(), skill_path, signal_classes)
+            .map_err(|e|Err(e.source))?;
 
-        let acts= match PythonAction::extend_and_init_classes(py, name.clone().into(), action_classes, Arc::new(skill_path.to_path_buf())) {
-            Ok(acts) => {Ok(acts)}
-            Err(e) => {
-                // Also, drop all actions from this package
-                SIG_REG.lock_it().remove_several(skill_name, &sigs)?;
-                Err(e.source)
-            }
-        }?;
+        let acts= PythonAction::extend_and_init_classes(py, name.clone().into(), action_classes, Arc::new(skill_path.to_path_buf()))
+            .map_err(|e|Err(e.source))?;
 
-        let queries = match PythonQuery::extend_and_init_classes(py,name.clone().into(), query_classes) {
-            Ok(queries) => {Ok(queries)}
-            Err(e) => {
-                // Also, drop all actions from this package
-                SIG_REG.lock_it().remove_several(skill_name, &sigs)?;
-                ACT_REG.lock_it().remove_several(skill_name, &acts)?;
-                Err(e.source)
-            }
-        }?;
+        let queries = PythonQuery::extend_and_init_classes(py,name.clone().into(), query_classes)
+            .map_err(|e|Err(e.source))?;
 
         Ok((sigs, acts, queries))
     }
@@ -281,7 +264,8 @@ fn load_intents(
                 let intent_trans = langs.into_iter().map(|l|{
                     Ok((l, data.clone().try_into_with_trans(l)?))
                 }).collect::<Result<_>>()?;
-
+                
+                register_skill();
                 match data.hook.clone() {
                     Hook::Action(name) => {
                         let action_grd = ACT_REG.lock_it();
@@ -368,5 +352,110 @@ pub struct HalfBakedDoubleError {
 impl HalfBakedDoubleError {
     fn new(acts: Vec<String>, queries: Vec<String>, signals: Vec<String>, source: anyhow::Error ) -> Self {
         Self {acts, queries, signals, source}
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct StringList {
+    pub data: Vec<String>
+}
+
+impl StringList {
+    pub fn new() -> Self {
+        Self{data: Vec::new()}
+    }
+    pub fn from_vec(vec: Vec<String>) -> Self {
+        Self{ data: vec}
+    }
+
+    /// Returns an aggregated vector with the translations of all entries
+    pub fn into_translation(self, lang: &LanguageIdentifier) -> Result<Vec<String>,Vec<String>> {
+        let lang_str = lang.to_string();
+
+        let (utts_data, failed):(Vec<_>,Vec<_>) = self.data.into_iter()
+        .map(|utt|try_translate_all(&utt, &lang_str))
+        .partition(Result::is_ok);
+
+        if failed.is_empty() {
+            let utts = utts_data.into_iter().map(Result::unwrap)
+            .flatten().collect();
+
+            Ok(utts)
+        }
+        else {
+            let failed = failed.into_iter().map(Result::unwrap)
+            .flatten().collect();
+            Err(failed)            
+        }
+    }
+
+    /// Returns an aggregated vector with the translations of all entries
+    pub fn to_translation(&self, lang: &LanguageIdentifier) -> Result<Vec<String>,Vec<String>> {
+        let lang_str = lang.to_string();
+
+        let (utts_data, failed):(Vec<_>,Vec<_>) = self.data.iter()
+        .map(|utt|try_translate_all(&utt, &lang_str))
+        .partition(Result::is_ok);
+
+        if failed.is_empty() {
+            let utts = utts_data.into_iter().map(Result::unwrap)
+            .flatten().collect();
+
+            Ok(utts)
+        }
+        else {
+            let failed = failed.into_iter().map(Result::unwrap)
+            .flatten().collect();
+            Err(failed)            
+        }
+    }
+}
+
+struct StringListVisitor;
+
+impl<'de> Visitor<'de> for StringListVisitor {
+    type Value = StringList;
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("either a string or a list containing strings")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> where E: de::Error{
+        Ok(StringList{data:vec![v.to_string()]})
+    }
+
+    fn visit_string<E>(self, v: String) -> Result<Self::Value, E> where E: de::Error{
+        Ok(StringList{data:vec![v]})
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
+        let mut res = StringList{data: Vec::with_capacity(seq.size_hint().unwrap_or(1))};
+        loop {
+            match seq.next_element()? {
+                Some(val) => {res.data.push(val)},
+                None => {break}
+            }
+        }
+
+        return Ok(res);   
+    }
+}
+
+impl<'de> Deserialize<'de> for StringList {
+    fn deserialize<D>(deserializer: D) -> Result<StringList, D::Error>
+    where D: Deserializer<'de> {
+        deserializer.deserialize_any(StringListVisitor)
+    }
+}
+
+// Serialize this as a list of strings
+impl Serialize for StringList {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,{
+        let mut seq = serializer.serialize_seq(Some(self.data.len()))?;
+        for e in &self.data {
+            seq.serialize_element(e)?;
+        }
+        seq.end()
     }
 }

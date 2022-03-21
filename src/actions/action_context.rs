@@ -47,7 +47,6 @@ pub struct SatelliteData {
     pub uuid: String   
 }
 
-#[cfg(not(feature="python_skills"))]
 pub enum ContextData {
     Event{event: String},
     Intent{intent: IntentData},
@@ -55,9 +54,8 @@ pub enum ContextData {
 
 #[cfg(feature="python_skills")]
 #[pyclass]
-pub enum ContextData {
-    Event{event: String},
-    Intent{intent: IntentData},
+pub struct ContextDataPy {
+    context: ContextData
 }
 
 impl ContextData {
@@ -117,17 +115,16 @@ impl DynamicDict {
     pub fn set_decimal(&mut self, key: String, value: f32) {
         self.map.lock_it().insert(key, DictElement::Decimal(value));
     }
-
-    pub fn get(&self, key: &str) -> Option<DictElement> {
-        self.map.lock_it().get(key).cloned()
-    }
-
 }
 
 #[cfg(not(feature = "python_skills"))]
 impl DynamicDict {
     pub fn copy(&self) -> Self {
         Self{map: Arc::new(Mutex::new(self.map.lock_it().clone()))}
+    }
+
+    pub fn get(&self, key: &str) -> Option<DictElement> {
+        self.map.lock_it().get(key).cloned()
     }
 }
 
@@ -186,8 +183,7 @@ impl IntoPy<PyObject> for DictElement {
         match self {
             DictElement::String(str)=>{str.into_py(py)},
             DictElement::Dict(c) =>{c.into_py(py)},
-            DictElement::Decimal(f)=>{f.into_py(py)},
-            DictElement::Integer(i)=>{i.into_py(py)}
+            DictElement::Decimal(f)=>{f.into_py(py)}
         }
     }
 }
@@ -461,7 +457,7 @@ impl PyMappingProtocol for DynamicDict {
     }
 
     fn __setitem__(&mut self, key: String, item: DictElement) {
-        self.set(key,item);
+        self.map.lock_it().insert(key, item);
     }
 }
 
@@ -573,7 +569,7 @@ impl DynamicDict {
     fn setdefault(&mut self, key:&str, default: DictElement) -> DictElement {
         match self.get(key) {
             Some(s) => s.into(),
-            None => {self.set(key.into(), default.clone().into());default.into()}
+            None => {self.map.lock_it().insert(key.into(), default);default.into()}
         }
     }
 

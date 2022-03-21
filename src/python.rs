@@ -1,19 +1,19 @@
 use std::collections::HashMap;
+use std::cell::{Ref, RefCell};
 use std::env;
 use std::path::Path;
 use std::process::Command;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::actions::{ActionSet, ACT_REG};
 use crate::exts::LockIt;
 use crate::queries::QUERY_REG;
-use crate::skills::{call_for_skill, PYTHON_LILY_SKILL};
 use crate::signals::{
-    dynamic_nlu::DynamicNluRequest,
     registries::POLL_SIGNAL,
-    order::{dynamic_nlu::{DYNAMIC_NLU_CHANNEL, EntityAddValueRequest}, dev_mgmt::CAPS_MANAGER}
+    order::{dynamic_nlu::{self}, dev_mgmt::CAPS_MANAGER}
 };
-use crate::vars::{PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_ADD_ENTITY_VALUE_MSG, NO_YAML_FLOAT_MSG};
+use crate::vars::{PYDICT_SET_ERR_MSG, PYTHON_VIRTUALENV, NO_YAML_FLOAT_MSG};
 
 use anyhow::{anyhow, Result};
 use pyo3::{conversion::IntoPy, PyErr, Python, types::{PyBool, PyList, PyDict}, PyObject, PyResult, prelude::*, wrap_pyfunction, FromPyObject, exceptions::*};
@@ -23,6 +23,44 @@ use log::info;
 use serde_yaml::Value;
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
+
+#[cfg(feature="python_skills")]
+pub struct RefString {
+    current_val: RefCell<Rc<String>>,
+    default_val: Rc<String>
+}
+
+impl RefString {
+    pub fn new(def: &str) -> Self {
+        let default_val = Rc::new(def.to_owned());
+        Self {current_val: RefCell::new(default_val.clone()), default_val}
+    }
+
+    pub fn clear(&self) {
+        self.current_val.replace(self.default_val.clone());
+    }
+
+    pub fn set(&self, val: Rc<String>) {
+        self.current_val.replace(val);
+    }
+
+    pub fn borrow(&self) -> Ref<String> {
+        Ref::map(self.current_val.borrow(), |r|r.as_ref())
+    }
+
+    fn get_package_path(&self, skill_name: &str, skill_path: &str) -> Option<&serde_yaml::Value> {
+        self.skills_conf.get(skill_name).and_then(|m| {
+            let mut curr_map = m;
+            for path_part in skill_path.split("/") {
+                match curr_map.get(path_part) {
+                    Some(inner_data) => curr_map = inner_data,
+                    None => return None
+                }
+            }
+            Some(curr_map)
+        })
+    }
+}
 
 thread_local! {
     pub static PYTHON_LILY_SKILL: RefString = RefString::new("<None>");
@@ -314,23 +352,12 @@ fn client_has_cap(client: &str, cap: &str) -> PyResult<bool> {
 
 #[pyfunction]
 fn add_entity_value(entity_name: String, value: String, langs: Option<Vec<String>>) -> PyResult<()> {
-    // Transform all languages into their LanguageIdentifier forms
-    let langs = langs.unwrap_or(Vec::new());
-    let langs: Result<Vec<_>,_> = langs.into_iter().map(|l|l.parse()).collect();
-    let langs = langs.py_excep::<PyValueError>()?;
-
-    // Get channel and ready request
-    let mut m = DYNAMIC_NLU_CHANNEL.lock_it();
-    let channel = m.as_mut().ok_or_else(||PyErr::new::<PyOSError, _>(NO_ADD_ENTITY_VALUE_MSG))?;
-    let request = EntityAddValueRequest{
-        skill: get_current_skill()?,
-        entity: entity_name,
-        value, langs
-    };
-
-    // Send request
-    channel.blocking_send(DynamicNluRequest::EntityAddValue(request)).py_excep::<PyOSError>()?;
-    Ok(())
+    dynamic_nlu::add_entity_value(
+        get_current_skill()?,
+        entity_name,
+        value,
+        langs
+    ).py_excep::<PyValueError>()?;
 }
 
 #[pyfunction]
@@ -445,17 +472,4 @@ fn extract_name(path: &Path) -> Result<Rc<String>> {
     let os_str = path.file_name().ok_or_else(||anyhow!("Can't get skill path's name"))?;
     let skill_name_str = os_str.to_str().ok_or_else(||anyhow!("Can't transform skill path name to str"))?;
     Ok(Rc::new(skill_name_str.to_string()))
-}
-
-fn get_package_path(&self, skill_name: &str, skill_path: &str) -> Option<&serde_yaml::Value> {
-    self.skills_conf.get(skill_name).and_then(|m| {
-        let mut curr_map = m;
-        for path_part in skill_path.split("/") {
-            match curr_map.get(path_part) {
-                Some(inner_data) => curr_map = inner_data,
-                None => return None
-            }
-        }
-        Some(curr_map)
-    })
 }
