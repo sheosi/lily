@@ -1,5 +1,6 @@
 mod embedded;
 pub mod hermes;
+mod vap;
 
 // Standard library
 use std::collections::HashMap;
