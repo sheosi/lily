@@ -1,9 +1,11 @@
+// Standard library
 use std::cell::RefCell;
 use std::fs::{create_dir_all, File};
-use std::io::{BufReader, Cursor, BufWriter};
+use std::io::{BufReader, Cursor, BufWriter, stdin};
 use std::path::Path;
 use std::rc::Rc;
 
+// Other crates
 use anyhow::anyhow;
 use lily_common::audio::{Audio, AudioRaw, PlayDevice, RecDevice};
 use lily_common::client::hotword::{HotwordDetector, Snowboy};
@@ -17,8 +19,10 @@ use rmp_serde::{decode, encode};
 use rumqttc::{AsyncClient, Event, EventLoop, LastWill, Packet, QoS};
 use serde::{Deserialize, Serialize};
 use serde_yaml::{from_reader, to_writer};
+use termion::{event::Key, input::TermRead};
 use tokio::sync::watch;
 use tokio::{
+    task::spawn_blocking,
     sync::{Mutex as AsyncMutex, MutexGuard as AsyncMGuard},
     try_join,
 };
@@ -285,6 +289,16 @@ async fn user_listen(
             ACTIVE_LISTENING_INTERVAL_MS
         };
 
+        
+        fn wait_key(key: Key) {
+            let stdin = stdin();
+            let stdin = stdin.lock();
+            let mut input = stdin.keys();
+            while input.next().map_or(false, |r|r.map_or(false,|k|k == key)) {}
+        }
+
+        let force_mode_wait = spawn_blocking(move || {wait_key(Key::Char('l'))});
+
         match current_state {
             ProgState::PasiveListening => {
                 let mut rec_guard = rec_dev.lock().await;
@@ -310,6 +324,15 @@ async fn user_listen(
                                 client.borrow_mut().publish("lily/event", QoS::AtMostOnce, false, msg_pack).await?;
                             }
                         }
+                    }
+
+                    _ = force_mode_wait => {
+                        current_state = ProgState::ActiveListening(rec_guard);
+
+                        debug!("I'm listening for your command");
+
+                        let msg_pack = encode::to_vec(&MsgEvent{satellite: mqtt_name.to_string(), event: "init_reco".into()})?;
+                        client.borrow_mut().publish("lily/event", QoS::AtMostOnce, false, msg_pack).await?;
                     }
                 }
             }
