@@ -100,11 +100,25 @@ cargo deb
 - [ ] Semantic parsing
 - [ ] Interactivity (asking for something after the initial trigger)
 
+### Multilanguage
+
+Lily can be configured to support multiple languages at the same time, this means al of the languages can be used for queries, however, this doesn't mean they can be used in the same phrase (this depends on the ASR model). Part of this is automatic language detection: for voice it exists, but it needs heavy testing, while for text there's some code but te implementation is pending.
+
+### Usable components
+
+TTS, STT and NLU are components important enough that having multiple of them makes sense, here's what's supported by Lily right now:
+
+**TTS:** Pico, Espeak, Google (using optional feature), IBM
+**STT/ASR:** PocketSphinx, Deepspeech (using optional feature), IBM
+**NLU:** Snips, Rasa (using optional feature, not functional).
+
+Remember that both for **TTS** and **STT/ASR** Lily will pair any online service with an offline one as fallback, so that even without connection it will continue to work.
+
 ## Where will it run?
 Lily is meant to be run on-device (mostly) even on constrained hardware like a Raspberry. Of course, it will still work on standard PCs and more powerful hardware.
 
 ## Current state:
 
 * *Smartness*: Can trigger actions, with a dialog system on the works
-* *Modularity*: Client and Server are their own processes, skills are getting the same treatment (getting compatibility with Hermes protocol)
+* *Modularity*: Client and Server are their own processes, skills are getting the same treatment (making a new connection protocol from scratch).
 * *Multilanguage* [Needs testing]: Can work with multiple languages and detect by voice which is being used. Detection is only made for voice (not text). Languages can`t be mixed in the same question.
