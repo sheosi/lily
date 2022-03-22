@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use crate::actions::{Action, ACT_REG};
 use crate::exts::LockIt;
 use crate::queries::{ActQuery, Query};
+use crate::nlu::IntentData;
 use crate::signals::{ActSignal, SIG_REG, UserSignal};
 use crate::signals::order::dynamic_nlu;
 use self::{embedded::EmbeddedLoader, hermes::HermesLoader, vap::VapLoader};
@@ -41,30 +42,17 @@ pub trait SkillLoader {
 }
 
 
-fn link_signal_intent(intent_name: String, skill_name: String, signal_name: String,
-    signal: Arc<Mutex<dyn UserSignal + Send>>) -> Result<()> {
+fn add_new_intent(intent_name: String, skill_name: String,
+    utts: HashMap<LanguageIdentifier, String>,
+    action: Arc<Mutex<dyn Action + Send>>) -> Result<()> {
+    
+    dynamic_nlu::add_intent(utts, skill_name_str.clone(), intent_name)?;
 
-    let arc = ActSignal::new(signal, signal_name);
     let weak = Arc::downgrade(&arc);
     
     ACT_REG.lock_it().insert(
         &skill_name,
-        &format!("{}_signal_wrapper",intent_name),
-        arc
-    )?;
-
-    dynamic_nlu::link_action_intent(intent_name, skill_name, weak)
-}
-
-// Note: Some very minimal support for queries
-fn link_query_intent(intent_name: String, skill_name: String,
-    query_name: String, query: Arc<Mutex<dyn Query + Send>>) -> Result<()> {
-    
-    let arc = ActQuery::new(query, query_name);
-    let weak = Arc::downgrade(&arc);
-    ACT_REG.lock_it().insert(
-        &skill_name,
-        &format!("{}_query_wrapper",intent_name),
+        &action.lock_it().get_name(),
         arc
     )?;
 
@@ -73,25 +61,37 @@ fn link_query_intent(intent_name: String, skill_name: String,
 
 
 pub fn register_skill(skill_name: &str,
-    actions: HashMap<String, (String, Arc<Mutex<dyn Action + Send>>)>,
-    signals: HashMap<String, (String, Arc<Mutex<dyn UserSignal + Send>>)>,
-    queries: HashMap<String, (String, Arc<Mutex<dyn Query + Send>>)>) -> Result<()> {
+    actions: Vec<(String, HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn Action + Send>>)>,
+    signals: Vec<(String, HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn UserSignal + Send>>)>,
+    queries: Vec<(String, HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn Query + Send>>)>) -> Result<()> {
+
+    let skill_name_str = skill_name.to_string();
     
-    // TODO! add utterances
-    for (name, (utts, action)) in actions {
+    for (name, utts, action) in actions {
         let weak = Arc::downgrade(&action);
+        dynamic_nlu::add_intent(utts, skill_name_str.clone(), intent_name)?;
         dynamic_nlu::link_action_intent(
             name, 
             skill_name.to_string(),
-            weak)?;
+            weak
+        )?;
     }
 
-    for (name, (utts, signal)) in signals {
-        link_signal_intent(name, skill_name.into(), "TODO!".into(), signal)?;
+    for (name, utts, signal) in signals {
+        add_new_intent(name.clone(),
+            skill_name.into(),
+            utts,
+            ActSignal::new(signal, format!("{}_signal_wrapper",name))
+        )?;
     }
 
-    for (name, (utts , query)) in queries {
-        link_query_intent(name, skill_name.into(), "TODO!".into(), query)?;
+    for (name, utts , query) in queries {
+        add_new_intent(
+            name.clone(),
+            skill_name.into(),
+            utts,
+            ActQuery::new(query, format!("{}_query_wrapper",name))
+        )?;
     }
 
     Ok(())

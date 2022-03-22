@@ -20,44 +20,39 @@ use unic_langid::LanguageIdentifier;
 
 lazy_static! {
     static ref DYNAMIC_NLU_CHANNEL: Mutex<Option<mpsc::Sender<DynamicNluRequest>>> =  Mutex::new(None);
-    pub static ref NEXT_NLU_COMPILATION: Mutex<Instant> = Mutex::new(Instant::now());
-    pub static ref IS_NLU_COMPILATION_SCHEDULED: Mutex<bool> = Mutex::new(false);
+    static ref NEXT_NLU_COMPILATION: Mutex<Instant> = Mutex::new(Instant::now());
+    static ref IS_NLU_COMPILATION_SCHEDULED: Mutex<bool> = Mutex::new(false);
 }
 
 #[derive(Debug)]
 enum DynamicNluRequest {
-    AddIntent(AddIntentRequest),
-    EntityAddValue(EntityAddValueRequest),
-    AddActionToIntent(AddActionToIntentRequest),
+    AddIntent{
+        by_lang: HashMap<LanguageIdentifier, IntentData>,
+        skill: String,
+        intent_name: String,
+    },
+
+    EntityAddValue {
+        skill: String,
+        entity: String,
+        value: String,
+        langs: Vec<LanguageIdentifier>,
+    },
+
+    AddActionToIntent {
+        skill: String,
+        intent_name: String,
+        action: WeakActionRef
+    }
 }
 
-#[derive(Debug)]
-struct AddIntentRequest {
-    pub by_lang: HashMap<LanguageIdentifier, IntentData>,
-    pub skill: String,
-    pub intent_name: String,
+struct WeakActionRef {
+    pub act_ref: Weak<Mutex<dyn Action + Send>>
 }
 
-#[derive(Debug)]
-struct EntityAddValueRequest {
-    pub skill: String,
-    pub entity: String,
-    pub value: String,
-    pub langs: Vec<LanguageIdentifier>,
-}
-
-
-struct  AddActionToIntentRequest {
-    pub skill: String,
-    pub intent_name: String,
-    pub action: Weak<Mutex<dyn Action + Send>>
-}
-
-impl Debug for AddActionToIntentRequest {
+impl Debug for WeakActionRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AddActionToIntentRequest")
-         .field("skill", &self.skill)
-         .field("intent_name", &self.skill)
+        f.debug_struct("WeakActionRef")
          .finish()
     }
 }
@@ -105,19 +100,19 @@ pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'stati
     let mut channel = init_dynamic_nlu()?;
     loop {
         match channel.recv().await.unwrap() {
-            DynamicNluRequest::EntityAddValue(request) => {
-                let langs = if request.langs.is_empty(){
+            DynamicNluRequest::EntityAddValue{skill, entity, value, langs} => {
+                let langs = if langs.is_empty(){
                     curr_langs.clone()
                 }
                 else {
-                    request.langs
+                    langs
                 };
 
                 let arc = shared_nlu.upgrade().unwrap();
                 let mut m = arc.lock_it();
                 for lang in langs {
                     let man = m.get_mut_nlu_man(&lang);
-                    let mangled = mangle(&request.skill, &request.entity);
+                    let mangled = mangle(&skill, &entity);
                     if let Err(e) = man.add_entity_value(&mangled, request.value.clone()) {
                         error!("Failed to add value to entity {}", e);
                     }
@@ -125,20 +120,20 @@ pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'stati
 
                 schedule_nlu_compilation(shared_nlu.clone(), curr_langs.clone());
             }
-            DynamicNluRequest::AddIntent(request) => {     
+            DynamicNluRequest::AddIntent{by_lang, skill, intent_name} => {     
                 let arc = shared_nlu.upgrade().unwrap();   
                 let mut m = arc.lock_it();
-                for (lang, intent) in request.by_lang {
+                for (lang, intent) in by_lang {
                     let man = m.get_mut_nlu_man(&lang);
-                    let mangled = mangle(&request.skill, &request.intent_name);
-                    man.add_intent(&mangled,intent.into_utterances(&request.skill));
+                    let mangled = mangle(&skill, &intent_name);
+                    man.add_intent(&mangled,intent.into_utterances(&skill));
                 }
 
                 schedule_nlu_compilation(shared_nlu.clone(), curr_langs.clone());
             }
-            DynamicNluRequest::AddActionToIntent(request) => {
+            DynamicNluRequest::AddActionToIntent{action,intent_name,skill} => {
                 intent_map.upgrade().unwrap().lock_it().add_mapping(
-                    &mangle(&request.skill, &request.intent_name),
+                    &mangle(&skill, &intent_name),
                     ActionSet::create(request.action)
                 )
             }
@@ -149,11 +144,11 @@ pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'stati
 pub fn link_action_intent(intent_name: String, skill_name: String,
     action: Weak<Mutex<dyn Action + Send>>) -> Result<()> {
     
-    DYNAMIC_NLU_CHANNEL.lock_it().as_ref().unwrap().try_send(DynamicNluRequest::AddActionToIntent(AddActionToIntentRequest {
+    send_in_channel(DynamicNluRequest::AddActionToIntent {
         skill: skill_name,
         intent_name,
         action
-    })).map_err(|e|anyhow!("Failed to send intent: {}", e))
+    })
 }
 
 pub fn add_entity_value(
@@ -161,28 +156,29 @@ pub fn add_entity_value(
     entity_name: String,
     value: String,
     langs: Vec<LanguageIdentifier>) -> Result<()> {
-    
 
-    // Get channel and ready request
-    let request = EntityAddValueRequest{
+    send_in_channel(DynamicNluRequest::EntityAddValue {
         skill: skill_name,
         entity: entity_name,
         value, langs
-    };
-
-    send_in_channel(DynamicNluRequest::EntityAddValue(request))
+    })
 }
 
-/*pub fn add_intent() -> Result<()> {
-    
-}*/
+pub fn add_intent(
+    by_lang: HashMap<LanguageIdentifier, IntentData>,
+    skill: String,
+    intent_name: String
+) -> Result<()> {
+
+    send_in_channel(DynamicNluRequest::AddIntent {
+        by_lang: HashMap::new(),
+        skill: "".to_string(),
+        intent_name: "".to_string()
+    })
+}
 
 fn send_in_channel(request: DynamicNluRequest) -> Result<()> {
-    // Get channel and ready request
-    let mut m = DYNAMIC_NLU_CHANNEL.lock_it();
-    let channel = m.as_mut().ok_or_else(||anyhow!(NO_ADD_ENTITY_VALUE_MSG))?;
-
-    // Send request
-    channel.blocking_send(request)?;
-    Ok(())
+    DYNAMIC_NLU_CHANNEL.lock_it()
+        .as_ref().unwrap().try_send(request)
+        .map_err(|e|anyhow!("Failed to send intent: {}", e))
 }
