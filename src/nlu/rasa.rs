@@ -125,7 +125,8 @@ struct RasaNluPipelineElement {
 #[derive(Debug)]
 pub struct RasaNluManager {
     intents: Vec<(String, Vec<NluUtterance>)>,
-    synonyms: Vec<EntityData>
+    synonyms: Vec<EntityData>,
+    equivalences: HashMap<String, Vec<String>>,
 }
 
 impl RasaNluManager {
@@ -160,12 +161,12 @@ impl RasaNluManager {
         Ok(serde_yaml::to_string(&conf)?)
     }
 
-    fn make_train_set_json(self) -> Result<String> {
-        let common_examples: Vec<RasaNluCommmonExample> = transform_intents(self.intents);
+    fn make_train_set_json(&self) -> Result<String> {
+        let common_examples: Vec<RasaNluCommmonExample> = transform_intents(self.intents.clone());
         
         let data = RasaNluData{
             common_examples,
-            entity_synonyms: self.synonyms,
+            entity_synonyms: self.synonyms.clone(),
             regex_features: vec![],
             lookup_tables: vec![]
         };
@@ -188,11 +189,17 @@ impl NluManager for RasaNluManager {
         self.intents.push((order_name.to_string(), phrases));
     }
 
-    fn add_entity(&mut self, _name: String, def: EntityDef) {
+    fn add_entity(&mut self, name: String, def: EntityDef) {
+        self.equivalences.insert(name, def.data.iter().map(|d|d.value.clone()).collect());
         self.synonyms.extend(def.data.into_iter());
     }
 
-    fn train(self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<RasaNlu> {
+    fn add_entity_value(&mut self, name: &str, value: String) -> Result<()> {
+        // TODO: Finish this!
+        std::unimplemented!();
+    }
+
+    fn train(&self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<RasaNlu> {
 
         let train_set = self.make_train_set_json()?;
         let train_conf = Self::make_train_conf(lang)?;
@@ -286,7 +293,7 @@ fn transform_intents(org: Vec<(String, Vec<NluUtterance>)>) -> Vec<RasaNluCommmo
 
 impl NluManagerStatic for RasaNluManager {
     fn new() -> Self {
-        Self{intents: vec![], synonyms: vec![]}
+        Self{intents: vec![], synonyms: vec![], equivalences: HashMap::new()}
     }
 
 
