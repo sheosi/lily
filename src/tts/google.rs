@@ -54,7 +54,12 @@ impl GTts {
     }
 
     fn available_langs() -> Vec<LanguageIdentifier> {
-        langids!("es", "en")
+        langids!("af", "ar", "bn", "bg", "ca", "cs", "da", "de", "en", "et")
+            /*"el", "fi", "fr", "gu", "he", "hi", "hu", "is", "id", "it", "iw",
+            "ja", "jv ","kn", "km", "ko", "nl", "lv", "ms", "ml", "my", "ne",
+            "no", "pl", "pt", "ro", "ru", "sr", "si", "sk", "es", "su", "sv",
+            "tl", "ta", "te", "th", "tr", "uk", "ur", "vi", "zh-CN", "zh-TW"*/
+        //)
     }
 }
 
