@@ -68,8 +68,7 @@ As we said voice is another signal (called 'order') , though to be fair is kind
 of a special signal as, both, 'order' and 'event' (a signal which is used to
 signal all kind of things happening from code: start active listening, error ...),
 are treated differently in the code, specially 'event' which is used in other signals
-and other parts. For the time being the only way to add new signals is by Python
-(though that is not yet fully implemented, but it shoudln't take long).
+and other parts. For the time being the only way to add new signals is by own Rust code.
 
 A skill having multiple signals will activate all of it's actions whenever any
 of the signals are activated.

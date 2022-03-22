@@ -1,16 +1,9 @@
 {
-    "python.autoComplete.extraPaths": [
-        "resources/python/lily_ext"
-    ],
-    "python.envFile": "${workspaceFolder}/.vscode/python_env",
+
     "files.watcherExclude": {
         "**/.git/objects/**": true,
         "**/.git/subtree-cache/**": true,
         "**/node_modules/*/**": true,
         "**/target/*/**": true
     },
-    "python.linting.pylintArgs": [
-        "--rcfile",
-        "${workspaceFolder}/.vscode/pylintrc"
-    ]
 }

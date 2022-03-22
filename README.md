@@ -2,7 +2,7 @@
 
 An efficient voice assistant for human beings.
 
-Lily is written in [Rust](https://www.rust-lang.org/)🦀 + [Python](https://www.python.org/)🐍.
+Lily is written in [Rust](https://www.rust-lang.org/)🦀.
 
 ## Obtaining Lily
 Lily uses git [LFS](https://git-lfs.github.com/) which means it needs to be
@@ -80,9 +80,8 @@ need [Rust](https://www.rust-lang.org/) and cargo (bundled alongside Rust) for t
 `cargo build`
 
 ### Debian package
-This repository can make a Debian package, however it is still dependent on 
-`snips-nlu` and `fluent.runtime` python packages, though will try to install 
-them on it's own.
+This repository can make a Debian package, however it is still dependent on the
+`snips-nlu` python package, though will try to install it on it's own.
 
 To generate the Debian package.
 

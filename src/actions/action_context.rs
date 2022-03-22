@@ -39,7 +39,7 @@ pub struct IntentData {
 }
 
 #[derive(Debug, Clone)]
-/// Just a basic dictionary implementation, this is used for compatibility both
+/// Just a basic dictionary implementation that was used for compatibility both
 /// with Python and Rust
 pub struct DynamicDict {
     pub map: Arc<Mutex<HashMap<String, DictElement>>>,

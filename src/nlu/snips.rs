@@ -141,7 +141,7 @@ fn split_captures<'a>(re: &'a Regex, input: &'a str) ->  Vec<(&'a str, SplitCapK
     result
 }
 
-// Python-less fallback
+// Check if the Python module for Snips exists
 fn python_has_module_path(module_path: &Path) -> Result<bool> {
     fn get_python_path() -> Result<Vec<String>> {
         let out = String::from_utf8(Command::new("python3").args(&[ "-c", "import sys;print(sys.path)"]).output()?.stdout)?;

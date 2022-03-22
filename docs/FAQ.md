@@ -40,11 +40,9 @@ Knowing that I wouldn't be satisfied with anything that existed I got to make my
 
 ## Why...
 
-### Why Rust + Python?
+### Why Rust?
 
 Rust is safe, and compiled (and it's ecosystem and community it's just plain awesomeness), it makes a great "core" language, but distributing modules with it means that dynamic libraries would get distributed, not only this is a bit iffy but it would mean architecture and platform lock-in to some that we establish, this would be a problem for people running it in other architectures or if we expanded OSs later, not to mention the nuissance of having to compile several libraries for different platforms.
-
-There enters Python, an very extended language which can be interpreted in any architecture just the same, and since it is used in 'extensions', this is no critic code and the potential slow-down is non-existant.
 
 Also: I wanted to use Rust to have a project to work on.
 

@@ -101,16 +101,6 @@ assets = [
         "usr/bin/",
         "755",
     ],
-    [
-        "resources/python/lily_ext/__init__.py",
-        "usr/share/lily/python/lily_ext/__init__.py",
-        "644",
-    ],
-    [
-        "resources/python/stubs/_lily_impl.py",
-        "usr/share/lily/python/stubs/_lily_impl.py",
-        "644",
-    ],
 
     # Pocketpshinx en-US
     [
@@ -294,11 +284,6 @@ assets = [
     ],
 
     # Default package
-    [
-        "skills/default/python/default/__init__.py",
-        "usr/share/lily/skills/default/python/default/__init__.py",
-        "644",
-    ],
     [
         "skills/default/sounds/beep.ogg",
         "usr/share/lily/skills/default/sounds/beep.ogg",

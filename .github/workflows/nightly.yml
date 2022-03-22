@@ -20,7 +20,7 @@ jobs:
     - name: ⚙️ Install deps
       run: |
         sudo apt update
-        sudo apt install libssl-dev libasound2-dev libpocketsphinx-dev libsphinxbase-dev python3-all-dev libopus-dev clang libgsl-dev
+        sudo apt install libssl-dev libasound2-dev libpocketsphinx-dev libsphinxbase-dev libopus-dev clang libgsl-dev
 
     - name: 🤔 Load persistent build files
       uses: actions/cache@v2.1.4
