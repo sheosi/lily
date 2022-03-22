@@ -21,16 +21,17 @@ use anyhow::Result;
 use async_trait::async_trait;
 use unic_langid::LanguageIdentifier;
 
-pub fn load_skills(paths: Vec<PathBuf>, curr_langs: &Vec<LanguageIdentifier>) -> Result<()> {
+pub fn load_skills(paths: Vec<PathBuf>, curr_langs: &Vec<LanguageIdentifier>) -> Result<Vec<Box<dyn SkillLoader>>> {
     let mut loaders  = get_loaders(paths);
 
     for loader in &mut loaders {
         loader.load_skills(curr_langs)?;
     }
 
+
     SIG_REG.lock_it().end_load(curr_langs)?;
 
-    Ok(())
+    Ok(loaders)
 }
 
 #[async_trait(?Send)]

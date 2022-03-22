@@ -26,6 +26,7 @@ use crate::vars::SKILLS_PATH;
 
 // Other crates
 use anyhow::Result;
+use futures::future::join_all;
 use lily_common::other::init_log;
 use lily_common::vars::set_app_name;
 use unic_langid::LanguageIdentifier;
@@ -71,10 +72,23 @@ pub async fn main()  -> Result<()> {
         as_str.into_iter().filter(|i|i.len()>0).map(|i|i.parse().expect(&format!("Locale parsing of \"{}\" failed",&i))).collect()
     };
 
-    load_skills(SKILLS_PATH.all(), &curr_langs)?;
+    let mut loaders = load_skills(SKILLS_PATH.all(), &curr_langs)?;
 
+    let loader_handles = loaders
+        .iter_mut()
+        .map(|mut loader| loader.run_loader())
+        .collect::<Vec<_>>();
+
+    let loader_handles = join_all(loader_handles);
+
+    let mut sig_reg_grd = SIG_REG.lock_it();
     //TODO!: This can very well be problematic since we access it later too.
-    SIG_REG.lock_it().call_loops(&config, &curr_langs).await?;
+    tokio::select!(
+        _ = sig_reg_grd.call_loops(&config, &curr_langs) => {}
+        _ = loader_handles => {}
+    );
+
+    
 
     Ok(())
 }
