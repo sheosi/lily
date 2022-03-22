@@ -37,12 +37,24 @@ impl IbmStt {
 
     fn model_from_lang(lang: &LanguageIdentifier) -> Result<String, SttConstructionError> {
         let lang = Self::lang_neg(lang);
-        Ok(format!("{}-{}_BroadbandModel", lang.language, lang.region.ok_or(SttConstructionError::NoRegion)?))
+		let language = lang.language.as_str();
+		let reg_data = lang.region.ok_or(SttConstructionError::NoRegion)?;
+		let region = reg_data.as_str();
+		Ok(match (language, region) {
+			("cs", "CZ") | ("en", "IN") | ("hi", "IN") => 
+				format!("{}-{}_Telephony", language, region),
+
+			_ => format!("{}-{}_BroadbandModel", language, region)
+		})
+
     }
 
     fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
         let available_langs = langids!(
-			"es-ES", "en-US"
+			"ar-AR", "ar-MS", "cs-CZ", "de-DE", "en-AU", "en-GB", "en-IN", 
+			"en-US", "es-AR", "es-CL", "es-CO", "es-ES", "es-MX", "es-PE", 
+			"fr-CA", "fr-FR", "hi-IN", "it-IT", "ja-JP", "ko-KR", "nl-NL", 
+			"pt-BR", "zh-CN"
 		);
 
         let default = langid!("en-US");
