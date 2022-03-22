@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use crate::actions::{Action, ACT_REG};
 use crate::exts::LockIt;
 use crate::queries::{ActQuery, Query};
-use crate::signals::{ActSignal, SIG_REG, Signal, UserSignal};
+use crate::signals::{ActSignal, SIG_REG, UserSignal};
 use crate::signals::order::dynamic_nlu;
 use self::{embedded::EmbeddedLoader, hermes::HermesLoader, vap::VapLoader};
 
@@ -87,11 +87,11 @@ pub fn register_skill(skill_name: &str,
     }
 
     for (name, (utts, signal)) in signals {
-        link_signal_intent(name, skill_name.into(), "TODO!".into(), signal);
+        link_signal_intent(name, skill_name.into(), "TODO!".into(), signal)?;
     }
 
     for (name, (utts , query)) in queries {
-        link_query_intent(name, skill_name.into(), "TODO!".into(), query);
+        link_query_intent(name, skill_name.into(), "TODO!".into(), query)?;
     }
 
     Ok(())

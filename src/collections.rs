@@ -54,14 +54,6 @@ impl<A: ?std::marker::Sized> BaseRegistry<A> {
         self.map.get(&mangled)
     }
 
-    pub fn remove_several(&mut self, skill_name: &str, items: &Vec<String>) -> Result<()> {
-        for item in items {
-            self.remove(skill_name, item)?;
-        }
-
-        Ok(())
-    }
-
     pub fn insert(&mut self, skill_name: &str, name: &str, object: Arc<Mutex<A>>) -> Result<()> {
         let mangled = mangle(skill_name,name);
         match self.map.entry(mangled) {

@@ -6,7 +6,7 @@ pub use self::action_context::*;
 use std::fmt; // For Debug in LocalActionRegistry
 use std::fs::{self, File};
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Mutex, Weak};
 
 // This crate
@@ -14,7 +14,7 @@ use crate::collections::BaseRegistry;
 use crate::exts::LockIt;
 
 // Other crates
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use log::error;

@@ -1,6 +1,6 @@
 // Standard library
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::exts::LockIt;
@@ -53,24 +53,6 @@ impl DynamicDict {
     pub fn set_str(&mut self, key: String, value: String) {
         self.map.lock_it().insert(key, DictElement::String(value));
     }
-
-    pub fn set_dict(&mut self, key: String, value: DynamicDict) {
-        self.map.lock_it().insert(key, DictElement::Dict(value));
-    }
-
-    pub fn set_decimal(&mut self, key: String, value: f32) {
-        self.map.lock_it().insert(key, DictElement::Decimal(value));
-    }
-}
-
-impl DynamicDict {
-    pub fn copy(&self) -> Self {
-        Self{map: Arc::new(Mutex::new(self.map.lock_it().clone()))}
-    }
-
-    pub fn get(&self, key: &str) -> Option<DictElement> {
-        self.map.lock_it().get(key).cloned()
-    }
 }
 
 impl PartialEq for DynamicDict {
@@ -87,18 +69,9 @@ impl DictElement {
         }
     }
 
-    pub fn as_dict(&self) -> Option<&DynamicDict> {
-        match self {
-            DictElement::Dict(d) => Some(d),
-            _ => None
-        }
-    }
-
     pub fn as_json_value(&self) -> Option<serde_json::Value> {
         match self {
             DictElement::String(s) => Some(serde_json::Value::String(s.to_string())),
-            DictElement::Decimal(d) => Some(serde_json::Value::Number(serde_json::Number::from_f64((*d).into()).unwrap())),
-            //DictElement::Dict(d) => Some(serde_json::Value::Object(d.map)), // TODO!
             _ => None
         }
     }
@@ -106,7 +79,5 @@ impl DictElement {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum DictElement {
-    String(String),
-    Dict(DynamicDict),
-    Decimal(f32)
+    String(String)
 }

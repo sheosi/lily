@@ -6,7 +6,7 @@ use crate::actions::{Action, ActionAnswer, ActionContext};
 use crate::exts::LockIt;
 use crate::collections::BaseRegistry;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use log::error;

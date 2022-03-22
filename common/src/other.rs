@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-pub fn init_log(name: String) {
+pub fn init_log(_name: String) {
     use simplelog::*;
 
     // Use Debug log level for debug compilations
