@@ -113,7 +113,7 @@ pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'stati
                 for lang in langs {
                     let man = m.get_mut_nlu_man(&lang);
                     let mangled = mangle(&skill, &entity);
-                    if let Err(e) = man.add_entity_value(&mangled, request.value.clone()) {
+                    if let Err(e) = man.add_entity_value(&mangled, value.clone()) {
                         error!("Failed to add value to entity {}", e);
                     }
                 }
@@ -134,7 +134,7 @@ pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'stati
             DynamicNluRequest::AddActionToIntent{action,intent_name,skill} => {
                 intent_map.upgrade().unwrap().lock_it().add_mapping(
                     &mangle(&skill, &intent_name),
-                    ActionSet::create(request.action)
+                    ActionSet::create(action.act_ref)
                 )
             }
         }
@@ -147,7 +147,7 @@ pub fn link_action_intent(intent_name: String, skill_name: String,
     send_in_channel(DynamicNluRequest::AddActionToIntent {
         skill: skill_name,
         intent_name,
-        action
+        action: WeakActionRef{act_ref: action}
     })
 }
 

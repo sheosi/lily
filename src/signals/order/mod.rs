@@ -11,7 +11,7 @@ use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
 // This crate
-use crate::actions::{ACT_REG, Action, ActionAnswer, ActionContext, ActionSet, ContextData, DynamicDict, MainAnswer, SatelliteData};
+use crate::actions::{ACT_REG, Action, ActionAnswer, ActionContext, ActionSet, ContextData, MainAnswer, SatelliteData};
 use crate::config::Config;
 use crate::exts::LockIt;
 use crate::queries::{ActQuery, Query};
@@ -261,11 +261,11 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
     }
 }
 
-// DynamicDict
-fn add_slots(slots: Vec<NluResponseSlot>) -> DynamicDict {
-    let mut result = DynamicDict::new();
+/// Transform the in the response into a HashMap for sending
+fn add_slots(slots: Vec<NluResponseSlot>) -> HashMap<String, String> {
+    let mut result = HashMap::new();
     for slot in slots.into_iter() {
-        result.set_str(slot.name, slot.value);
+        result.insert(slot.name, slot.value);
     }
 
     result

@@ -275,11 +275,11 @@ impl Action for HermesAction {
             intent: messages::ObjectIntentMessage {
                 intent_name: intent_name.clone(),
                 confidence_score: 1.0,
-                slots: intent_data.slots.map.lock_it().iter().map(|(n,v)|{
+                slots: intent_data.slots.iter().map(|(n,v)|{
                     messages::SlotIntentMessage {
-                        raw_value: v.as_string().expect(ERR).to_string(),
+                        raw_value: v.clone(),
                         value: messages::ValueSlotIntentMessage {
-                            value: v.as_json_value().expect(ERR)
+                            value: serde_json::Value::String(v.clone())
                         },
                         entity: n.to_string(),
                         slot_name: n.clone(),

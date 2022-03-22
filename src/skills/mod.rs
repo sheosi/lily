@@ -43,18 +43,15 @@ pub trait SkillLoader {
 
 
 fn add_new_intent(intent_name: String, skill_name: String,
-    utts: HashMap<LanguageIdentifier, String>,
+    utts: HashMap<LanguageIdentifier, IntentData>,
     action: Arc<Mutex<dyn Action + Send>>) -> Result<()> {
     
-    dynamic_nlu::add_intent(utts, skill_name_str.clone(), intent_name)?;
+    dynamic_nlu::add_intent(utts, skill_name.clone(), intent_name.clone())?;
 
-    let weak = Arc::downgrade(&arc);
+    let weak = Arc::downgrade(&action);
+    let act_name = action.lock_it().get_name().clone();
     
-    ACT_REG.lock_it().insert(
-        &skill_name,
-        &action.lock_it().get_name(),
-        arc
-    )?;
+    ACT_REG.lock_it().insert(&skill_name,&act_name,action)?;
 
     dynamic_nlu::link_action_intent(intent_name, skill_name, weak)
 }
@@ -67,11 +64,11 @@ pub fn register_skill(skill_name: &str,
 
     let skill_name_str = skill_name.to_string();
     
-    for (name, utts, action) in actions {
+    for (intent_name, utts, action) in actions {
         let weak = Arc::downgrade(&action);
-        dynamic_nlu::add_intent(utts, skill_name_str.clone(), intent_name)?;
+        dynamic_nlu::add_intent(utts, skill_name_str.clone(), intent_name.clone())?;
         dynamic_nlu::link_action_intent(
-            name, 
+            intent_name, 
             skill_name.to_string(),
             weak
         )?;
@@ -79,7 +76,7 @@ pub fn register_skill(skill_name: &str,
 
     for (name, utts, signal) in signals {
         add_new_intent(name.clone(),
-            skill_name.into(),
+            skill_name_str.clone(),
             utts,
             ActSignal::new(signal, format!("{}_signal_wrapper",name))
         )?;
@@ -88,7 +85,7 @@ pub fn register_skill(skill_name: &str,
     for (name, utts , query) in queries {
         add_new_intent(
             name.clone(),
-            skill_name.into(),
+            skill_name_str.clone(),
             utts,
             ActQuery::new(query, format!("{}_query_wrapper",name))
         )?;
