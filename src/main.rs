@@ -82,6 +82,7 @@ pub async fn main()  -> Result<()> {
     let loader_handles = join_all(loader_handles);
 
     let mut sig_reg_grd = SIG_REG.lock_it();
+    
     //TODO!: This can very well be problematic since we access it later too.
     tokio::select!(
         _ = sig_reg_grd.call_loops(&config, &curr_langs) => {}
