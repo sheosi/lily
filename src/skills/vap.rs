@@ -1,5 +1,6 @@
 // Standard library
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 // This crate
@@ -11,7 +12,7 @@ use crate::skills::{register_skill, SkillLoader};
 // Other crates
 use anyhow::Result;
 use async_trait::async_trait;
-use unic_langid::LanguageIdentifier;
+use unic_langid::{LanguageIdentifier, subtags};
 use vap_common_skill::structures::msg_skill_request::{ClientData, RequestData, RequestSlot};
 use vap_common_skill::structures::{MsgRegisterIntents, MsgRegisterIntentsResponse, MsgSkillRequest, Language};
 use vap_skill_register::{SkillRegister, SkillRegisterMessage, SkillRegisterStream, Response, ResponseType};
@@ -84,10 +85,19 @@ impl VapLoader {
     }
 
     fn transform(msg: MsgRegisterIntents) -> Vec<(String, HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn Action + Send>>)> {
-        let new_intents: HashMap<String, HashMap<LanguageIdentifier, IntentData>> = HashMap::new();
+        let mut new_intents: HashMap<String, HashMap<LanguageIdentifier, IntentData>> = HashMap::new();
 
         fn fmt_name(name: &str) -> String {
             format!("vap_action_{}", name)
+        }
+
+        fn fmt_lang(lang: Language) -> LanguageIdentifier {
+            LanguageIdentifier::from_parts(
+                subtags::Language::from_str(&lang.language).unwrap(),
+                Option::None,
+                lang.country.and_then(|r| subtags::Region::from_str(&r).ok()),
+                &lang.extra.and_then(|e|subtags::Variant::from_str(&e).ok()).map(|v|vec![v]).unwrap_or_else(|| vec![])
+            )
         }
 
         for lang_set in msg.nlu_data.into_iter() {
@@ -103,10 +113,20 @@ impl VapLoader {
                     utts: intent.utterances.into_iter().map(|d|d.text).collect(), // TODO! Utterances might need some conversion of slot format
                     hook: Hook::Action(fmt_name(&intent.name)),
                 };
+
+                if !new_intents.contains_key(&intent.name) {
+                    new_intents.insert(intent.name.clone(), HashMap::new());
+                }
+            
+                assert!(
+                    new_intents.get_mut(&intent.name).unwrap()
+                    .insert(fmt_lang(lang_set.language.clone()), internal_intent)
+                    .is_none()
+                );
             }
 
             for entity in lang_set.entities {
-
+                // TODO! Need a way of passing entities
             }
         }
 

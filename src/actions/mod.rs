@@ -43,7 +43,7 @@ impl ActionAnswer {
     pub fn audio_file(path: &Path, end_session: bool) -> Result<Self> {
         let mut f = File::open(path)?;
         let mut buffer = vec![0; fs::metadata(path)?.len() as usize];
-        f.read(&mut buffer)?;
+        f.read_exact(&mut buffer)?;
         let a = Audio::new_encoded(buffer);
         Ok(Self {answer: MainAnswer::Sound(a), should_end_session: end_session})
     }
