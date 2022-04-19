@@ -1326,7 +1326,7 @@ dependencies = [
  "pocketsphinx",
  "regex",
  "reqwest",
- "rmp-serde 1.0.0",
+ "rmp-serde 1.1.0",
  "rumqttc",
  "serde",
  "serde_json",
@@ -1353,7 +1353,7 @@ dependencies = [
  "lily_common",
  "log",
  "ogg-opus",
- "rmp-serde 1.0.0",
+ "rmp-serde 1.1.0",
  "rsnowboy",
  "rumqttc",
  "serde",
@@ -1965,6 +1965,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "paste"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c520e05135d6e763148b6426a837e239041653ba7becd2e538c076c738025fc"
+
+[[package]]
 name = "peeking_take_while"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2251,12 +2257,13 @@ dependencies = [
 
 [[package]]
 name = "rmp"
-version = "0.8.10"
+version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f55e5fa1446c4d5dd1f5daeed2a4fe193071771a2636274d0d7a3b082aa7ad6"
+checksum = "44519172358fd6d58656c86ab8e7fbc9e1490c3e8f14d35ed78ca0dd07403c9f"
 dependencies = [
  "byteorder",
  "num-traits 0.2.14",
+ "paste",
 ]
 
 [[package]]
@@ -2294,9 +2301,9 @@ dependencies = [
 
 [[package]]
 name = "rmp-serde"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3eedffbfcc6a428f230c04baf8f59bd73c1781361e4286111fe900849aaddaf"
+checksum = "25786b0d276110195fa3d6f3f31299900cf71dfbd6c28450f3f58a0e7f7a347e"
 dependencies = [
  "byteorder",
  "rmp",
