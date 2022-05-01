@@ -41,7 +41,7 @@ pub async fn on_nlu_request<M: NluManager + NluManagerStatic + Debug + Send + 's
     config: &Config,
     mut channel: mpsc::Receiver<MsgRequest>,
     signal_event: SignalEventShared,
-    curr_langs: &Vec<LanguageIdentifier>,
+    curr_langs: &[LanguageIdentifier],
     order: &mut SignalOrder<M>,
     sessions: Arc<Mutex<SessionManager>>
 ) -> Result<()> {

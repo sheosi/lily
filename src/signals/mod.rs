@@ -77,8 +77,8 @@ impl ActMap {
 
 #[async_trait(?Send)]
 pub trait Signal {
-    fn end_load(&mut self, curr_lang: &Vec<LanguageIdentifier>) -> Result<()>;
-    async fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, curr_lang: &Vec<LanguageIdentifier>) -> Result<()>;
+    fn end_load(&mut self, curr_lang: &[LanguageIdentifier]) -> Result<()>;
+    async fn event_loop(&mut self, signal_event: SignalEventShared, config: &Config, curr_lang: &[LanguageIdentifier]) -> Result<()>;
 }
 
 #[async_trait(?Send)]

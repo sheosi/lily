@@ -101,7 +101,7 @@ impl<T> IsLangCompatible for T where T: SpecifiesLangs {
 
 fn negotiate_langs_res(
     input: &LanguageIdentifier,
-    available: &Vec<LanguageIdentifier>
+    available: &[LanguageIdentifier]
 ) -> Result<LanguageIdentifier, SttConstructionError> {
     let langs = negotiate_languages(&[input], available, None, NegotiationStrategy::Filtering);
     if !langs.is_empty() {

@@ -37,7 +37,7 @@ impl SignalRegistry {
         }
     }
 
-    pub fn end_load(&mut self, curr_langs: &Vec<LanguageIdentifier>) -> Result<()> {
+    pub fn end_load(&mut self, curr_langs: &[LanguageIdentifier]) -> Result<()> {
 
         let mut to_remove = Vec::new();
 

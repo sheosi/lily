@@ -85,7 +85,7 @@ impl MqttInterfaceOut {
 
     pub async fn handle_out(
         &mut self,
-        curr_langs: &Vec<LanguageIdentifier>,
+        curr_langs: &[LanguageIdentifier],
         conf_tts: &TtsData,
         def_lang: Option<&LanguageIdentifier>,
         sessions: Arc<Mutex<SessionManager>>,

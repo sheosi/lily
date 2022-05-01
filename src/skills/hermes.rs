@@ -133,7 +133,7 @@ impl HermesLoader {
 #[async_trait(?Send)]
 impl SkillLoader for HermesLoader {
     fn load_skills(&mut self,
-        _langs: &Vec<LanguageIdentifier>) -> Result<()> {
+        _langs: &[LanguageIdentifier]) -> Result<()> {
 
         // For the time being we are going to put everything as a single skill called "hermes"
         // TODO: Get all intents from somewhere

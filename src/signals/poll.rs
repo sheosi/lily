@@ -45,10 +45,10 @@ impl PollQuery {
 
 #[async_trait(?Send)]
 impl Signal for PollQuery {
-    fn end_load(&mut self, _curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
+    fn end_load(&mut self, _curr_lang: &[LanguageIdentifier]) -> Result<()> {
         Ok(())
     }
-    async fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, curr_lang: &Vec<LanguageIdentifier>) -> Result<()> {
+    async fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, curr_lang: &[LanguageIdentifier]) -> Result<()> {
         loop {
             sleep(Duration::from_secs(30)).await;
             for task in &mut self.tasks {

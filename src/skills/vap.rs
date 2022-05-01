@@ -207,7 +207,7 @@ impl VapLoader {
 
 #[async_trait(?Send)]
 impl SkillLoader for VapLoader {
-    fn load_skills(&mut self, _langs: &Vec<LanguageIdentifier>) -> Result<()> {
+    fn load_skills(&mut self, _langs: &[LanguageIdentifier]) -> Result<()> {
         Ok(())
     }
     

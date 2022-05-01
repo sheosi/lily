@@ -21,8 +21,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use unic_langid::LanguageIdentifier;
 
-pub fn load_skills(curr_langs: &Vec<LanguageIdentifier>) -> Result<Vec<Box<dyn SkillLoader>>> {
-    let mut loaders  = get_loaders(curr_langs.clone());
+pub fn load_skills(curr_langs: &[LanguageIdentifier]) -> Result<Vec<Box<dyn SkillLoader>>> {
+    let mut loaders  = get_loaders(curr_langs.to_vec());
 
     for loader in &mut loaders {
         loader.load_skills(curr_langs)?;
@@ -37,7 +37,7 @@ pub fn load_skills(curr_langs: &Vec<LanguageIdentifier>) -> Result<Vec<Box<dyn S
 #[async_trait(?Send)]
 pub trait SkillLoader {
     fn load_skills(&mut self,
-        langs: &Vec<LanguageIdentifier>) -> Result<()>;
+        langs: &[LanguageIdentifier]) -> Result<()>;
     
     async fn run_loader(&mut self) -> Result<()>;
 }

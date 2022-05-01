@@ -125,7 +125,7 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> SignalOrder<M> {
         process_answers(ans, lang, satellite.clone())
     }
 
-    pub fn end_loading(nlu: &Arc<Mutex<NluMap<M>>>,langs: &Vec<LanguageIdentifier>) -> Result<()> {
+    pub fn end_loading(nlu: &Arc<Mutex<NluMap<M>>>,langs: &[LanguageIdentifier]) -> Result<()> {
         for lang in langs {
             let (train_path, model_path) = M::get_paths();
             let mut m = nlu.lock_it();
@@ -230,14 +230,14 @@ impl<M:NluManager + NluManagerStatic + Debug + Send>  SignalOrder<M> {
 
 #[async_trait(?Send)]
 impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for SignalOrder<M> {
-    fn end_load(&mut self, curr_langs: &Vec<LanguageIdentifier>) -> Result<()> {
+    fn end_load(&mut self, curr_langs: &[LanguageIdentifier]) -> Result<()> {
         Self::end_loading(&self.nlu, curr_langs)
     }
 
     async fn event_loop(&mut self, 
         signal_event: SignalEventShared,
         config: &Config,
-        curr_langs: &Vec<LanguageIdentifier>
+        curr_langs: &[LanguageIdentifier]
     ) -> Result<()> {
         let def_lang = curr_langs.get(0);
         let mut mqtt = MqttApi::new(def_lang.expect("We need at least one language").clone())?;
@@ -250,7 +250,7 @@ impl<M:NluManager + NluManagerStatic + Debug + Send + 'static> Signal for Signal
         let dyn_ent_fut = on_dyn_nlu(
             Arc::downgrade(&self.nlu),
             Arc::downgrade(&self.intent_map),
-            curr_langs.clone()
+            curr_langs.to_vec()
         );
         select!{
             e = dyn_ent_fut => {Err(anyhow!("Dynamic entitying failed: {:?}",e))}

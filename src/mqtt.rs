@@ -25,7 +25,7 @@ impl MqttApi {
     pub async fn api_loop (
         &mut self,
         config: &Config,
-        curr_langs: &Vec<LanguageIdentifier>,
+        curr_langs: &[LanguageIdentifier],
         def_lang: Option<&LanguageIdentifier>,
         sessions: Arc<Mutex<SessionManager>>,
         channel_nlu: mpsc::Sender<MsgRequest>,
@@ -116,7 +116,7 @@ impl MqttApiOut {
     }
     
     async fn handle(&mut self,
-        curr_langs: &Vec<LanguageIdentifier>,
+        curr_langs: &[LanguageIdentifier],
         tts_conf: &TtsData,
         def_lang: Option<&LanguageIdentifier>,
         sessions: Arc<Mutex<SessionManager>>,

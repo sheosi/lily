@@ -95,7 +95,7 @@ pub struct VoiceDescr {
 
 fn negotiate_langs_res(
     input: &LanguageIdentifier,
-    available: &Vec<LanguageIdentifier>,
+    available: &[LanguageIdentifier],
     default: Option<&LanguageIdentifier>
 ) -> Result<LanguageIdentifier, TtsConstructionError> {
     let langs = negotiate_languages(

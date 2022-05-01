@@ -23,7 +23,7 @@ impl EmbeddedLoader {
 #[async_trait(?Send)]
 impl SkillLoader for EmbeddedLoader {
     fn load_skills(&mut self, 
-        langs: &Vec<LanguageIdentifier>) -> Result<()> {
+        langs: &[LanguageIdentifier]) -> Result<()> {
 
         {
             let mut mut_sigreg = SIG_REG.lock_it();
