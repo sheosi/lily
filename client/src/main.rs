@@ -7,9 +7,9 @@ use std::rc::Rc;
 
 // Other crates
 use anyhow::anyhow;
+use client_components::*;
 use lily_common::audio::{Audio, AudioRaw, PlayDevice, RecDevice};
-use lily_common::client::hotword::{HotwordDetector, Snowboy};
-use lily_common::client::vad::{SnowboyVad, Vad, VadError};
+use lily_common::client::{hotword::Snowboy, vad::SnowboyVad};
 use lily_common::communication::*;
 use lily_common::other::{init_log, ConnectionConf};
 use lily_common::vars::*;
@@ -47,74 +47,6 @@ impl<'a> PartialEq for ProgState<'a> {
             ProgState::PasiveListening => matches!(other, ProgState::PasiveListening),
             ProgState::ActiveListening(_) => matches!(other, ProgState::ActiveListening(_))
         }
-    }
-}
-struct ActiveListener<V: Vad> {
-    was_talking: bool,
-    vad: V,
-}
-
-struct PasiveListener<H: HotwordDetector> {
-    hotword_detector: H,
-}
-
-impl<H: HotwordDetector> PasiveListener<H> {
-    fn new(mut hotword_detector: H) -> anyhow::Result<Self> {
-        hotword_detector.start_hotword_check()?;
-        Ok(Self { hotword_detector })
-    }
-
-    fn process(&mut self, audio: AudioRef) -> anyhow::Result<bool> {
-        self.hotword_detector.check_hotword(audio.data)
-    }
-
-    fn set_from_conf(&mut self, conf: &ClientConf) {
-        self.hotword_detector
-            .set_sensitivity(conf.hotword_sensitivity)
-    }
-}
-
-enum ActiveState<'a> {
-    // TODO: Add timeout
-    NoOneTalking,
-    Hearing(AudioRef<'a>),
-    Done(AudioRef<'a>),
-}
-
-impl<V: Vad> ActiveListener<V> {
-    fn new(vad: V) -> Self {
-        Self {
-            was_talking: false,
-            vad,
-        }
-    }
-
-    fn process<'a>(&mut self, audio: AudioRef<'a>) -> Result<ActiveState<'a>, VadError> {
-        if self.vad.is_someone_talking(audio.data)? {
-            self.was_talking = true;
-            Ok(ActiveState::Hearing(audio))
-        } else if self.was_talking {
-            self.vad.reset()?;
-            self.was_talking = false;
-            Ok(ActiveState::Done(audio))
-        } else {
-            Ok(ActiveState::NoOneTalking)
-        }
-    }
-}
-
-#[derive(Clone)]
-struct AudioRef<'a> {
-    data: &'a [i16],
-}
-
-impl<'a> AudioRef<'a> {
-    fn from(data: &'a [i16]) -> Self {
-        Self { data }
-    }
-
-    fn into_owned(self) -> AudioRaw {
-        AudioRaw::new_raw(self.data.to_owned(), DEFAULT_SAMPLES_PER_SECOND)
     }
 }
 
@@ -201,57 +133,6 @@ async fn receive(
         }
     }
 }
-
-#[cfg(debug_assertions)]
-struct DebugAudio {
-    audio: AudioRaw,
-    save_ms: u16,
-    curr_ms: f32,
-}
-
-#[cfg(debug_assertions)]
-impl DebugAudio {
-    fn new(save_ms: u16) -> Self {
-        Self {
-            audio: AudioRaw::new_empty(DEFAULT_SAMPLES_PER_SECOND),
-            save_ms,
-            curr_ms: 0.0,
-        }
-    }
-
-    fn push(&mut self, audio: &AudioRef) {
-        self.curr_ms += (audio.data.len() as f32) / (DEFAULT_SAMPLES_PER_SECOND as f32) * 1000.0;
-        self.audio
-            .append_audio(audio.data, DEFAULT_SAMPLES_PER_SECOND)
-            .expect("Wrong SPSs");
-        if (self.curr_ms as u16) >= self.save_ms {
-            self.audio
-                .save_to_disk(Path::new("pasive_audio.ogg"))
-                .expect("Failed to write debug file");
-            self.clear();
-        }
-    }
-
-    fn clear(&mut self) {
-        self.audio.clear();
-        self.curr_ms = 0.0;
-    }
-}
-
-// Just an empty version of DebugAudio for release
-#[cfg(not(debug_assertions))]
-struct DebugAudio {
-}
-
-#[cfg(not(debug_assertions))]
-impl DebugAudio {
-    fn new(save_ms: u16) -> Self {Self {}}
-
-    fn push(&mut self, audio: &AudioRef) {}
-
-    fn clear(&mut self) {}
-}
-
 
 async fn user_listen(
     mqtt_name: &str,
@@ -384,19 +265,12 @@ async fn user_listen(
     }
 }
 
-#[derive(Clone, Deserialize, Debug, Serialize)]
+#[derive(Clone, Deserialize, Debug, Default, Serialize)]
 struct ConfFile {
     #[serde(default)]
     mqtt: ConnectionConf,
 }
 
-impl Default for ConfFile {
-    fn default() -> Self {
-        Self {
-            mqtt: ConnectionConf::default(),
-        }
-    }
-}
 impl ConfFile {
     fn load() -> anyhow::Result<ConfFile> {
         let conf_path = CONN_CONF_FILE.get();
@@ -435,7 +309,7 @@ pub async fn main() -> anyhow::Result<()> {
     let mqtt_conn = {
         let mut old_conf = config.clone();
         let conn = ConnectionConfResolved::from(config.mqtt, || {
-            format!("lily-satellite-{}", Uuid::new_v4().to_string())
+            format!("lily-satellite-{}", Uuid::new_v4())
         });
 
         if old_conf.mqtt.name.is_none() {

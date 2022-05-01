@@ -30,7 +30,10 @@ bytes = "^1.1"
 futures = "^0.3"
 xtra = {version = "^0.5", features = ["with-tokio-1"] }  # Actor framework
 delegate = "^0.6"                                                         # Used for the registries using the base ones
-vap-skill-register = {git="https://github.com/secretsauceai/voice-assistant-protocol/"}
+#vap-skill-register = {git="https://github.com/secretsauceai/voice-assistant-protocol/"}
+#vap-common-skill = {git="https://github.com/secretsauceai/voice-assistant-protocol/"}
+vap-skill-register = {path="../vap/vap-skill-register"}
+vap-common-skill = {path="../vap/vap-common-skill"}
 coap-lite = "^0.9"
 
 pocketsphinx = "^0.6.0"                            # Offline Stt
@@ -84,7 +87,7 @@ devel_rasa_nlu = []
 unused = []
 
 [workspace]
-members = ["client", "common"]
+members = ["client", "client-components", "common"]
 
 [package.metadata.deb]
 maintainer = "Sergio Tortosa Benedito <sertorbe@gmail.com>"
