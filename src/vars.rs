@@ -1,4 +1,4 @@
-use lily_common::vars::{MultipathRef, PathRef};
+use lily_common::vars::PathRef;
 
 // Paths
 pub const STT_DATA_PATH: PathRef = PathRef::own("stt");
@@ -19,10 +19,6 @@ pub const PS_LOG_PATH: PathRef = PathRef::user_cfg("logs/pocketsphinx.log");
 pub const PS_LOG_PATH: PathRef = PathRef::user_cfg("logs/pocketsphinx.log");
 
 pub const MAIN_CONF_PATH: PathRef = PathRef::user_cfg("conf.yaml");
-pub const SKILLS_PATH: MultipathRef = MultipathRef::new(&[
-    PathRef::user_cfg("skills"),
-    PathRef::own("skills")
-]);
 
 
 // Messages
@@ -41,6 +37,7 @@ pub const NO_ADD_ENTITY_VALUE_MSG: &str = "Can't add value to entity, NLU manage
 // Other
 pub const MIN_SCORE_FOR_ACTION: f32 = 0.3;
 pub const NLU_TRAINING_DELAY: u64 = 1000;
+pub const DEFAULT_COAP_PORT: u16 = 5683;
 
 pub fn mangle(skill_name: &str, intent_name: &str) -> String {
     format!("__{}__{}", skill_name, intent_name)

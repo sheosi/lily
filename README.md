@@ -6,7 +6,7 @@ Lily is written in [Rust](https://www.rust-lang.org/)🦀.
 
 ## Obtaining Lily
 Lily uses git [LFS](https://git-lfs.github.com/) which means it needs to be
-cloned with that installed and ready beforehand.
+cloned with that installed beforehand.
 
 First install git LFS, for *Debian/Ubuntu* it is:
 

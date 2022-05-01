@@ -264,7 +264,7 @@ impl HermesAction {
 
 #[async_trait(?Send)]
 impl Action for HermesAction {
-    async fn call(&self ,context: &ActionContext) -> Result<ActionAnswer> {
+    async fn call(&mut self ,context: &ActionContext) -> Result<ActionAnswer> {
         const ERR: &str = "DynamicDict lacks mandatory element";
         
         let intent_name = (*self.intent_name).clone();

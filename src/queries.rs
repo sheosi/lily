@@ -76,7 +76,7 @@ impl ActQuery {
 
 #[async_trait(?Send)]
 impl Action for ActQuery {
-    async fn call(&self ,_context: &ActionContext) -> Result<ActionAnswer> {
+    async fn call(&mut self ,_context: &ActionContext) -> Result<ActionAnswer> {
         let data = HashMap::new();
         let a = match self.q.lock_it().execute(data) {
             Ok(v)=>v.into_iter().fold("".to_string(),|g,s|format!("{} {:?},", g, s)),

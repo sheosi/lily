@@ -6,7 +6,7 @@ use std::sync::{Mutex, Weak};
 // This crate
 use crate::actions::Action;
 use crate::exts::LockIt;
-use crate::nlu::{IntentData, NluManager, NluManagerStatic};
+use crate::nlu::{IntentData, NluManager, NluManagerStatic, EntityDef};
 use crate::signals::{ActionSet, ActMap, collections::NluMap, SignalOrder};
 use crate::vars::{mangle, NO_ADD_ENTITY_VALUE_MSG, NLU_TRAINING_DELAY};
 
@@ -30,6 +30,12 @@ enum DynamicNluRequest {
         by_lang: HashMap<LanguageIdentifier, IntentData>,
         skill: String,
         intent_name: String,
+    },
+
+    AddEntity {
+        skill: String,
+        entity_name: String,
+        by_lang: HashMap<LanguageIdentifier, EntityDef>
     },
 
     EntityAddValue {
@@ -120,6 +126,7 @@ pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'stati
 
                 schedule_nlu_compilation(shared_nlu.clone(), curr_langs.clone());
             }
+
             DynamicNluRequest::AddIntent{by_lang, skill, intent_name} => {     
                 let arc = shared_nlu.upgrade().unwrap();   
                 let mut m = arc.lock_it();
@@ -131,11 +138,23 @@ pub async fn on_dyn_nlu<M: NluManager + NluManagerStatic + Debug + Send + 'stati
 
                 schedule_nlu_compilation(shared_nlu.clone(), curr_langs.clone());
             }
+
             DynamicNluRequest::AddActionToIntent{action,intent_name,skill} => {
                 intent_map.upgrade().unwrap().lock_it().add_mapping(
                     &mangle(&skill, &intent_name),
                     ActionSet::create(action.act_ref)
                 )
+            }
+
+            DynamicNluRequest::AddEntity { skill, entity_name, by_lang } => {
+                let arc = shared_nlu.upgrade().unwrap();   
+                let mut m = arc.lock_it();
+
+                for (lang, def) in by_lang {
+                    let man = m.get_mut_nlu_man(&lang);
+                    let mangled = mangle(&skill, &entity_name);
+                    man.add_entity(mangled, def);
+                }
             }
         }
     }
@@ -171,9 +190,18 @@ pub fn add_intent(
 ) -> Result<()> {
 
     send_in_channel(DynamicNluRequest::AddIntent {
-        by_lang: HashMap::new(),
-        skill: "".to_string(),
-        intent_name: "".to_string()
+        by_lang, skill,intent_name
+    })
+}
+
+pub fn add_entity(
+    by_lang: HashMap<LanguageIdentifier, EntityDef>,
+    skill: String,
+    entity_name: String
+) -> Result<()> {
+    
+    send_in_channel(DynamicNluRequest::AddEntity { 
+        skill, entity_name, by_lang
     })
 }
 

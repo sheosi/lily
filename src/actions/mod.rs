@@ -57,7 +57,7 @@ impl ActionAnswer {
 
 #[async_trait(?Send)]
 pub trait Action {
-    async fn call(&self, context: &ActionContext) -> Result<ActionAnswer>;
+    async fn call(&mut self, context: &ActionContext) -> Result<ActionAnswer>;
     fn get_name(&self) -> String;
 }
 
@@ -123,7 +123,7 @@ impl SayHelloAction {
 
 #[async_trait(?Send)]
 impl Action for SayHelloAction {
-    async fn call(&self, _context: &ActionContext) -> Result<ActionAnswer> {
+    async fn call(&mut self, _context: &ActionContext) -> Result<ActionAnswer> {
         ActionAnswer::send_text("Hello".into(), true)
     }
 

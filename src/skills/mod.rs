@@ -4,16 +4,16 @@ mod vap;
 
 // Standard library
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::actions::{Action, ACT_REG};
 use crate::exts::LockIt;
 use crate::queries::{ActQuery, Query};
-use crate::nlu::IntentData;
+use crate::nlu::{IntentData, EntityDef};
 use crate::signals::{ActSignal, SIG_REG, UserSignal};
 use crate::signals::order::dynamic_nlu;
+use crate::vars::DEFAULT_COAP_PORT;
 use self::{embedded::EmbeddedLoader, hermes::HermesLoader, vap::VapLoader};
 
 // Other crates
@@ -21,8 +21,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use unic_langid::LanguageIdentifier;
 
-pub fn load_skills(paths: Vec<PathBuf>, curr_langs: &Vec<LanguageIdentifier>) -> Result<Vec<Box<dyn SkillLoader>>> {
-    let mut loaders  = get_loaders(paths);
+pub fn load_skills(curr_langs: &Vec<LanguageIdentifier>) -> Result<Vec<Box<dyn SkillLoader>>> {
+    let mut loaders  = get_loaders(curr_langs.clone());
 
     for loader in &mut loaders {
         loader.load_skills(curr_langs)?;
@@ -61,7 +61,9 @@ fn add_new_intent(intent_name: String, skill_name: String,
 pub fn register_skill(skill_name: &str,
     actions: Vec<(String, HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn Action + Send>>)>,
     signals: Vec<(String, HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn UserSignal + Send>>)>,
-    queries: Vec<(String, HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn Query + Send>>)>) -> Result<()> {
+    queries: Vec<(String, HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn Query + Send>>)>,
+    entities: Vec<(String, HashMap<LanguageIdentifier, EntityDef>)>
+) -> Result<()> {
 
     let skill_name_str = skill_name.to_string();
     
@@ -92,16 +94,22 @@ pub fn register_skill(skill_name: &str,
         )?;
     }
 
+    for (name, def) in entities {
+        dynamic_nlu::add_entity(
+            def, skill_name_str.clone(), name
+        )?;
+    }
+
     Ok(())
 }
 
 fn get_loaders(
-    _paths: Vec<PathBuf>
+    langs: Vec<LanguageIdentifier>
 ) ->Vec<Box<dyn SkillLoader>> {
     vec![
         Box::new(EmbeddedLoader::new()),
         Box::new(HermesLoader::new()),
-        Box::new(VapLoader::new())
+        Box::new(VapLoader::new(DEFAULT_COAP_PORT, langs))
     ]
 }
 

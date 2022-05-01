@@ -22,7 +22,6 @@ use crate::config::Config;
 use crate::exts::LockIt;
 use crate::skills::load_skills;
 use crate::signals::SIG_REG;
-use crate::vars::SKILLS_PATH;
 
 // Other crates
 use anyhow::Result;
@@ -69,14 +68,14 @@ pub async fn main()  -> Result<()> {
                 vec![get_locale_default()]
             };
 
-        as_str.into_iter().filter(|i|i.len()>0).map(|i|i.parse().expect(&format!("Locale parsing of \"{}\" failed",&i))).collect()
+        as_str.into_iter().filter(|i|!i.is_empty()).map(|i|i.parse().expect(&format!("Locale parsing of \"{}\" failed",&i))).collect()
     };
 
-    let mut loaders = load_skills(SKILLS_PATH.all(), &curr_langs)?;
+    let mut loaders = load_skills(&curr_langs)?;
 
     let loader_handles = loaders
         .iter_mut()
-        .map(|mut loader| loader.run_loader())
+        .map(|loader| loader.run_loader())
         .collect::<Vec<_>>();
 
     let loader_handles = join_all(loader_handles);

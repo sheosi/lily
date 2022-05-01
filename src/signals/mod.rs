@@ -99,7 +99,7 @@ impl ActSignal {
 
 #[async_trait(?Send)]
 impl Action for ActSignal {
-    async fn call(&self ,_context: &ActionContext) -> Result<ActionAnswer> {
+    async fn call(&mut self ,_context: &ActionContext) -> Result<ActionAnswer> {
         // TODO: In theory, Lily should ask which parameters for the signal and 
         // which action to be executed but we can't do that right now
         let m = HashMap::new();
