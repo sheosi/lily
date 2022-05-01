@@ -1,3 +1,4 @@
+use std::sync::{Mutex, Arc};
 use std::time::{SystemTime, Duration, UNIX_EPOCH};
 use crate::vars::{CLOCK_TOO_EARLY_MSG, DEFAULT_SAMPLES_PER_SECOND, RECORD_BUFFER_SIZE};
 use log::info;
@@ -33,8 +34,14 @@ pub struct RecDevice {
 struct StreamData {
     internal_buffer_consumer: Consumer<i16>,
     last_read: u128,
-    _stream: Stream
+    _stream: SendableStream
 }
+
+struct SendableStream {
+    _inner: Arc<Mutex<Stream>>
+}
+
+unsafe impl Send for SendableStream {}
 
 impl RecDevice {
     pub fn new() -> Self {
@@ -75,7 +82,7 @@ impl RecDevice {
         Ok(StreamData {
             internal_buffer_consumer: cons,
             last_read: 0u128,
-            _stream: stream
+            _stream: SendableStream{_inner: Arc::new(Mutex::new(stream))}
         })
     }
 
@@ -105,19 +112,22 @@ impl RecDevice {
 
     pub async fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, RecordingError> {
         assert!(milis <= ((RECORD_BUFFER_SIZE/2) as u16) );
-        match self.stream_data {
-            Some(ref mut str_data) => {
-                let curr_time = Self::get_millis();
-                let diff_time = (curr_time - str_data.last_read) as u16;
-                
-                if milis > diff_time{
-                    let sleep_time = (milis  - diff_time) as u64;
-                    sleep(Duration::from_millis(sleep_time)).await;
-                }
+
+        let last_read = match self.stream_data {
+            Some(ref mut str_data) => {      
+                str_data.last_read          
             },
             None => {
                 panic!("read_for_ms called when a recdevice was stopped");
             }
+        };
+
+        let curr_time = Self::get_millis();
+        let diff_time = (curr_time - last_read) as u16;
+
+        if milis > diff_time {
+            let sleep_time = (milis  - diff_time) as u64;
+            sleep(Duration::from_millis(sleep_time)).await;
         }
 
         self.read()
