@@ -50,13 +50,12 @@ fn add_new_intent(intent_name: String, skill_name: String,
     dynamic_nlu::add_intent(utts, skill_name.clone(), intent_name.clone())?;
 
     let weak = Arc::downgrade(&action);
-    let act_name = action.lock_it().get_name().clone();
+    let act_name = action.lock_it().get_name();
     
     ACT_REG.lock_it().insert(&skill_name,&act_name,action)?;
 
     dynamic_nlu::link_action_intent(intent_name, skill_name, weak)
 }
-
 
 pub fn register_skill(skill_name: &str,
     actions: Vec<(String, HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn Action + Send>>)>,

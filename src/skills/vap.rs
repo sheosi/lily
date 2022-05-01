@@ -11,19 +11,25 @@ use crate::signals::collections::Hook;
 use crate::skills::{register_skill, SkillLoader};
 
 // Other crates
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use maplit::hashmap;
 use rmp_serde::to_vec_named;
 use unic_langid::{LanguageIdentifier, subtags};
+use vap_common_skill::structures::msg_query_response::QueryDataCapability;
 use vap_common_skill::structures::msg_register_intents::NluData;
 use vap_common_skill::structures::msg_skill_request::{ClientData, RequestData, RequestSlot, RequestDataKind};
-use vap_common_skill::structures::{MsgRegisterIntentsResponse, MsgSkillRequest, Language, MsgConnectResponse, MsgNotificationResponse};
-use vap_skill_register::{SkillRegister, SkillRegisterMessage, SkillRegisterOut, SkillRegisterStream, Response, ResponseType, RequestResponse};
+use vap_common_skill::structures::{MsgRegisterIntentsResponse, MsgSkillRequest, Language, MsgConnectResponse, MsgNotificationResponse, MsgQueryResponse, msg_notification_response, msg_query_response, AssociativeMap};
+use vap_skill_register::{SkillRegister, SkillRegisterMessage, SkillRegisterOut, SkillRegisterStream, Response, ResponseType, RequestResponse, SYSTEM_SELF_ID};
 
 pub struct VapLoader {
     out: Arc<Mutex<SkillRegisterOut>>,
     stream_reg: Option<(SkillRegisterStream, SkillRegister)>,
-    langs: Vec<Language>
+    langs: Vec<Language>,
+
+    // Dicts containing the system capabilities
+    notifies: HashMap<String, Box<dyn CanBeNotified>>,
+    queries: HashMap<String, Box<dyn CanBeQueried>>
 }
 
 fn to_lang_struct(l: LanguageIdentifier) -> Language {
@@ -36,13 +42,36 @@ fn to_lang_struct(l: LanguageIdentifier) -> Language {
 
 impl VapLoader {
     pub fn new(port: u16, langs: Vec<LanguageIdentifier>) -> Self {
-        let (reg, stream, out) = SkillRegister::new("test-skill-register", port).unwrap();
+        let (reg, stream, out) = SkillRegister::new(port).unwrap();
         let langs = langs.into_iter().map(to_lang_struct).collect();
 
         VapLoader {
             out: Arc::new(Mutex::new(out)),
             stream_reg: Some((stream, reg)),
-            langs
+            langs,
+
+            notifies: HashMap::new(),
+            queries: HashMap::new()
+        }
+    }
+
+    pub fn register_notify(&mut self, name: String, caller: Box<dyn CanBeNotified>) -> Result<()> {
+        if !self.notifies.contains_key(&name) {
+            self.notifies.insert(name, caller);
+            Ok(())
+        }
+        else {
+            Err(anyhow!("Notify already exists"))
+        }
+    }
+
+    pub fn register_query(&mut self, name: String, caller: Box<dyn CanBeQueried>) -> Result<()> {
+        if !self.queries.contains_key(&name) {
+            self.queries.insert(name, caller);
+            Ok(())
+        }
+        else {
+            Err(anyhow!("Query already exists"))
         }
     }
 
@@ -51,8 +80,10 @@ impl VapLoader {
             let (msg, responder) = stream.recv().await?;
 
             let response = match msg {
-                SkillRegisterMessage::Connect(msg) => {
-                    // TODO!
+                SkillRegisterMessage::Connect(_) => {
+                    // SkillRegister already makes sure that the skill name is 
+                    // not one known and the vap version is compatible, there's
+                    // nothing more to do
                     Response {
                         status: ResponseType::Valid,
                         payload: to_vec_named(&MsgConnectResponse{
@@ -92,21 +123,71 @@ impl VapLoader {
                     }
                 }
 
-                SkillRegisterMessage::Notification(_) => {
-                    // TODO!
+                SkillRegisterMessage::Notification(msg) => {
+                    let data = msg.data.into_iter().map(
+                        |n| {
+                            // TODO! Should we send an answer per capability?
+                            let code = if n.client_id == SYSTEM_SELF_ID {
+                                n.capabilities.into_iter().map(|c|{
+                                    if self.notifies.contains_key(&c.name) {
+                                        match self.notifies.get_mut(&c.name).unwrap().notify(c.cap_data) {
+                                            NotificationResult::Valid => 200
+                                        }
+                                    }
+                                    else {
+                                        404
+                                    }
+                                }).max().unwrap_or(200)
+                            }
+                            // else if ... // TODO! Notification need to be sent to clients
+                            else {
+                                404
+                            };
+                            msg_notification_response::Data::StandAlone {client_id: n.client_id, code}
+                    }).collect::<Vec<_>>();
+
                     Response {
                         status: ResponseType::Valid,
                         payload: to_vec_named(&MsgNotificationResponse {
-                            data: Vec::new() // TODO!
+                            data
                         }).unwrap()
                     }
                 }
 
                 SkillRegisterMessage::Query(msg) => {
-                    // TODO!
+                    let data = msg.data.into_iter().map(
+                        |q| {
+                            let client_id = q.client_id;
+                            let capabilities = if client_id == SYSTEM_SELF_ID {
+                                q.capabilities.into_iter().map(|c|{
+                                    if self.queries.contains_key(&c.name) {
+                                        let (code, data) = self.queries.get_mut(&c.name).unwrap().query(c.cap_data).unwrap();
+
+                                        QueryDataCapability {name: c.name, code, data}
+                                    }
+                                    else {
+                                        QueryDataCapability {
+                                            name: c.name.clone(),
+                                            code: 404,
+                                            data: hashmap!{"object".into() => c.name.into()}
+                                        }
+                                    }
+                                }).collect()
+                            }
+                            // else if  ... // TODO! Queries need to be sent to clients
+                            else {
+                                q.capabilities.into_iter().map(|c|{
+                                    QueryDataCapability { name: c.name, code: 404, data: hashmap!{"object".into() => client_id.clone().into()}}
+                                }).collect()
+                            };
+
+                            msg_query_response::QueryData {client_id, capabilities}
+                        }
+                    ).collect();
+
                     Response {
                         status: ResponseType::Valid,
-                        payload: vec![]
+                        payload: to_vec_named(&MsgQueryResponse{data}).unwrap()
                     }
                 }
             };
@@ -247,7 +328,7 @@ impl Action for VapAction {
                 name: n.clone(),
                 value: Some(v.clone())
             }).collect();
-
+        
         let (capabilities,sender) = self.shared_out.lock_it().activate_skill(self.ip.clone(), MsgSkillRequest {
             request_id: self.next_request_id,
             client: ClientData {
@@ -267,7 +348,7 @@ impl Action for VapAction {
         }).unwrap();
 
         let data = if capabilities[0].name == "voice" {
-            capabilities[0].cap_data["text"].clone()
+            capabilities[0].cap_data[&"text".into()].clone().to_string()
         } else {
             "NO VOICE CAPABILITY IN RESPONSE".to_string()
         };
@@ -277,4 +358,17 @@ impl Action for VapAction {
     fn get_name(&self) -> String {
         self.name.clone()
     }
+}
+
+// Capabilities /**************************************************************/
+pub trait CanBeQueried {
+    fn query(&mut self, caps: AssociativeMap) -> Result<(u16, AssociativeMap)> ;
+}
+
+pub enum NotificationResult {
+    Valid
+}
+
+pub trait CanBeNotified {
+    fn notify(&mut self, caps: AssociativeMap) -> NotificationResult;
 }
