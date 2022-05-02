@@ -1,5 +1,5 @@
 // Standard library
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
@@ -56,21 +56,19 @@ impl VapLoader {
     }
 
     pub fn register_notify(&mut self, name: String, caller: Box<dyn CanBeNotified>) -> Result<()> {
-        if !self.notifies.contains_key(&name) {
-            self.notifies.insert(name, caller);
+        if let hash_map::Entry::Vacant(e) = self.notifies.entry(name) {
+            e.insert(caller);
             Ok(())
-        }
-        else {
+        } else {
             Err(anyhow!("Notify already exists"))
         }
     }
 
     pub fn register_query(&mut self, name: String, caller: Box<dyn CanBeQueried>) -> Result<()> {
-        if !self.queries.contains_key(&name) {
-            self.queries.insert(name, caller);
+        if let hash_map::Entry::Vacant(e) = self.queries.entry(name) {
+            e.insert(caller);
             Ok(())
-        }
-        else {
+        } else {
             Err(anyhow!("Query already exists"))
         }
     }
@@ -160,8 +158,8 @@ impl VapLoader {
                             let client_id = q.client_id;
                             let capabilities = if client_id == SYSTEM_SELF_ID {
                                 q.capabilities.into_iter().map(|c|{
-                                    if self.queries.contains_key(&c.name) {
-                                        let (code, data) = self.queries.get_mut(&c.name).unwrap().query(c.cap_data).unwrap();
+                                    if let hash_map::Entry::Occupied(mut e) = self.queries.entry(c.name.clone()) {
+                                        let (code, data) = e.get_mut().query(c.cap_data).unwrap();
 
                                         QueryDataCapability {name: c.name, code, data}
                                     }
@@ -231,8 +229,8 @@ impl VapLoader {
                     hook: Hook::Action(fmt_name(&intent.name)),
                 };
 
-                if !new_intents.contains_key(&intent.name) {
-                    new_intents.insert(intent.name.clone(), HashMap::new());
+                if let hash_map::Entry::Vacant(e) = new_intents.entry(intent.name.clone()) {
+                    e.insert(HashMap::new());
                 }
             
                 assert!(

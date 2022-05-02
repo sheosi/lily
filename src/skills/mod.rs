@@ -57,11 +57,14 @@ fn add_new_intent(intent_name: String, skill_name: String,
     dynamic_nlu::link_action_intent(intent_name, skill_name, weak)
 }
 
+pub type IntentList<A> = Vec<(String, HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<A>>)>;
+pub type EntityList = Vec<(String, HashMap<LanguageIdentifier, EntityDef>)>;
+
 pub fn register_skill(skill_name: &str,
-    actions: Vec<(String, HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn Action + Send>>)>,
-    signals: Vec<(String, HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn UserSignal + Send>>)>,
-    queries: Vec<(String, HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn Query + Send>>)>,
-    entities: Vec<(String, HashMap<LanguageIdentifier, EntityDef>)>
+    actions: IntentList<dyn Action + Send>,
+    signals: IntentList<dyn UserSignal + Send>,
+    queries: IntentList<dyn Query + Send>,
+    entities: EntityList
 ) -> Result<()> {
 
     let skill_name_str = skill_name.to_string();
