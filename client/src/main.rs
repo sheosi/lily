@@ -302,7 +302,7 @@ impl ConfFile {
 
 #[tokio::main(flavor = "current_thread")]
 pub async fn main() -> anyhow::Result<()> {
-    init_log("lily-satellite".into());
+    init_log();
     set_app_name("lily-satellite");
 
     let config = ConfFile::load().unwrap_or_else(|_| ConfFile::default());

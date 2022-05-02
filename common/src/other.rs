@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-pub fn init_log(_name: String) {
+pub fn init_log() {
     use simplelog::*;
 
     // Use Debug log level for debug compilations
@@ -11,9 +11,15 @@ pub fn init_log(_name: String) {
         log::LevelFilter::Info
     };
 
+    let conf = ConfigBuilder::new()
+    .add_filter_ignore_str("reqwest::connect")
+    .add_filter_ignore_str("rumqttc::state")
+    .add_filter_ignore_str("reqwest::async_impl::client")
+    .build();
+    
     TermLogger::init(
         log_level,
-        Config::default(),
+        conf,
         TerminalMode::Mixed,
         ColorChoice::Auto
     ).unwrap();

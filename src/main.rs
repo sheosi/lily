@@ -49,7 +49,7 @@ pub async fn main()  -> Result<()> {
     }).expect("Error setting Ctrl-C handler");
 
     set_app_name("lily");
-    init_log("lily".into());
+    init_log();
 
     // Set config on global
     let config = Config::load().unwrap_or_default();
