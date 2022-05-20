@@ -375,11 +375,10 @@ dependencies = [
 [[package]]
 name = "coap"
 version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a4ef1b5546f6ba554509aa8eab047d71088e79f908dbd4a5d6dcf9610b616de"
+source = "git+https://github.com/Covertness/coap-rs#76bea972df92f0b730d24435921b9a86b95d42c3"
 dependencies = [
  "bytes",
- "coap-lite 0.7.0",
+ "coap-lite 0.8.1",
  "futures",
  "log",
  "num-derive",
@@ -394,9 +393,9 @@ dependencies = [
 
 [[package]]
 name = "coap-lite"
-version = "0.7.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2911526fe9fc3bb90ff13ff52bd5454e93da0685ba8ed105f06bfc0e898fd950"
+checksum = "1fa1d1df3de26ab9f13899c4f0a2467d3b018069642dd4ec34b3871b2edb13ad"
 
 [[package]]
 name = "coap-lite"
@@ -3300,19 +3299,20 @@ dependencies = [
 [[package]]
 name = "vap-common-skill"
 version = "0.1.0"
-source = "git+https://github.com/secretsauceai/voice-assistant-protocol/#9b8f35f728e7d7a40a02ca322187675d5a4a81b7"
+source = "git+https://github.com/secretsauceai/voice-assistant-protocol/#f8b93cede46183ab372e857856fe9f15eaea438d"
 dependencies = [
  "serde",
  "serde_derive",
+ "unic-langid",
 ]
 
 [[package]]
 name = "vap-skill-register"
 version = "0.1.0"
-source = "git+https://github.com/secretsauceai/voice-assistant-protocol/#9b8f35f728e7d7a40a02ca322187675d5a4a81b7"
+source = "git+https://github.com/secretsauceai/voice-assistant-protocol/#f8b93cede46183ab372e857856fe9f15eaea438d"
 dependencies = [
  "coap",
- "coap-lite 0.7.0",
+ "coap-lite 0.8.1",
  "futures",
  "rmp",
  "rmp-serde 0.15.5",
