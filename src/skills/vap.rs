@@ -32,18 +32,10 @@ pub struct VapLoader {
     queries: HashMap<String, Box<dyn CanBeQueried>>
 }
 
-fn to_lang_struct(l: LanguageIdentifier) -> Language {
-    Language {
-        country: l.region.map(|r|r.to_string()),
-        language: l.language.to_string(),
-        extra: l.script.map(|s|s.to_string())
-    }
-}
-
 impl VapLoader {
     pub fn new(port: u16, langs: Vec<LanguageIdentifier>) -> Self {
         let (reg, stream, out) = SkillRegister::new(port).unwrap();
-        let langs = langs.into_iter().map(to_lang_struct).collect();
+        let langs = langs.into_iter().map(|l|l.into()).collect();
 
         VapLoader {
             out: Arc::new(Mutex::new(out)),
