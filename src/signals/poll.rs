@@ -28,18 +28,22 @@ struct UserTask {
 
 impl UserTask {
     fn new(query: Arc<Mutex<dyn Query + Send>>, act_set: ActionSet) -> Self {
-        Self {query, act_set, condition: Condition::Changed(RefCell::new(Vec::new()))}
+        Self {
+            query,
+            act_set,
+            condition: Condition::Changed(RefCell::new(Vec::new())),
+        }
     }
 }
 
 #[derive(Debug)]
 pub struct PollQuery {
-    tasks: Vec<UserTask>
+    tasks: Vec<UserTask>,
 }
-        
+
 impl PollQuery {
     pub fn new() -> Self {
-        Self{tasks: Vec::new()}
+        Self { tasks: Vec::new() }
     }
 }
 
@@ -48,7 +52,12 @@ impl Signal for PollQuery {
     fn end_load(&mut self, _curr_lang: &[LanguageIdentifier]) -> Result<()> {
         Ok(())
     }
-    async fn event_loop(&mut self, _signal_event: SignalEventShared, _config: &Config, curr_lang: &[LanguageIdentifier]) -> Result<()> {
+    async fn event_loop(
+        &mut self,
+        _signal_event: SignalEventShared,
+        _config: &Config,
+        curr_lang: &[LanguageIdentifier],
+    ) -> Result<()> {
         loop {
             sleep(Duration::from_secs(30)).await;
             for task in &mut self.tasks {
@@ -56,7 +65,9 @@ impl Signal for PollQuery {
                     let context = ActionContext {
                         locale: curr_lang[0].to_string(),
                         satellite: None,
-                        data: ContextData::Event{event: "called by user signal".into()}
+                        data: ContextData::Event {
+                            event: "called by user signal".into(),
+                        },
                     };
                     task.act_set.call_all(&context).await;
                 }

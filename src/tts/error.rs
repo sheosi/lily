@@ -1,5 +1,5 @@
-use thiserror::Error;
 use crate::exts::NotUnicodeError;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum TtsError {
@@ -7,29 +7,29 @@ pub enum TtsError {
     StringHadInternalNul(#[from] std::ffi::NulError),
 
     #[error("Problem with online TTS")]
-    Online(#[from] OnlineTtsError)
+    Online(#[from] OnlineTtsError),
 }
 
 #[derive(Error, Debug, Clone)]
 pub enum TtsConstructionError {
-        #[error("No voice with the selected gender is available")]
-        WrongGender,
+    #[error("No voice with the selected gender is available")]
+    WrongGender,
 
-        #[error("This engine is not available in this language")]
-        IncompatibleLanguage,
+    #[error("This engine is not available in this language")]
+    IncompatibleLanguage,
 
-        #[error("Input language has no region")]
-        NoRegion,
+    #[error("Input language has no region")]
+    NoRegion,
 
-        #[error("Input is not unicode")]
-        NotUnicode(#[from] NotUnicodeError)
+    #[error("Input is not unicode")]
+    NotUnicode(#[from] NotUnicodeError),
 }
 
-#[derive(Error,Debug)]
+#[derive(Error, Debug)]
 pub enum OnlineTtsError {
-	#[error("network failure")]
-	Network(#[from] reqwest::Error),
+    #[error("network failure")]
+    Network(#[from] reqwest::Error),
 
-	#[error("url parsing")]
+    #[error("url parsing")]
     UrlParse(#[from] url::ParseError),
 }

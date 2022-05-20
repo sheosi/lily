@@ -10,19 +10,19 @@ pub struct ActionContext {
 }
 
 pub struct SatelliteData {
-    pub uuid: String   
+    pub uuid: String,
 }
 
 pub enum ContextData {
-    Event{event: String},
-    Intent{intent: IntentData},
+    Event { event: String },
+    Intent { intent: IntentData },
 }
 
 impl ContextData {
     pub fn as_intent(&self) -> Option<&IntentData> {
         match self {
-            ContextData::Intent{intent} => Some(intent),
-            _ => None
+            ContextData::Intent { intent } => Some(intent),
+            _ => None,
         }
     }
 }
@@ -33,4 +33,3 @@ pub struct IntentData {
     pub confidence: f32,
     pub slots: HashMap<String, String>,
 }
-

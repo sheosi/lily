@@ -11,7 +11,7 @@ use crate::vars::MAIN_CONF_PATH;
 // Other crates
 use anyhow::{anyhow, Result};
 use lily_common::communication::ClientConf;
-use lily_common::other::{false_val, ConnectionConf, none};
+use lily_common::other::{false_val, none, ConnectionConf};
 use lily_common::vars::DEFAULT_HOTWORD_SENSITIVITY;
 use serde::Deserialize;
 use serde_yaml::Value;
@@ -37,9 +37,8 @@ pub struct Config {
     #[serde(default)]
     pub mqtt: ConnectionConf,
 
-
     #[serde(flatten)]
-    pub skills_conf: HashMap<String, Value>
+    pub skills_conf: HashMap<String, Value>,
 }
 
 fn def_hotword_sensitivity() -> f32 {
@@ -48,14 +47,14 @@ fn def_hotword_sensitivity() -> f32 {
 
 impl Default for Config {
     fn default() -> Self {
-        Config{
+        Config {
             stt: SttData::default(),
             language: None,
             hotword_sensitivity: DEFAULT_HOTWORD_SENSITIVITY,
             debug_record_active_speech: false,
             skills_conf: HashMap::new(),
             mqtt: ConnectionConf::default(),
-            tts: TtsData::default()
+            tts: TtsData::default(),
         }
     }
 }
@@ -66,16 +65,14 @@ impl Config {
         if conf_path.is_file() {
             let conf_file = std::fs::File::open(conf_path)?;
             Ok(serde_yaml::from_reader(std::io::BufReader::new(conf_file))?)
-        }
-        else {
+        } else {
             Err(anyhow!("Config file not found"))
         }
-    
     }
 
     pub fn to_client_conf(&self) -> ClientConf {
         ClientConf {
-            hotword_sensitivity: self.hotword_sensitivity
+            hotword_sensitivity: self.hotword_sensitivity,
         }
     }
 }

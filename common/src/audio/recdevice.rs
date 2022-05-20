@@ -1,19 +1,19 @@
-use std::sync::{Mutex, Arc};
-use std::time::{SystemTime, Duration, UNIX_EPOCH};
 use crate::vars::{CLOCK_TOO_EARLY_MSG, DEFAULT_SAMPLES_PER_SECOND, RECORD_BUFFER_SIZE};
 use log::info;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{BufferSize, SampleRate, Stream, StreamConfig};
+use log::error;
 use ringbuf::{Consumer, RingBuffer};
 use tokio::time::sleep;
-use log::error;
 
 #[derive(Error, Debug)]
 pub enum RecordingError {
     #[error("Failed to do I/O operations")]
-    IoError(#[from]std::io::Error),
+    IoError(#[from] std::io::Error),
 
     #[error("No input device")]
     NoInputDevice,
@@ -22,23 +22,23 @@ pub enum RecordingError {
     BuildStream(#[from] cpal::BuildStreamError),
 
     #[error("Failed to play the stream")]
-    PlayStreamError(#[from] cpal::PlayStreamError)
+    PlayStreamError(#[from] cpal::PlayStreamError),
 }
 
 // Cpal version
 pub struct RecDevice {
     external_buffer: [i16; RECORD_BUFFER_SIZE],
-    stream_data: Option<StreamData>
+    stream_data: Option<StreamData>,
 }
 
 struct StreamData {
     internal_buffer_consumer: Consumer<i16>,
     last_read: u128,
-    _stream: SendableStream
+    _stream: SendableStream,
 }
 
 struct SendableStream {
-    _inner: Arc<Mutex<Stream>>
+    _inner: Arc<Mutex<Stream>>,
 }
 
 unsafe impl Send for SendableStream {}
@@ -47,19 +47,21 @@ impl RecDevice {
     pub fn new() -> Self {
         Self {
             external_buffer: [0i16; RECORD_BUFFER_SIZE],
-            stream_data: None
+            stream_data: None,
         }
     }
 
     fn make_stream() -> Result<StreamData, RecordingError> {
         info!("Using cpal");
         let host = cpal::default_host();
-        let device = host.default_input_device().ok_or(RecordingError::NoInputDevice)?;
+        let device = host
+            .default_input_device()
+            .ok_or(RecordingError::NoInputDevice)?;
         // TODO: Make sure audio is compatible with our application and/or negotiate
         let config = StreamConfig {
             channels: 1,
             sample_rate: SampleRate(DEFAULT_SAMPLES_PER_SECOND),
-            buffer_size: BufferSize::Default
+            buffer_size: BufferSize::Default,
         };
 
         let internal_buffer = RingBuffer::new(RECORD_BUFFER_SIZE * 2);
@@ -74,7 +76,7 @@ impl RecDevice {
             move |data: &[i16], _: &_| {
                 prod.push_slice(data);
             },
-            err_fn
+            err_fn,
         )?;
 
         // Do make sure stream is working
@@ -82,41 +84,43 @@ impl RecDevice {
         Ok(StreamData {
             internal_buffer_consumer: cons,
             last_read: 0u128,
-            _stream: SendableStream{_inner: Arc::new(Mutex::new(stream))}
+            _stream: SendableStream {
+                _inner: Arc::new(Mutex::new(stream)),
+            },
         })
     }
 
     fn get_millis() -> u128 {
-        SystemTime::now().duration_since(UNIX_EPOCH).expect(CLOCK_TOO_EARLY_MSG).as_millis()
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect(CLOCK_TOO_EARLY_MSG)
+            .as_millis()
     }
 
     pub fn read(&mut self) -> Result<Option<&[i16]>, RecordingError> {
         match self.stream_data {
             Some(ref mut str_data) => {
                 str_data.last_read = Self::get_millis();
-                let size = str_data.internal_buffer_consumer.pop_slice(&mut self.external_buffer[..]);
+                let size = str_data
+                    .internal_buffer_consumer
+                    .pop_slice(&mut self.external_buffer[..]);
                 if size > 0 {
                     Ok(Some(&self.external_buffer[0..size]))
-                }
-                else {
+                } else {
                     Ok(None)
                 }
-            },
+            }
             None => {
                 panic!("Read called when a recdevice was stopped");
             }
         }
-        
-        
     }
 
     pub async fn read_for_ms(&mut self, milis: u16) -> Result<Option<&[i16]>, RecordingError> {
-        assert!(milis <= ((RECORD_BUFFER_SIZE/2) as u16) );
+        assert!(milis <= ((RECORD_BUFFER_SIZE / 2) as u16));
 
         let last_read = match self.stream_data {
-            Some(ref mut str_data) => {      
-                str_data.last_read          
-            },
+            Some(ref mut str_data) => str_data.last_read,
             None => {
                 panic!("read_for_ms called when a recdevice was stopped");
             }
@@ -126,7 +130,7 @@ impl RecDevice {
         let diff_time = (curr_time - last_read) as u16;
 
         if milis > diff_time {
-            let sleep_time = (milis  - diff_time) as u64;
+            let sleep_time = (milis - diff_time) as u64;
             sleep(Duration::from_millis(sleep_time)).await;
         }
 

@@ -8,9 +8,9 @@ pub use self::playdevice::*;
 #[cfg(feature = "client")]
 pub use self::recdevice::*;
 
+use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 use std::io::Write;
 use std::path::Path;
-use crate::vars::DEFAULT_SAMPLES_PER_SECOND;
 
 #[cfg(feature = "client")]
 use std::io::Cursor;
@@ -21,15 +21,15 @@ use thiserror::Error;
 
 #[derive(Debug, Clone)]
 struct AudioEncoded {
-    data: Vec<u8>
+    data: Vec<u8>,
 }
 
 impl AudioEncoded {
     fn new(data: Vec<u8>) -> Self {
-        Self {data}
+        Self { data }
     }
 
-    #[cfg(feature="client")]
+    #[cfg(feature = "client")]
     pub fn is_ogg_opus(&self) -> bool {
         ogg_opus::is_ogg_opus(Cursor::new(&self.data))
     }
@@ -45,43 +45,44 @@ impl AudioEncoded {
 #[derive(Debug, Clone)]
 enum Data {
     Raw(AudioRaw),
-    Encoded(AudioEncoded)
+    Encoded(AudioEncoded),
 }
 
 impl Data {
-
     fn clear(&mut self) {
         match self {
             Data::Raw(raw_data) => raw_data.clear(),
-            Data::Encoded(enc_data) => enc_data.data.clear()
+            Data::Encoded(enc_data) => enc_data.data.clear(),
         }
     }
 
     fn append_raw(&mut self, b: &[i16]) {
         match self {
-            Data::Raw(data_self) => data_self.append_audio(b, DEFAULT_SAMPLES_PER_SECOND).expect("Tried to append but one of the raw data wasn't using default sps"),
-            Data::Encoded(_) => std::panic!("Tried to append a raw audio to an encoded audio")
+            Data::Raw(data_self) => data_self
+                .append_audio(b, DEFAULT_SAMPLES_PER_SECOND)
+                .expect("Tried to append but one of the raw data wasn't using default sps"),
+            Data::Encoded(_) => std::panic!("Tried to append a raw audio to an encoded audio"),
         }
     }
 
     fn is_raw(&self) -> bool {
         match self {
             Data::Raw(_) => true,
-            Data::Encoded(_) => false
+            Data::Encoded(_) => false,
         }
     }
 
     fn len(&self) -> usize {
         match self {
             Data::Raw(buffer) => buffer.len(),
-            Data::Encoded(buffer) => buffer.data.len()
+            Data::Encoded(buffer) => buffer.data.len(),
         }
     }
 
     fn get_sps(&self) -> u32 {
         match self {
             Data::Raw(_) => DEFAULT_SAMPLES_PER_SECOND,
-            Data::Encoded(data) => data.get_sps()
+            Data::Encoded(data) => data.get_sps(),
         }
     }
 }
@@ -89,39 +90,42 @@ impl Data {
 // Just some and audio dummy for now
 #[derive(Debug, Clone)]
 pub struct Audio {
-    buffer: Data
+    buffer: Data,
 }
 
 impl Audio {
     pub fn new_empty(samples_per_second: u32) -> Self {
         assert_eq!(samples_per_second, DEFAULT_SAMPLES_PER_SECOND);
-        Self{buffer: Data::Raw(AudioRaw::new_empty(samples_per_second))}
+        Self {
+            buffer: Data::Raw(AudioRaw::new_empty(samples_per_second)),
+        }
     }
 
     pub fn new_raw(buffer: Vec<i16>, samples_per_second: u32) -> Self {
         assert_eq!(samples_per_second, DEFAULT_SAMPLES_PER_SECOND);
-        Self {buffer: Data::Raw(AudioRaw::new_raw(buffer, samples_per_second))}
+        Self {
+            buffer: Data::Raw(AudioRaw::new_raw(buffer, samples_per_second)),
+        }
     }
 
     pub fn new_encoded(buffer: Vec<u8>) -> Self {
-        Self {buffer: Data::Encoded(AudioEncoded::new(buffer))}
+        Self {
+            buffer: Data::Encoded(AudioEncoded::new(buffer)),
+        }
     }
-
 
     pub fn append_raw(&mut self, other: &[i16], samples_per_second: u32) -> Option<()> {
         if self.buffer.is_raw() {
             assert_eq!(samples_per_second, DEFAULT_SAMPLES_PER_SECOND);
             self.buffer.append_raw(other);
             Some(())
-        }
-        else {
+        } else {
             // Can't join if it's not the same sample rate
             None
         }
     }
 
-    pub fn write_ogg(&self, file_path:&Path) -> Result<(), AudioError> {
-
+    pub fn write_ogg(&self, file_path: &Path) -> Result<(), AudioError> {
         match &self.buffer {
             Data::Raw(audio_raw) => {
                 let as_ogg = audio_raw.to_ogg_opus()?;
@@ -134,17 +138,13 @@ impl Audio {
             }
         }
 
-        
-
         Ok(())
     }
 
     pub fn into_encoded(self) -> Result<Vec<u8>, AudioError> {
         match self.buffer {
-            Data::Raw(audio_raw) => {
-                audio_raw.to_ogg_opus()
-            }
-            Data::Encoded(vec_data) => {Ok(vec_data.data)}
+            Data::Raw(audio_raw) => audio_raw.to_ogg_opus(),
+            Data::Encoded(vec_data) => Ok(vec_data.data),
         }
     }
 
@@ -155,11 +155,13 @@ impl Audio {
     // Length in seconds
     pub fn len_s(&self) -> f32 {
         let len = self.buffer.len();
-        (len as f32)/(self.buffer.get_sps() as f32)
+        (len as f32) / (self.buffer.get_sps() as f32)
     }
 
     pub fn from_raw(raw: AudioRaw) -> Self {
-        Self{buffer: Data::Raw(raw)}
+        Self {
+            buffer: Data::Raw(raw),
+        }
     }
 }
 
@@ -167,7 +169,7 @@ impl Audio {
 // is fixed at 16 KHz and mono (what most STTs )
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AudioRaw {
-    pub buffer: Vec<i16>
+    pub buffer: Vec<i16>,
 }
 
 impl AudioRaw {
@@ -176,12 +178,12 @@ impl AudioRaw {
     }
     pub fn new_empty(samples_per_second: u32) -> Self {
         assert!(samples_per_second == Self::get_samples_per_second());
-        AudioRaw{buffer: Vec:: new()}
+        AudioRaw { buffer: Vec::new() }
     }
 
     pub fn new_raw(buffer: Vec<i16>, samples_per_second: u32) -> Self {
         assert!(samples_per_second == Self::get_samples_per_second());
-        AudioRaw{buffer}
+        AudioRaw { buffer }
     }
 
     pub fn clear(&mut self) {
@@ -192,8 +194,7 @@ impl AudioRaw {
         if sps == Self::get_samples_per_second() {
             self.buffer.extend(other);
             Ok(())
-        }
-        else {
+        } else {
             Err(AudioError::IncompatibleSps)
         }
     }
@@ -203,17 +204,17 @@ impl AudioRaw {
     }
 
     pub fn rms(&self) -> f64 {
-        let sqr_sum = self.buffer.iter().fold(0i64, |sqr_sum, s|{
-            sqr_sum + (*s as i64)  * (*s as i64)
-        });
-        (sqr_sum as f64/ self.buffer.len() as f64).sqrt()
-
+        let sqr_sum = self
+            .buffer
+            .iter()
+            .fold(0i64, |sqr_sum, s| sqr_sum + (*s as i64) * (*s as i64));
+        (sqr_sum as f64 / self.buffer.len() as f64).sqrt()
     }
 
     // Length in seconds
     pub fn len_s(&self) -> f32 {
         let len = self.buffer.len();
-        (len as f32)/(Self::get_samples_per_second() as f32)
+        (len as f32) / (Self::get_samples_per_second() as f32)
     }
 
     pub fn save_to_disk(&self, path: &Path) -> Result<(), AudioError> {
@@ -228,7 +229,6 @@ impl AudioRaw {
     }
 }
 
-
 #[derive(Error, Debug)]
 pub enum AudioError {
     #[error("Io Error")]
@@ -238,5 +238,5 @@ pub enum AudioError {
     IncompatibleSps,
 
     #[error("")]
-    OggOpusError(#[from] ogg_opus::Error)
+    OggOpusError(#[from] ogg_opus::Error),
 }

@@ -24,39 +24,42 @@ use log::info;
 use serde::Deserialize;
 use unic_langid::LanguageIdentifier;
 
-
-#[cfg(feature="unused")]
+#[cfg(feature = "unused")]
 use lily_common::audio::AudioRaw;
-
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct SttData {
     #[serde(default = "false_val")]
     pub prefer_online: bool,
     #[serde(default = "none::<IbmSttData>")]
-    pub ibm: Option<IbmSttData>
+    pub ibm: Option<IbmSttData>,
 }
 
 impl Default for SttData {
     fn default() -> Self {
-        Self {prefer_online: false, ibm: None}
+        Self {
+            prefer_online: false,
+            ibm: None,
+        }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct SttInfo {
     pub name: String,
-    pub is_online: bool
+    pub is_online: bool,
 }
 
 impl Display for SttInfo {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
         let online_str = {
-            if self.is_online {"online"}
-            else {"local"}
-
+            if self.is_online {
+                "online"
+            } else {
+                "local"
+            }
         };
-        
+
         write!(formatter, "{}({})", self.name, online_str)
     }
 }
@@ -64,7 +67,7 @@ impl Display for SttInfo {
 #[derive(PartialEq, Debug)]
 pub struct DecodeRes {
     pub hypothesis: String,
-    pub confidence: f32
+    pub confidence: f32,
 }
 
 #[async_trait(?Send)]
@@ -82,7 +85,6 @@ pub trait Stt {
     fn get_info(&self) -> SttInfo;
 }
 
-
 pub struct SttFactory;
 
 pub trait SpecifiesLangs {
@@ -93,33 +95,34 @@ pub trait IsLangCompatible {
     fn is_lang_compatible(lang: &LanguageIdentifier) -> Result<(), SttConstructionError>;
 }
 
-impl<T> IsLangCompatible for T where T: SpecifiesLangs {
+impl<T> IsLangCompatible for T
+where
+    T: SpecifiesLangs,
+{
     fn is_lang_compatible(lang: &LanguageIdentifier) -> Result<(), SttConstructionError> {
-        negotiate_langs_res(lang, &Self::available_langs()).map(|_|())
+        negotiate_langs_res(lang, &Self::available_langs()).map(|_| ())
     }
 }
 
 fn negotiate_langs_res(
     input: &LanguageIdentifier,
-    available: &[LanguageIdentifier]
+    available: &[LanguageIdentifier],
 ) -> Result<LanguageIdentifier, SttConstructionError> {
     let langs = negotiate_languages(&[input], available, None, NegotiationStrategy::Filtering);
     if !langs.is_empty() {
         Ok(langs[0].clone())
-    }
-    else {
+    } else {
         Err(SttConstructionError::LangIncompatible)
     }
-
 }
 
-#[cfg(feature="unused")]
+#[cfg(feature = "unused")]
 const DYNAMIC_ENERGY_ADJUSTMENT_DAMPING: f64 = 0.15;
-#[cfg(feature="unused")]
+#[cfg(feature = "unused")]
 const DYNAMIC_ENERGY_RATIO: f64 = 0.00013;
-#[cfg(feature="unused")]
+#[cfg(feature = "unused")]
 const MIN_ENERGY: f64 = 3.0;
-#[cfg(feature="unused")]
+#[cfg(feature = "unused")]
 fn calc_threshold(audio: &AudioRaw) -> f64 {
     // This is taken from python's speech_recognition package
     let energy = audio.rms();
@@ -136,8 +139,7 @@ impl SttFactory {
     fn make_local(lang: &LanguageIdentifier) -> Result<Box<dyn Stt>, SttConstructionError> {
         if DeepSpeechStt::is_lang_compatible(lang).is_ok() {
             Ok(Box::new(DeepSpeechStt::new(lang)?))
-        }
-        else {
+        } else {
             Ok(Box::new(Pocketsphinx::new(lang)?))
         }
     }
@@ -147,23 +149,23 @@ impl SttFactory {
         Ok(Box::new(Pocketsphinx::new(lang)?))
     }
 
-
-	pub async fn load(lang: &LanguageIdentifier, prefer_cloud: bool, ibm_data: Option<IbmSttData>) -> Result<Box<dyn Stt>, SttConstructionError> {
-
-		let local_stt = Self::make_local(lang)?;
+    pub async fn load(
+        lang: &LanguageIdentifier,
+        prefer_cloud: bool,
+        ibm_data: Option<IbmSttData>,
+    ) -> Result<Box<dyn Stt>, SttConstructionError> {
+        let local_stt = Self::make_local(lang)?;
         if prefer_cloud {
             info!("Prefer online Stt");
             if let Some(ibm_data_obj) = ibm_data {
                 info!("Construct online Stt");
-                let online = IbmStt::new(lang,ibm_data_obj).await?;
+                let online = IbmStt::new(lang, ibm_data_obj).await?;
                 //let online = SttBatcher::new(IbmStt::new(lang,ibm_data_obj)?,vad);
                 Ok(Box::new(SttFallback::new(online, local_stt)))
-            }
-            else {
+            } else {
                 Ok(local_stt)
             }
-        }
-        else {
+        } else {
             Ok(local_stt)
         }
     }

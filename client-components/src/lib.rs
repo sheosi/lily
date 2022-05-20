@@ -1,14 +1,15 @@
 use std::path::Path;
 
 use anyhow::Result;
+
 use lily_common::{
     audio::AudioRaw,
-    communication::ClientConf,
     client::{
         hotword::HotwordDetector,
-        vad::{Vad, VadError}
+        vad::{Vad, VadError},
     },
-    vars::DEFAULT_SAMPLES_PER_SECOND
+    communication::ClientConf,
+    vars::DEFAULT_SAMPLES_PER_SECOND,
 };
 
 pub struct ActiveListener<V: Vad> {
@@ -118,12 +119,13 @@ impl DebugAudio {
 
 // Just an empty version of DebugAudio for release
 #[cfg(not(debug_assertions))]
-pub struct DebugAudio {
-}
+pub struct DebugAudio {}
 
 #[cfg(not(debug_assertions))]
 impl DebugAudio {
-    pub fn new(save_ms: u16) -> Self {Self {}}
+    pub fn new(save_ms: u16) -> Self {
+        Self {}
+    }
 
     pub fn push(&mut self, audio: &AudioRef) {}
 

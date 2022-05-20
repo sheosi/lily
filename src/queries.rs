@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::actions::{Action, ActionAnswer, ActionContext};
-use crate::exts::LockIt;
 use crate::collections::BaseRegistry;
+use crate::exts::LockIt;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -20,17 +20,17 @@ lazy_static! {
 }
 pub trait Query {
     fn is_monitorable(&self) -> bool;
-    fn execute(&mut self, data: QueryData) -> Result<QueryResult,()>;
+    fn execute(&mut self, data: QueryData) -> Result<QueryResult, ()>;
     fn get_name(&self) -> &str;
 }
 
-struct DummyQuery {
-
-}
+struct DummyQuery {}
 
 impl Query for DummyQuery {
-    fn is_monitorable(&self) -> bool {true}
-    fn execute(&mut self, _data: QueryData) -> Result<QueryResult,()> {
+    fn is_monitorable(&self) -> bool {
+        true
+    }
+    fn execute(&mut self, _data: QueryData) -> Result<QueryResult, ()> {
         Ok(vec![])
     }
     fn get_name(&self) -> &str {
@@ -40,14 +40,14 @@ impl Query for DummyQuery {
 
 #[derive(Debug)]
 pub enum Condition {
-    Changed(RefCell<Vec<String>>)
+    Changed(RefCell<Vec<String>>),
 }
 
 impl Condition {
     pub fn check(&mut self, query: &Arc<Mutex<dyn Query + Send>>, data: QueryData) -> bool {
         match self {
-            Condition::Changed(c)=>{
-                let mut q =query.lock_it();
+            Condition::Changed(c) => {
+                let mut q = query.lock_it();
                 match q.execute(data) {
                     Ok(v) => {
                         let res = *c.borrow() == v;
@@ -58,31 +58,32 @@ impl Condition {
                         error!("Query '{}' had an error", q.get_name());
                         false
                     }
-                }                
+                }
             }
         }
     }
 }
 pub struct ActQuery {
     q: Arc<Mutex<dyn Query + Send>>,
-    name: String
+    name: String,
 }
 
 impl ActQuery {
     pub fn new(q: Arc<Mutex<dyn Query + Send>>, name: String) -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(Self{q, name}))
+        Arc::new(Mutex::new(Self { q, name }))
     }
 }
 
 #[async_trait(?Send)]
 impl Action for ActQuery {
-    async fn call(&mut self ,_context: &ActionContext) -> Result<ActionAnswer> {
+    async fn call(&mut self, _context: &ActionContext) -> Result<ActionAnswer> {
         let data = HashMap::new();
         let a = match self.q.lock_it().execute(data) {
-            Ok(v)=>v.into_iter().fold("".to_string(),|g,s|format!("{} {:?},", g, s)),
-            Err(_)=> "Had an error".into() // TODO: This should be translated
+            Ok(v) => v
+                .into_iter()
+                .fold("".to_string(), |g, s| format!("{} {:?},", g, s)),
+            Err(_) => "Had an error".into(), // TODO: This should be translated
         };
-        
 
         ActionAnswer::send_text(a, true)
     }

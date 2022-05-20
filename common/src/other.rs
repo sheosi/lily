@@ -6,23 +6,17 @@ pub fn init_log() {
     // Use Debug log level for debug compilations
     let log_level = if cfg!(debug_assertions) {
         log::LevelFilter::Debug
-    }
-    else {
+    } else {
         log::LevelFilter::Info
     };
 
     let conf = ConfigBuilder::new()
-    .add_filter_ignore_str("reqwest::connect")
-    .add_filter_ignore_str("rumqttc::state")
-    .add_filter_ignore_str("reqwest::async_impl::client")
-    .build();
-    
-    TermLogger::init(
-        log_level,
-        conf,
-        TerminalMode::Mixed,
-        ColorChoice::Auto
-    ).unwrap();
+        .add_filter_ignore_str("reqwest::connect")
+        .add_filter_ignore_str("rumqttc::state")
+        .add_filter_ignore_str("reqwest::async_impl::client")
+        .build();
+
+    TermLogger::init(log_level, conf, TerminalMode::Mixed, ColorChoice::Auto).unwrap();
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -36,7 +30,7 @@ pub struct ConnectionConf {
 
     #[serde(default = "ConnectionConf::def_user_pass")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub user_pass: Option<(String, String)>
+    pub user_pass: Option<(String, String)>,
 }
 impl ConnectionConf {
     fn def_url_str() -> String {
@@ -61,12 +55,12 @@ impl Default for ConnectionConf {
         Self {
             url_str: Self::def_url_str(),
             name: Self::def_name(),
-            user_pass: Self::def_user_pass()
+            user_pass: Self::def_user_pass(),
         }
     }
 }
 
-pub fn none<T>()-> Option<T> {
+pub fn none<T>() -> Option<T> {
     None
 }
 

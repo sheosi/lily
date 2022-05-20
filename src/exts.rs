@@ -10,7 +10,7 @@ use unic_langid::{LanguageIdentifier, LanguageIdentifierError};
 #[derive(Error, Debug, Clone)]
 #[error("\"{}\" contains not-unicode characters", debug_str)]
 pub struct NotUnicodeError {
-    debug_str: String
+    debug_str: String,
 }
 
 pub trait ToStrResult {
@@ -19,7 +19,9 @@ pub trait ToStrResult {
 
 impl ToStrResult for PathBuf {
     fn to_str_res(&self) -> Result<&str, NotUnicodeError> {
-        self.to_str().ok_or_else(|| NotUnicodeError{debug_str: format!("{:?}", self)})
+        self.to_str().ok_or_else(|| NotUnicodeError {
+            debug_str: format!("{:?}", self),
+        })
     }
 }
 
@@ -43,6 +45,6 @@ impl<T: ?std::marker::Sized> LockIt<T> for Mutex<T> {
 fn parse_langs(langs: Vec<String>) -> Result<Vec<LanguageIdentifier>, LanguageIdentifierError> {
     Ok(langs
         .into_iter()
-        .map(|l|l.parse())
-        .collect::<Result<Vec<_>,_>>()?)
+        .map(|l| l.parse())
+        .collect::<Result<Vec<_>, _>>()?)
 }

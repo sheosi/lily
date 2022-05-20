@@ -1,12 +1,12 @@
 // Standard library
-use std::collections::{HashMap, hash_map};
+use std::collections::{hash_map, HashMap};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 // This crate
 use crate::actions::{Action, ActionAnswer, ActionContext};
 use crate::exts::LockIt;
-use crate::nlu::{IntentData, OrderKind, SlotData, EntityDef, EntityData};
+use crate::nlu::{EntityData, EntityDef, IntentData, OrderKind, SlotData};
 use crate::signals::collections::Hook;
 use crate::skills::{register_skill, SkillLoader};
 
@@ -15,12 +15,20 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use maplit::hashmap;
 use rmp_serde::to_vec_named;
-use unic_langid::{LanguageIdentifier, subtags};
+use unic_langid::{subtags, LanguageIdentifier};
 use vap_common_skill::structures::msg_query_response::QueryDataCapability;
 use vap_common_skill::structures::msg_register_intents::NluData;
-use vap_common_skill::structures::msg_skill_request::{ClientData, RequestData, RequestSlot, RequestDataKind};
-use vap_common_skill::structures::{MsgRegisterIntentsResponse, MsgSkillRequest, Language, MsgConnectResponse, MsgNotificationResponse, MsgQueryResponse, msg_notification_response, msg_query_response, AssociativeMap};
-use vap_skill_register::{SkillRegister, SkillRegisterMessage, SkillRegisterOut, SkillRegisterStream, Response, ResponseType, RequestResponse, SYSTEM_SELF_ID};
+use vap_common_skill::structures::msg_skill_request::{
+    ClientData, RequestData, RequestDataKind, RequestSlot,
+};
+use vap_common_skill::structures::{
+    msg_notification_response, msg_query_response, AssociativeMap, Language, MsgConnectResponse,
+    MsgNotificationResponse, MsgQueryResponse, MsgRegisterIntentsResponse, MsgSkillRequest,
+};
+use vap_skill_register::{
+    RequestResponse, Response, ResponseType, SkillRegister, SkillRegisterMessage, SkillRegisterOut,
+    SkillRegisterStream, SYSTEM_SELF_ID,
+};
 
 pub struct VapLoader {
     out: Arc<Mutex<SkillRegisterOut>>,
@@ -29,13 +37,13 @@ pub struct VapLoader {
 
     // Dicts containing the system capabilities
     notifies: HashMap<String, Box<dyn CanBeNotified>>,
-    queries: HashMap<String, Box<dyn CanBeQueried>>
+    queries: HashMap<String, Box<dyn CanBeQueried>>,
 }
 
 impl VapLoader {
     pub fn new(port: u16, langs: Vec<LanguageIdentifier>) -> Self {
         let (reg, stream, out) = SkillRegister::new(port).unwrap();
-        let langs = langs.into_iter().map(|l|l.into()).collect();
+        let langs = langs.into_iter().map(|l| l.into()).collect();
 
         VapLoader {
             out: Arc::new(Mutex::new(out)),
@@ -43,7 +51,7 @@ impl VapLoader {
             langs,
 
             notifies: HashMap::new(),
-            queries: HashMap::new()
+            queries: HashMap::new(),
         }
     }
 
@@ -65,41 +73,41 @@ impl VapLoader {
         }
     }
 
-    async fn on_msg(&mut self, mut stream: SkillRegisterStream) -> Result<(), vap_skill_register::Error> {
+    async fn on_msg(
+        &mut self,
+        mut stream: SkillRegisterStream,
+    ) -> Result<(), vap_skill_register::Error> {
         loop {
             let (msg, responder) = stream.recv().await?;
 
             let response = match msg {
                 SkillRegisterMessage::Connect(_) => {
-                    // SkillRegister already makes sure that the skill name is 
+                    // SkillRegister already makes sure that the skill name is
                     // not one known and the vap version is compatible, there's
                     // nothing more to do
                     Response {
                         status: ResponseType::Valid,
-                        payload: to_vec_named(&MsgConnectResponse{
+                        payload: to_vec_named(&MsgConnectResponse {
                             langs: self.langs.clone(),
-                            unique_authentication_token: Some("".into()) // TODO: Finish security
-                        }).unwrap()
+                            unique_authentication_token: Some("".into()), // TODO: Finish security
+                        })
+                        .unwrap(),
                     }
                 }
 
                 SkillRegisterMessage::RegisterIntents(msg) => {
                     let (actions, entities) = self.transform(msg.nlu_data);
                     match register_skill(&msg.skill_id, actions, vec![], vec![], entities) {
-                        Ok(()) => {
-                            Response {
-                                status: ResponseType::Valid,
-                                payload: to_vec_named(&MsgRegisterIntentsResponse{
-                                    
-                                }).unwrap()
-                            }
-                        }
+                        Ok(()) => Response {
+                            status: ResponseType::Valid,
+                            payload: to_vec_named(&MsgRegisterIntentsResponse {}).unwrap(),
+                        },
 
                         Err(_) => {
                             Response {
                                 status: ResponseType::RequestEntityIncomplete,
                                 // TODO! Add why
-                                payload: vec![]
+                                payload: vec![],
                             }
                         }
                     }
@@ -109,38 +117,50 @@ impl VapLoader {
                     // TODO! We should unregister the skill from the NLU
                     Response {
                         status: ResponseType::Valid,
-                        payload: Vec::new()
+                        payload: Vec::new(),
                     }
                 }
 
                 SkillRegisterMessage::Notification(msg) => {
-                    let data = msg.data.into_iter().map(
-                        |n| {
+                    let data = msg
+                        .data
+                        .into_iter()
+                        .map(|n| {
                             // TODO! Should we send an answer per capability?
                             let code = if n.client_id == SYSTEM_SELF_ID {
-                                n.capabilities.into_iter().map(|c|{
-                                    if self.notifies.contains_key(&c.name) {
-                                        match self.notifies.get_mut(&c.name).unwrap().notify(c.cap_data) {
-                                            NotificationResult::Valid => 200
+                                n.capabilities
+                                    .into_iter()
+                                    .map(|c| {
+                                        if self.notifies.contains_key(&c.name) {
+                                            match self
+                                                .notifies
+                                                .get_mut(&c.name)
+                                                .unwrap()
+                                                .notify(c.cap_data)
+                                            {
+                                                NotificationResult::Valid => 200,
+                                            }
+                                        } else {
+                                            404
                                         }
-                                    }
-                                    else {
-                                        404
-                                    }
-                                }).max().unwrap_or(200)
+                                    })
+                                    .max()
+                                    .unwrap_or(200)
                             }
                             // else if ... // TODO! Notification need to be sent to clients
                             else {
                                 404
                             };
-                            msg_notification_response::Data::StandAlone {client_id: n.client_id, code}
-                    }).collect::<Vec<_>>();
+                            msg_notification_response::Data::StandAlone {
+                                client_id: n.client_id,
+                                code,
+                            }
+                        })
+                        .collect::<Vec<_>>();
 
                     Response {
                         status: ResponseType::Valid,
-                        payload: to_vec_named(&MsgNotificationResponse {
-                            data
-                        }).unwrap()
+                        payload: to_vec_named(&MsgNotificationResponse { data }).unwrap(),
                     }
                 }
 
@@ -177,21 +197,30 @@ impl VapLoader {
 
                     Response {
                         status: ResponseType::Valid,
-                        payload: to_vec_named(&MsgQueryResponse{data}).unwrap()
+                        payload: to_vec_named(&MsgQueryResponse { data }).unwrap(),
                     }
                 }
             };
 
-            responder.send(response).map_err(|_| vap_skill_register::Error::ClosedChannel)?;
+            responder
+                .send(response)
+                .map_err(|_| vap_skill_register::Error::ClosedChannel)?;
         }
     }
 
-    fn transform(&self, nlu_data: Vec<NluData>) -> 
-        (
-            Vec<(String, HashMap<LanguageIdentifier, IntentData>, Arc<Mutex<dyn Action + Send>>)>,
-            Vec<(String, HashMap<LanguageIdentifier, EntityDef>)>,
-        ) {
-        let mut new_intents: HashMap<String, HashMap<LanguageIdentifier, IntentData>> = HashMap::new();
+    fn transform(
+        &self,
+        nlu_data: Vec<NluData>,
+    ) -> (
+        Vec<(
+            String,
+            HashMap<LanguageIdentifier, IntentData>,
+            Arc<Mutex<dyn Action + Send>>,
+        )>,
+        Vec<(String, HashMap<LanguageIdentifier, EntityDef>)>,
+    ) {
+        let mut new_intents: HashMap<String, HashMap<LanguageIdentifier, IntentData>> =
+            HashMap::new();
         let mut entities: HashMap<String, HashMap<LanguageIdentifier, EntityDef>> = HashMap::new();
 
         fn fmt_name(name: &str) -> String {
@@ -202,76 +231,90 @@ impl VapLoader {
             LanguageIdentifier::from_parts(
                 subtags::Language::from_str(&lang.language).unwrap(),
                 Option::None,
-                lang.country.and_then(|r| subtags::Region::from_str(&r).ok()),
-                &lang.extra.and_then(|e|subtags::Variant::from_str(&e).ok()).map(|v|vec![v]).unwrap_or_else(Vec::new)
+                lang.country
+                    .and_then(|r| subtags::Region::from_str(&r).ok()),
+                &lang
+                    .extra
+                    .and_then(|e| subtags::Variant::from_str(&e).ok())
+                    .map(|v| vec![v])
+                    .unwrap_or_else(Vec::new),
             )
         }
 
         for lang_set in nlu_data.into_iter() {
             for intent in lang_set.intents {
-        
                 let internal_intent = IntentData {
-                    slots: intent.slots.into_iter().map(|s|(s.name.clone(), SlotData {
-                        slot_type: OrderKind::Ref(s.entity),
-                        required: false,
-                        prompt: None,
-                        reprompt: None,
-                    })).collect(),
-                    utts: intent.utterances.into_iter().map(|d|d.text).collect(), // TODO! Utterances might need some conversion of slot format
+                    slots: intent
+                        .slots
+                        .into_iter()
+                        .map(|s| {
+                            (
+                                s.name.clone(),
+                                SlotData {
+                                    slot_type: OrderKind::Ref(s.entity),
+                                    required: false,
+                                    prompt: None,
+                                    reprompt: None,
+                                },
+                            )
+                        })
+                        .collect(),
+                    utts: intent.utterances.into_iter().map(|d| d.text).collect(), // TODO! Utterances might need some conversion of slot format
                     hook: Hook::Action(fmt_name(&intent.name)),
                 };
 
                 if let hash_map::Entry::Vacant(e) = new_intents.entry(intent.name.clone()) {
                     e.insert(HashMap::new());
                 }
-            
-                assert!(
-                    new_intents.get_mut(&intent.name).unwrap()
+
+                assert!(new_intents
+                    .get_mut(&intent.name)
+                    .unwrap()
                     .insert(fmt_lang(lang_set.language.clone()), internal_intent)
-                    .is_none()
-                );
+                    .is_none());
             }
 
             for entity in lang_set.entities {
                 let def = EntityDef {
-                    data: entity.data.into_iter().map(|d|EntityData {
-                        value: d.value,
-                        synonyms: d.synonyms
-                    }).collect(),
-                    automatically_extensible: !entity.strict
+                    data: entity
+                        .data
+                        .into_iter()
+                        .map(|d| EntityData {
+                            value: d.value,
+                            synonyms: d.synonyms,
+                        })
+                        .collect(),
+                    automatically_extensible: !entity.strict,
                 };
-                
+
                 if !entities.contains_key(&entity.name) {
                     entities.insert(entity.name.clone(), HashMap::new());
                 }
 
-                assert!(
-                    entities.get_mut(&entity.name).unwrap()
+                assert!(entities
+                    .get_mut(&entity.name)
+                    .unwrap()
                     .insert(fmt_lang(lang_set.language.clone()), def)
-                    .is_none()
-                )
-
+                    .is_none())
 
                 // TODO! Need a way of passing entities
             }
         }
 
         (
-            new_intents.into_iter().map(
-                |(intent, utts)| {
-                let action: Arc<Mutex<dyn Action + Send>> = Arc::new(
-                    Mutex::new(
-                        VapAction::new(
+            new_intents
+                .into_iter()
+                .map(|(intent, utts)| {
+                    let action: Arc<Mutex<dyn Action + Send>> =
+                        Arc::new(Mutex::new(VapAction::new(
                             fmt_name(&intent),
                             "TODO!Figure ip".to_string(),
-                            self.out.clone()
-                        )
-                    )
-                );
-                (intent, utts, action)
-            }).collect(),
-
-            entities.into_iter().collect()
+                            self.out.clone(),
+                        )));
+                    (intent, utts, action)
+                })
+                .collect(),
+            entities.into_iter().collect(),
         )
     }
 }
@@ -281,7 +324,7 @@ impl SkillLoader for VapLoader {
     fn load_skills(&mut self, _langs: &[LanguageIdentifier]) -> Result<()> {
         Ok(())
     }
-    
+
     async fn run_loader(&mut self) -> Result<()> {
         let (stream, reg) = self.stream_reg.take().unwrap();
         tokio::select!(
@@ -302,7 +345,12 @@ struct VapAction {
 
 impl VapAction {
     pub fn new(name: String, ip: String, shared_out: Arc<Mutex<SkillRegisterOut>>) -> Self {
-        VapAction {name, ip, next_request_id: 0, shared_out}
+        VapAction {
+            name,
+            ip,
+            next_request_id: 0,
+            shared_out,
+        }
     }
 }
 
@@ -311,31 +359,44 @@ impl Action for VapAction {
     async fn call(&mut self, context: &ActionContext) -> Result<ActionAnswer> {
         // TODO! Also map events!!!
 
-        let slots = context.data.as_intent()
+        let slots = context
+            .data
+            .as_intent()
             .unwrap()
-            .slots.iter()
-            .map(|(n,v)| RequestSlot {
+            .slots
+            .iter()
+            .map(|(n, v)| RequestSlot {
                 name: n.clone(),
-                value: Some(v.clone())
-            }).collect();
-        
-        let (capabilities,sender) = self.shared_out.lock_it().activate_skill(self.ip.clone(), MsgSkillRequest {
-            request_id: self.next_request_id,
-            client: ClientData {
-                system_id: context.satellite.as_ref().map(|s|s.uuid.clone()).expect("No satellite"),
-                capabilities: vec![], // TODO! Figure out capabilities
-            },
-            request: RequestData {
-                type_:  RequestDataKind::Intent,
-                intent: context.data.as_intent().unwrap().name.clone(),
-                locale: context.locale.clone(),
-                slots
-            }
-        }).await?;
+                value: Some(v.clone()),
+            })
+            .collect();
 
-        sender.send(RequestResponse {
-            code: 205,
-        }).unwrap();
+        let (capabilities, sender) = self
+            .shared_out
+            .lock_it()
+            .activate_skill(
+                self.ip.clone(),
+                MsgSkillRequest {
+                    request_id: self.next_request_id,
+                    client: ClientData {
+                        system_id: context
+                            .satellite
+                            .as_ref()
+                            .map(|s| s.uuid.clone())
+                            .expect("No satellite"),
+                        capabilities: vec![], // TODO! Figure out capabilities
+                    },
+                    request: RequestData {
+                        type_: RequestDataKind::Intent,
+                        intent: context.data.as_intent().unwrap().name.clone(),
+                        locale: context.locale.clone(),
+                        slots,
+                    },
+                },
+            )
+            .await?;
+
+        sender.send(RequestResponse { code: 205 }).unwrap();
 
         let data = if capabilities[0].name == "voice" {
             capabilities[0].cap_data[&"text".into()].clone().to_string()
@@ -352,11 +413,11 @@ impl Action for VapAction {
 
 // Capabilities /**************************************************************/
 pub trait CanBeQueried {
-    fn query(&mut self, caps: AssociativeMap) -> Result<(u16, AssociativeMap)> ;
+    fn query(&mut self, caps: AssociativeMap) -> Result<(u16, AssociativeMap)>;
 }
 
 pub enum NotificationResult {
-    Valid
+    Valid,
 }
 
 pub trait CanBeNotified {

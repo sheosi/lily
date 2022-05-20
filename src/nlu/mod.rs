@@ -13,14 +13,14 @@ use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use serde::Serialize;
 use unic_langid::LanguageIdentifier;
 
-#[cfg(not(feature="devel_rasa_nlu"))]
+#[cfg(not(feature = "devel_rasa_nlu"))]
 mod snips;
-#[cfg(not(feature="devel_rasa_nlu"))]
+#[cfg(not(feature = "devel_rasa_nlu"))]
 pub use self::snips::*;
 
-#[cfg(feature="devel_rasa_nlu")]
+#[cfg(feature = "devel_rasa_nlu")]
 mod rasa;
-#[cfg(feature="devel_rasa_nlu")]
+#[cfg(feature = "devel_rasa_nlu")]
 pub use self::rasa::*;
 
 pub trait NluManager {
@@ -32,27 +32,37 @@ pub trait NluManager {
     fn add_entity_value(&mut self, name: &str, value: String) -> Result<()>;
 
     // Consume the struct so that we can reuse memory
-    fn train(&self, train_set_path: &Path, engine_path: &Path, lang: &LanguageIdentifier) -> Result<Self::NluType>;
+    fn train(
+        &self,
+        train_set_path: &Path,
+        engine_path: &Path,
+        lang: &LanguageIdentifier,
+    ) -> Result<Self::NluType>;
 }
 
 pub trait NluManagerStatic {
     fn new() -> Self;
     fn list_compatible_langs() -> Vec<LanguageIdentifier>;
     fn is_lang_compatible(lang: &LanguageIdentifier) -> bool {
-        !negotiate_languages(&[lang],
+        !negotiate_languages(
+            &[lang],
             &Self::list_compatible_langs(),
             None,
-            NegotiationStrategy::Filtering
-        ).is_empty()
+            NegotiationStrategy::Filtering,
+        )
+        .is_empty()
     }
     fn name() -> &'static str;
     fn get_paths() -> (PathBuf, PathBuf);
 }
 
-#[derive(Clone,Debug)]
-pub enum NluUtterance{
+#[derive(Clone, Debug)]
+pub enum NluUtterance {
     Direct(String),
-    WithEntities {text: String, entities: HashMap<String, EntityInstance>}
+    WithEntities {
+        text: String,
+        entities: HashMap<String, EntityInstance>,
+    },
 }
 
 #[async_trait(?Send)]
@@ -63,54 +73,58 @@ pub trait Nlu {
 #[derive(Clone, Debug)]
 pub struct EntityInstance {
     pub kind: String,
-    pub example: String
+    pub example: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
 pub struct EntityData {
     pub value: String,
     #[serde(default)]
-    pub synonyms: Vec<String>
+    pub synonyms: Vec<String>,
 }
-
 
 #[derive(Clone, Debug)]
 pub struct EntityDef {
     pub data: Vec<EntityData>,
-    pub automatically_extensible: bool
+    pub automatically_extensible: bool,
 }
-
 
 impl EntityDef {
     pub fn new(data: Vec<EntityData>, automatically_extensible: bool) -> Self {
-        Self {data, automatically_extensible}
+        Self {
+            data,
+            automatically_extensible,
+        }
     }
 }
 #[derive(Debug, Clone)]
 pub enum OrderKind {
     Ref(String),
-    Def(EntityDef)
+    Def(EntityDef),
 }
 
 #[derive(Clone, Debug)]
 pub struct IntentData {
-    pub utts:  Vec<String>,
+    pub utts: Vec<String>,
     pub slots: HashMap<String, SlotData>,
-    pub hook: Hook
+    pub hook: Hook,
 }
 
 impl IntentData {
-    pub fn into_utterances(self, skill_name: &str)  -> Vec<NluUtterance> {
-        let mut slots_res:HashMap<String, EntityInstance> = HashMap::new();
+    pub fn into_utterances(self, skill_name: &str) -> Vec<NluUtterance> {
+        let mut slots_res: HashMap<String, EntityInstance> = HashMap::new();
         for (slot_name, slot_data) in self.slots.iter() {
-
             // Handle that slot types might be defined on the spot
-            let (ent_kind_name, example):(_, String) = match slot_data.slot_type.clone() {
+            let (ent_kind_name, example): (_, String) = match slot_data.slot_type.clone() {
                 OrderKind::Ref(name) => (name, "".into()),
                 OrderKind::Def(def) => {
-                    
                     let name = mangle(skill_name, slot_name);
-                    let example = def.data.first().as_ref().map(|d|d.value.clone()).unwrap_or("".into());
+                    let example = def
+                        .data
+                        .first()
+                        .as_ref()
+                        .map(|d| d.value.clone())
+                        .unwrap_or("".into());
                     (name, example)
                 }
             };
@@ -123,16 +137,19 @@ impl IntentData {
                 },
             );
         }
-        self.utts.into_iter().map(|utt|
-            if slots_res.is_empty() {
-                NluUtterance::Direct(utt)
-            }
-            else {
-                NluUtterance::WithEntities {
-                    text: utt,
-                    entities: slots_res.clone(),
+        self.utts
+            .into_iter()
+            .map(|utt| {
+                if slots_res.is_empty() {
+                    NluUtterance::Direct(utt)
+                } else {
+                    NluUtterance::WithEntities {
+                        text: utt,
+                        entities: slots_res.clone(),
+                    }
                 }
-        }).collect()
+            })
+            .collect()
     }
 }
 
@@ -146,49 +163,55 @@ pub struct SlotData {
     pub prompt: Option<String>,
 
     // Second chance for asking the user for this slot
-    pub reprompt: Option<String>
+    pub reprompt: Option<String>,
 }
-
 
 #[derive(Debug)]
 pub struct NluResponse {
     pub name: Option<String>,
     pub confidence: f32,
-    pub slots: Vec<NluResponseSlot>
+    pub slots: Vec<NluResponseSlot>,
 }
 
 #[derive(Debug)]
 pub struct NluResponseSlot {
     pub value: String,
-    pub name: String
+    pub name: String,
 }
 
-
-pub fn try_open_file_and_check(path: &Path, new_contents: &str) -> Result<Option<std::fs::File>, std::io::Error> {
-    let file = std::fs::OpenOptions::new().read(true).write(true).create(true).open(path);
+pub fn try_open_file_and_check(
+    path: &Path,
+    new_contents: &str,
+) -> Result<Option<std::fs::File>, std::io::Error> {
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(path);
 
     if let Ok(mut file) = file {
         let mut old_file: String = String::new();
         file.read_to_string(&mut old_file)?;
         if old_file != new_contents {
             Ok(Some(file))
-        }
-        else {
+        } else {
             Ok(None)
         }
-    }
-    else {
+    } else {
         if let Some(path_parent) = path.parent() {
             std::fs::create_dir_all(path_parent)?;
         }
-        let file = std::fs::OpenOptions::new().read(true).write(true).create(true).open(path)?;
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(path)?;
 
         Ok(Some(file))
     }
-
 }
 
-pub fn write_contents(file: &mut File, contents: &str) -> Result <()> {
+pub fn write_contents(file: &mut File, contents: &str) -> Result<()> {
     file.set_len(0)?; // Truncate file
     file.seek(SeekFrom::Start(0))?; // Start from the start
     file.write_all(contents[..].as_bytes())?;
@@ -197,7 +220,12 @@ pub fn write_contents(file: &mut File, contents: &str) -> Result <()> {
     Ok(())
 }
 
-pub fn compare_sets_and_train<F: FnOnce()>(train_set_path: &Path, train_set:&str, engine_path: &Path, callback: F) -> Result<()> {
+pub fn compare_sets_and_train<F: FnOnce()>(
+    train_set_path: &Path,
+    train_set: &str,
+    engine_path: &Path,
+    callback: F,
+) -> Result<()> {
     if let Some(mut train_file) = try_open_file_and_check(train_set_path, train_set)? {
         // Create parents
         if let Some(path_parent) = engine_path.parent() {
@@ -214,10 +242,7 @@ pub fn compare_sets_and_train<F: FnOnce()>(train_set_path: &Path, train_set:&str
 
         // Train engine
         callback();
-
     }
 
     Ok(())
 }
-
-

@@ -1,7 +1,7 @@
 // Standard library
 use std::cell::RefCell;
 use std::fs::{create_dir_all, File};
-use std::io::{BufReader, Cursor, BufWriter, stdin};
+use std::io::{stdin, BufReader, BufWriter, Cursor};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -20,7 +20,7 @@ use rumqttc::{AsyncClient, Event, EventLoop, LastWill, Packet, QoS};
 use serde::{Deserialize, Serialize};
 use serde_yaml::{from_reader, to_writer};
 use termion::{event::Key, input::TermRead};
-use tokio::sync::{watch, mpsc};
+use tokio::sync::{mpsc, watch};
 use tokio::{
     sync::{Mutex as AsyncMutex, MutexGuard as AsyncMGuard},
     try_join,
@@ -35,7 +35,7 @@ const CONN_CONF_FILE: MultipathRef = MultipathRef::new(&[
 
 const SNOWBOY_DATA_PATH: PathRef = PathRef::own("hotword");
 pub const HOTWORD_CHECK_INTERVAL_MS: u16 = 20; // Larger = less CPU, more wait time
-pub const ACTIVE_LISTENING_INTERVAL_MS: u16 = 200; 
+pub const ACTIVE_LISTENING_INTERVAL_MS: u16 = 200;
 enum ProgState<'a> {
     PasiveListening,
     ActiveListening(AsyncMGuard<'a, RecDevice>),
@@ -45,7 +45,7 @@ impl<'a> PartialEq for ProgState<'a> {
     fn eq(&self, other: &Self) -> bool {
         match self {
             ProgState::PasiveListening => matches!(other, ProgState::PasiveListening),
-            ProgState::ActiveListening(_) => matches!(other, ProgState::ActiveListening(_))
+            ProgState::ActiveListening(_) => matches!(other, ProgState::ActiveListening(_)),
         }
     }
 }
@@ -167,23 +167,28 @@ async fn user_listen(
         let stdin = stdin.lock();
         let mut input = stdin.keys();
         loop {
-            if input.next().map_or(false, |r|r.map_or(false,|k|{k == key})) {
-                key_channel_in.blocking_send(()).map_err(|e|println!("{}", e)).unwrap();
+            if input
+                .next()
+                .map_or(false, |r| r.map_or(false, |k| k == key))
+            {
+                key_channel_in
+                    .blocking_send(())
+                    .map_err(|e| println!("{}", e))
+                    .unwrap();
                 break;
             }
         }
     }
 
     let (key_channel_in, mut key_channel_out) = mpsc::channel::<()>(1);
-    let _waiter_thread = std::thread::spawn(move || {wait_key(key_channel_in, Key::Char('l'))});
-    
+    let _waiter_thread = std::thread::spawn(move || wait_key(key_channel_in, Key::Char('l')));
+
     loop {
         let interval = if current_state == ProgState::PasiveListening {
             HOTWORD_CHECK_INTERVAL_MS
         } else {
             ACTIVE_LISTENING_INTERVAL_MS
         };
-        
 
         match current_state {
             ProgState::PasiveListening => {
@@ -229,7 +234,7 @@ async fn user_listen(
                     None => continue,
                 };
                 let audio = mic_data.clone().into_owned().to_ogg_opus().unwrap();
-                let (a2, _,) =
+                let (a2, _) =
                     opus_decode::<_, DEFAULT_SAMPLES_PER_SECOND>(Cursor::new(audio)).unwrap();
                 if cfg!(debug_assertions) {
                     activeaudio
@@ -294,7 +299,6 @@ impl ConfFile {
         }
         let conf_file = File::create(&conf_path)?;
         let writer = BufWriter::new(&conf_file);
-        
 
         Ok(to_writer(writer, &self)?)
     }
@@ -335,7 +339,10 @@ pub async fn main() -> anyhow::Result<()> {
         .subscribe(&format!("lily/{}/say_msg", mqtt_conn.name), QoS::AtMostOnce)
         .await?;
     client
-        .subscribe(&format!("lily/{}/session_end", mqtt_conn.name), QoS::AtMostOnce)
+        .subscribe(
+            &format!("lily/{}/session_end", mqtt_conn.name),
+            QoS::AtMostOnce,
+        )
         .await?;
     client
         .subscribe("lily/satellite_welcome", QoS::AtMostOnce)

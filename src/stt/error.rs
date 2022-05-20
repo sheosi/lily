@@ -1,6 +1,6 @@
-use thiserror::Error;
-use lily_common::audio::AudioError;
 use crate::exts::NotUnicodeError;
+use lily_common::audio::AudioError;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum SttError {
@@ -15,7 +15,7 @@ pub enum SttError {
     Deepspeech(#[from] deepspeech::errors::DeepspeechError),
 
     #[error("Failed to append audio")]
-    AudioError(#[from] AudioError)
+    AudioError(#[from] AudioError),
 }
 
 #[derive(Error, Debug)]
@@ -44,29 +44,29 @@ pub enum SttConstructionError {
 
     #[cfg(feature = "deepspeech_stt")]
     #[error("Deepspeech error")]
-    Deepspeech(#[from] deepspeech::errors::DeepspeechError)
+    Deepspeech(#[from] deepspeech::errors::DeepspeechError),
 }
 
-#[derive(Error,Debug)]
+#[derive(Error, Debug)]
 pub enum OnlineSttError {
-	#[error("network failure")]
-	Network(#[from] reqwest::Error),
+    #[error("network failure")]
+    Network(#[from] reqwest::Error),
 
-	#[error("url parsing")]
-	UrlParse(#[from] url::ParseError),
+    #[error("url parsing")]
+    UrlParse(#[from] url::ParseError),
 
-	#[error("wav conversion")]
-	WavConvert(#[from] lily_common::audio::AudioError),
+    #[error("wav conversion")]
+    WavConvert(#[from] lily_common::audio::AudioError),
 
-	#[error("json parsing")]
-	JsonParse(#[from] serde_json::Error),
+    #[error("json parsing")]
+    JsonParse(#[from] serde_json::Error),
 
-	#[error("opus encoding")]
+    #[error("opus encoding")]
     OpusEncode(#[from] magnum_opus::Error),
 
     #[error("Websocket failure: {0}")]
     WebSocket(#[from] tungstenite::Error),
-    
+
     #[error("Connection closed")]
-    ConnectionClosed
+    ConnectionClosed,
 }

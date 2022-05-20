@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::{config::Config};
+use crate::config::Config;
 use crate::signals::mqtt::{MqttInterfaceIn, MqttInterfaceOut};
 use crate::signals::order::dev_mgmt::SessionManager;
 use crate::skills::hermes::{HermesApiIn, HermesApiOut};
@@ -9,20 +9,20 @@ use crate::tts::TtsData;
 use anyhow::Result;
 use lily_common::communication::*;
 use rumqttc::{AsyncClient, Event, EventLoop, Packet};
-use tokio::{try_join, sync::mpsc};
+use tokio::{sync::mpsc, try_join};
 use unic_langid::LanguageIdentifier;
 pub struct MqttApi {
     api_in: MqttApiIn,
-    api_out: MqttApiOut
+    api_out: MqttApiOut,
 }
 impl MqttApi {
     pub fn new(def_lang: LanguageIdentifier) -> Result<Self> {
         Ok(Self {
             api_in: MqttApiIn::new(def_lang),
-            api_out: MqttApiOut::new()?
+            api_out: MqttApiOut::new()?,
         })
     }
-    pub async fn api_loop (
+    pub async fn api_loop(
         &mut self,
         config: &Config,
         curr_langs: &[LanguageIdentifier],
@@ -31,18 +31,18 @@ impl MqttApi {
         channel_nlu: mpsc::Sender<MsgRequest>,
         channel_event: mpsc::Sender<MsgEvent>,
     ) -> Result<()> {
-            
-        let mqtt_conf = ConnectionConfResolved::from(
-            config.mqtt.clone(),
-            || "lily-server".into()
-        );
+        let mqtt_conf = ConnectionConfResolved::from(config.mqtt.clone(), || "lily-server".into());
         let (client_raw, eloop) = make_mqtt_conn(&mqtt_conf, None)?;
         let client = Arc::new(Mutex::new(client_raw));
 
-        let i = self.api_in.handle(eloop, client.clone(), config, channel_nlu, channel_event);
-        let o = self.api_out.handle(curr_langs, &config.tts, def_lang, sessions, client);
+        let i = self
+            .api_in
+            .handle(eloop, client.clone(), config, channel_nlu, channel_event);
+        let o = self
+            .api_out
+            .handle(curr_langs, &config.tts, def_lang, sessions, client);
         try_join!(i, o)?;
-                
+
         Ok(())
     }
 }
@@ -54,9 +54,9 @@ pub struct MqttApiIn {
 
 impl MqttApiIn {
     fn new(def_lang: LanguageIdentifier) -> Self {
-        Self{
+        Self {
             hermes_in: HermesApiIn::new(def_lang),
-            satellite_server_in: MqttInterfaceIn::new()
+            satellite_server_in: MqttInterfaceIn::new(),
         }
     }
     async fn handle(
@@ -67,7 +67,6 @@ impl MqttApiIn {
         channel_nlu: mpsc::Sender<MsgRequest>,
         channel_event: mpsc::Sender<MsgEvent>,
     ) -> Result<()> {
-        
         MqttInterfaceIn::subscribe(&client).await?;
         HermesApiIn::subscribe(&client).await?;
 
@@ -77,16 +76,24 @@ impl MqttApiIn {
                     match pub_msg.topic.as_str() {
                         // Lily client related
                         "lily/new_satellite" => {
-                            self.satellite_server_in.handle_new_sattelite(&pub_msg.payload, config, &client).await?;
+                            self.satellite_server_in
+                                .handle_new_sattelite(&pub_msg.payload, config, &client)
+                                .await?;
                         }
                         "lily/nlu_process" => {
-                            self.satellite_server_in.handle_nlu_process(&pub_msg.payload, &channel_nlu).await?;
+                            self.satellite_server_in
+                                .handle_nlu_process(&pub_msg.payload, &channel_nlu)
+                                .await?;
                         }
                         "lily/event" => {
-                            self.satellite_server_in.handle_event(&pub_msg.payload, &channel_event).await?;
+                            self.satellite_server_in
+                                .handle_event(&pub_msg.payload, &channel_event)
+                                .await?;
                         }
                         "lily/disconnected" => {
-                            self.satellite_server_in.handle_disconnected(&pub_msg.payload).await?;
+                            self.satellite_server_in
+                                .handle_disconnected(&pub_msg.payload)
+                                .await?;
                         }
 
                         // Hermes related
@@ -109,24 +116,25 @@ pub struct MqttApiOut {
 
 impl MqttApiOut {
     fn new() -> Result<Self> {
-        Ok(Self{
+        Ok(Self {
             hermes_out: HermesApiOut::new()?,
-            satellite_server_out: MqttInterfaceOut::new()?
+            satellite_server_out: MqttInterfaceOut::new()?,
         })
     }
-    
-    async fn handle(&mut self,
+
+    async fn handle(
+        &mut self,
         curr_langs: &[LanguageIdentifier],
         tts_conf: &TtsData,
         def_lang: Option<&LanguageIdentifier>,
         sessions: Arc<Mutex<SessionManager>>,
-        client: Arc<Mutex<AsyncClient>>
+        client: Arc<Mutex<AsyncClient>>,
     ) -> Result<()> {
-        let satellites = self.satellite_server_out.handle_out(curr_langs, tts_conf, def_lang, sessions, &client);
+        let satellites = self
+            .satellite_server_out
+            .handle_out(curr_langs, tts_conf, def_lang, sessions, &client);
         let hermes = self.hermes_out.handle_out(&client);
         try_join!(satellites, hermes)?;
         Ok(())
-
     }
-    
 }

@@ -4,7 +4,6 @@ mod error;
 mod ibm;
 mod pico;
 
-
 pub use self::error::*;
 pub use self::ibm::*;
 pub use self::pico::*;
@@ -41,39 +40,41 @@ pub trait TtsStatic {
 #[derive(Debug, Clone)]
 pub struct TtsInfo {
     pub name: String,
-    pub is_online: bool
+    pub is_online: bool,
 }
 
 impl Display for TtsInfo {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
         let online_str = {
-            if self.is_online {"online"}
-            else {"local"}
-
+            if self.is_online {
+                "online"
+            } else {
+                "local"
+            }
         };
-        
+
         write!(formatter, "{}({})", self.name, online_str)
     }
 }
 // OnlineInterface /////////////////////////////////////////////////////////////
 struct TtsOnlineInterface<O: Tts> {
     online: O,
-    local: Box<dyn Tts>
+    local: Box<dyn Tts>,
 }
 
 impl<O: Tts> TtsOnlineInterface<O> {
     pub fn new(online: O, local: Box<dyn Tts>) -> Self {
-        Self {online, local}
+        Self { online, local }
     }
 }
 
 #[async_trait(?Send)]
-impl<O: Tts> Tts for TtsOnlineInterface <O> {
+impl<O: Tts> Tts for TtsOnlineInterface<O> {
     async fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
         match self.online.synth_text(input).await {
             Ok(audio) => Ok(audio),
             // If it didn't work try with local
-            Err(_) => self.local.synth_text(input).await
+            Err(_) => self.local.synth_text(input).await,
         }
     }
 
@@ -86,29 +87,24 @@ impl<O: Tts> Tts for TtsOnlineInterface <O> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Gender {
     Male,
-    Female
+    Female,
 }
 #[derive(Debug, Clone)]
 pub struct VoiceDescr {
-    pub gender: Gender
+    pub gender: Gender,
 }
 
 fn negotiate_langs_res(
     input: &LanguageIdentifier,
     available: &[LanguageIdentifier],
-    default: Option<&LanguageIdentifier>
+    default: Option<&LanguageIdentifier>,
 ) -> Result<LanguageIdentifier, TtsConstructionError> {
-    let langs = negotiate_languages(
-        &[input],available,
-        default, NegotiationStrategy::Filtering
-    );
+    let langs = negotiate_languages(&[input], available, default, NegotiationStrategy::Filtering);
     if !langs.is_empty() {
         Ok(langs[0].clone())
-    }
-    else {
+    } else {
         Err(TtsConstructionError::IncompatibleLanguage)
     }
-
 }
 
 // Conf ////////////////////////////////////////////////////////////////////////
@@ -120,12 +116,16 @@ pub struct TtsData {
     pub prefer_online: bool,
 
     #[serde(default = "none::<IbmTtsData>")]
-    pub ibm: Option<IbmTtsData>
+    pub ibm: Option<IbmTtsData>,
 }
 
 impl Default for TtsData {
     fn default() -> Self {
-        Self  { prefer_male: false, prefer_online: false, ibm: None }
+        Self {
+            prefer_male: false,
+            prefer_online: false,
+            ibm: None,
+        }
     }
 }
 
@@ -134,50 +134,70 @@ pub struct TtsFactory;
 
 impl TtsFactory {
     #[cfg(not(feature = "extra_langs_tts"))]
-    fn make_local_tts (lang: &LanguageIdentifier, prefs: &VoiceDescr) -> Result<Box<dyn Tts>, TtsConstructionError> {
+    fn make_local_tts(
+        lang: &LanguageIdentifier,
+        prefs: &VoiceDescr,
+    ) -> Result<Box<dyn Tts>, TtsConstructionError> {
         Ok(Box::new(PicoTts::new(lang, prefs)?))
     }
 
     #[cfg(feature = "extra_langs_tts")]
-    fn make_local_tts (lang: &LanguageIdentifier, prefs: &VoiceDescr) -> Result<Box<dyn Tts>, TtsConstructionError> {
+    fn make_local_tts(
+        lang: &LanguageIdentifier,
+        prefs: &VoiceDescr,
+    ) -> Result<Box<dyn Tts>, TtsConstructionError> {
         if PicoTts::is_descr_compatible(prefs).is_ok() & PicoTts::is_lang_comptaible(lang).is_ok() {
             Ok(Box::new(PicoTts::new(lang, prefs)?))
-        }
-        else {
+        } else {
             Ok(Box::new(EspeakTts::new(lang, prefs)))
         }
     }
 
     #[cfg(not(feature = "google_tts"))]
-    fn make_cloud_tts(lang: &LanguageIdentifier, gateway_key: Option<IbmTtsData>, prefs: &VoiceDescr, local: Box<dyn Tts>) -> Result<Box<dyn Tts>, TtsConstructionError> {
+    fn make_cloud_tts(
+        lang: &LanguageIdentifier,
+        gateway_key: Option<IbmTtsData>,
+        prefs: &VoiceDescr,
+        local: Box<dyn Tts>,
+    ) -> Result<Box<dyn Tts>, TtsConstructionError> {
         if let Some(ibm_data) = gateway_key {
-            Ok(Box::new(TtsOnlineInterface::new(IbmTts::new(lang, ibm_data.gateway, ibm_data.key, prefs)?, local)))
-        }
-        else {
+            Ok(Box::new(TtsOnlineInterface::new(
+                IbmTts::new(lang, ibm_data.gateway, ibm_data.key, prefs)?,
+                local,
+            )))
+        } else {
             Ok(local)
         }
     }
 
     #[cfg(feature = "google_tts")]
-    fn make_cloud_tts(lang: &LanguageIdentifier, gateway_key: Option<IbmTtsData>, prefs: &VoiceDescr, local: Box<dyn Tts>) -> Result<Box<dyn Tts>, TtsConstructionError> {
+    fn make_cloud_tts(
+        lang: &LanguageIdentifier,
+        gateway_key: Option<IbmTtsData>,
+        prefs: &VoiceDescr,
+        local: Box<dyn Tts>,
+    ) -> Result<Box<dyn Tts>, TtsConstructionError> {
         if let Some(ibm_data) = gateway_key {
-            Ok(Box::new(TtsOnlineInterface::new(IbmTts::new(lang, ibm_data.gateway, ibm_data.key, prefs)?, local)))
-        }
-        else {
+            Ok(Box::new(TtsOnlineInterface::new(
+                IbmTts::new(lang, ibm_data.gateway, ibm_data.key, prefs)?,
+                local,
+            )))
+        } else {
             Ok(Box::new(TtsOnlineInterface::new(GTts::new(lang), local)))
         }
     }
 
-    pub fn load_with_prefs(lang: &LanguageIdentifier, prefer_cloud_tts: bool, gateway_key: Option<IbmTtsData>, prefs: &VoiceDescr) -> Result<Box<dyn Tts>, TtsConstructionError> {
+    pub fn load_with_prefs(
+        lang: &LanguageIdentifier,
+        prefer_cloud_tts: bool,
+        gateway_key: Option<IbmTtsData>,
+        prefs: &VoiceDescr,
+    ) -> Result<Box<dyn Tts>, TtsConstructionError> {
         let local_tts = Self::make_local_tts(lang, prefs)?;
 
         match prefer_cloud_tts {
-            true => {
-                Self::make_cloud_tts(lang, gateway_key, prefs, local_tts)
-            },
-            false => {
-                Ok(local_tts)
-            }
+            true => Self::make_cloud_tts(lang, gateway_key, prefs, local_tts),
+            false => Ok(local_tts),
         }
     }
 }

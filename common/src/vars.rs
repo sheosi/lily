@@ -1,17 +1,20 @@
-use std::path::PathBuf;
 use lazy_static::lazy_static;
+use std::path::PathBuf;
 
 #[cfg(not(debug_assertions))]
-use std::path::Path;
-#[cfg(not(debug_assertions))]
 use dirs::data_local_dir;
+#[cfg(not(debug_assertions))]
+use std::path::Path;
 
 use std::sync::Mutex;
 
 // Paths
 #[cfg(debug_assertions)]
 lazy_static! {
-    static ref ORG_PATH: PathBuf = std::env::current_dir().expect("Couldn't get current_dir").canonicalize().expect("Failed to canonicalize current_dir");
+    static ref ORG_PATH: PathBuf = std::env::current_dir()
+        .expect("Couldn't get current_dir")
+        .canonicalize()
+        .expect("Failed to canonicalize current_dir");
     static ref ASSETS_PATH: Mutex<PathBuf> = Mutex::new(ORG_PATH.join("resources"));
     static ref USER_DATA_PATH: PathBuf = ORG_PATH.join("debug_run");
 }
@@ -23,7 +26,7 @@ lazy_static! {
 }
 
 #[cfg(debug_assertions)]
-pub fn set_app_name(_name: &str){}
+pub fn set_app_name(_name: &str) {}
 
 #[cfg(not(debug_assertions))]
 pub fn set_app_name(name: &str) {
@@ -31,7 +34,8 @@ pub fn set_app_name(name: &str) {
 }
 
 enum PathRefKind {
-    UserData, Own
+    UserData,
+    Own,
 }
 pub struct PathRef {
     path_ref: &'static str,
@@ -40,28 +44,34 @@ pub struct PathRef {
 
 impl PathRef {
     pub const fn own(path_ref: &'static str) -> Self {
-        Self{path_ref, kind: PathRefKind::Own}
+        Self {
+            path_ref,
+            kind: PathRefKind::Own,
+        }
     }
 
     pub const fn user_cfg(path_ref: &'static str) -> Self {
-        Self{path_ref, kind: PathRefKind::UserData}
+        Self {
+            path_ref,
+            kind: PathRefKind::UserData,
+        }
     }
 
     pub fn resolve(&self) -> PathBuf {
         match self.kind {
             PathRefKind::UserData => USER_DATA_PATH.join(self.path_ref),
-            PathRefKind::Own => (*ASSETS_PATH.lock().unwrap()).join(self.path_ref)
+            PathRefKind::Own => (*ASSETS_PATH.lock().unwrap()).join(self.path_ref),
         }
     }
 }
 
 pub struct MultipathRef {
-    refs: &'static [PathRef]
+    refs: &'static [PathRef],
 }
 
 impl MultipathRef {
     pub const fn new(refs: &'static [PathRef]) -> Self {
-        Self {refs}
+        Self { refs }
     }
 
     // Will get the first that exists from the list
@@ -81,16 +91,19 @@ impl MultipathRef {
     }
 
     pub fn all(&self) -> Vec<PathBuf> {
-        self.refs.iter()
-        .map(|r|r.resolve())
-        .filter(|p|p.exists())
-        .collect()
+        self.refs
+            .iter()
+            .map(|r| r.resolve())
+            .filter(|p| p.exists())
+            .collect()
     }
 }
 
 // Messages
-pub const AUDIO_REC_START_ERR_MSG: &str = "Failed while trying to start audio recording, please report this";
-pub const AUDIO_REC_STOP_ERR_MSG: &str = "Failed while trying to stop audio recording, please report this";
+pub const AUDIO_REC_START_ERR_MSG: &str =
+    "Failed while trying to start audio recording, please report this";
+pub const AUDIO_REC_STOP_ERR_MSG: &str =
+    "Failed while trying to stop audio recording, please report this";
 pub const CLOCK_TOO_EARLY_MSG :&str = "Somehow the system's clock time is before unix epoch, this is not supported, check your system's time and the CMOS battery";
 
 // Other
