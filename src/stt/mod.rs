@@ -19,7 +19,7 @@ pub use self::deepspeech::*;
 use async_trait::async_trait;
 use core::fmt::Display;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
-use lily_common::other::{false_val, none};
+use lily_common::other::false_val;
 use log::info;
 use serde::Deserialize;
 use unic_langid::LanguageIdentifier;
@@ -31,7 +31,7 @@ use lily_common::audio::AudioRaw;
 pub struct SttData {
     #[serde(default = "false_val")]
     pub prefer_online: bool,
-    #[serde(default = "none::<IbmSttData>")]
+    #[serde(default)]
     pub ibm: Option<IbmSttData>,
 }
 

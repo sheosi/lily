@@ -1,11 +1,14 @@
 use core::fmt::Display;
 
 mod error;
+mod http_tts;
 mod ibm;
+mod larynx;
 mod pico;
 
 pub use self::error::*;
 pub use self::ibm::*;
+use self::larynx::LarynxData;
 pub use self::pico::*;
 
 #[cfg(feature = "extra_langs_tts")]
@@ -17,10 +20,12 @@ mod google;
 #[cfg(feature = "google_tts")]
 pub use self::google::*;
 
+use self::http_tts::HttpTts;
+
 use async_trait::async_trait;
 use fluent_langneg::{negotiate_languages, NegotiationStrategy};
 use lily_common::audio::Audio;
-use lily_common::other::{false_val, none};
+use lily_common::other::false_val;
 use serde::Deserialize;
 use unic_langid::LanguageIdentifier;
 
@@ -31,9 +36,11 @@ pub trait Tts {
     fn get_info(&self) -> TtsInfo;
 }
 
+
 pub trait TtsStatic {
-    fn is_descr_compatible(descr: &VoiceDescr) -> Result<(), TtsConstructionError>;
-    fn is_lang_comptaible(lang: &LanguageIdentifier) -> Result<(), TtsConstructionError>;
+    type Data;
+    fn is_descr_compatible(d: &Self::Data, descr: &VoiceDescr) -> Result<(), TtsConstructionError>;
+    fn is_lang_comptaible(d: &Self::Data, lang: &LanguageIdentifier) -> Result<(), TtsConstructionError>;
 }
 
 // Info ////////////////////////////////////////////////////////////////////////
@@ -115,8 +122,11 @@ pub struct TtsData {
     #[serde(default = "false_val")]
     pub prefer_online: bool,
 
-    #[serde(default = "none::<IbmTtsData>")]
+    #[serde(default)]
     pub ibm: Option<IbmTtsData>,
+
+    #[serde(default)]
+    pub larynx: Option<LarynxData>,
 }
 
 impl Default for TtsData {
@@ -125,6 +135,7 @@ impl Default for TtsData {
             prefer_male: false,
             prefer_online: false,
             ibm: None,
+            larynx: None
         }
     }
 }
@@ -146,7 +157,7 @@ impl TtsFactory {
         lang: &LanguageIdentifier,
         prefs: &VoiceDescr,
     ) -> Result<Box<dyn Tts>, TtsConstructionError> {
-        if PicoTts::is_descr_compatible(prefs).is_ok() & PicoTts::is_lang_comptaible(lang).is_ok() {
+        if PicoTts::is_descr_compatible(&(), prefs).is_ok() & PicoTts::is_lang_comptaible(&(), lang).is_ok() {
             Ok(Box::new(PicoTts::new(lang, prefs)?))
         } else {
             Ok(Box::new(EspeakTts::new(lang, prefs)))
@@ -162,7 +173,7 @@ impl TtsFactory {
     ) -> Result<Box<dyn Tts>, TtsConstructionError> {
         if let Some(ibm_data) = gateway_key {
             Ok(Box::new(TtsOnlineInterface::new(
-                IbmTts::new(lang, ibm_data.gateway, ibm_data.key, prefs)?,
+                HttpTts::new(lang, prefs, ibm_data)?,
                 local,
             )))
         } else {
@@ -179,11 +190,14 @@ impl TtsFactory {
     ) -> Result<Box<dyn Tts>, TtsConstructionError> {
         if let Some(ibm_data) = gateway_key {
             Ok(Box::new(TtsOnlineInterface::new(
-                IbmTts::new(lang, ibm_data.gateway, ibm_data.key, prefs)?,
+                HttpTts::new(lang, prefs, ibm_data)?,
                 local,
             )))
         } else {
-            Ok(Box::new(TtsOnlineInterface::new(GTts::new(lang), local)))
+            Ok(Box::new(TtsOnlineInterface::new(
+                HttpTts::new(lang, prefs, GttsData())?,
+                local,
+            )))
         }
     }
 

@@ -11,7 +11,7 @@ use crate::vars::MAIN_CONF_PATH;
 // Other crates
 use anyhow::{anyhow, Result};
 use lily_common::communication::ClientConf;
-use lily_common::other::{false_val, none, ConnectionConf};
+use lily_common::other::{false_val, ConnectionConf};
 use lily_common::vars::DEFAULT_HOTWORD_SENSITIVITY;
 use serde::Deserialize;
 use serde_yaml::Value;
@@ -22,7 +22,7 @@ thread_local! {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
-    #[serde(default = "none::<Vec<String>>")]
+    #[serde(default)]
     pub language: Option<Vec<String>>,
     #[serde(default = "def_hotword_sensitivity")]
     pub hotword_sensitivity: f32,

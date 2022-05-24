@@ -8,7 +8,7 @@ use crate::actions::Action;
 use crate::exts::LockIt;
 use crate::nlu::{EntityDef, IntentData, NluManager, NluManagerStatic};
 use crate::signals::{collections::NluMap, ActMap, ActionSet, SignalOrder};
-use crate::vars::{mangle, NLU_TRAINING_DELAY, NO_ADD_ENTITY_VALUE_MSG};
+use crate::vars::{mangle, NLU_TRAINING_DELAY};
 
 // Other crates
 use anyhow::{anyhow, Result};

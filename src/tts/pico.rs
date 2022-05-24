@@ -42,7 +42,7 @@ impl PicoTts {
         lang: &LanguageIdentifier,
         prefs: &VoiceDescr,
     ) -> Result<Self, TtsConstructionError> {
-        Self::is_descr_compatible(prefs)?; // Check voice description compatibility
+        Self::is_descr_compatible(&(), prefs)?; // Check voice description compatibility
 
         // 1. Create a Pico system
         let lang = Self::lang_neg(lang);
@@ -135,7 +135,8 @@ impl Tts for PicoTts {
 }
 
 impl TtsStatic for PicoTts {
-    fn is_descr_compatible(descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
+    type Data = ();
+    fn is_descr_compatible(d: &Self::Data, descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
         //Only has female voices (by default)
         if descr.gender != Gender::Female {
             Err(TtsConstructionError::WrongGender)
@@ -144,7 +145,7 @@ impl TtsStatic for PicoTts {
         }
     }
 
-    fn is_lang_comptaible(lang: &LanguageIdentifier) -> Result<(), TtsConstructionError> {
+    fn is_lang_comptaible(d: &Self::Data, lang: &LanguageIdentifier) -> Result<(), TtsConstructionError> {
         let default = langid!("en-US");
 
         negotiate_langs_res(lang, &Self::available_langs(), Some(&default)).map(|_| ())

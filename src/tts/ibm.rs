@@ -1,12 +1,8 @@
-use crate::tts::{
-    negotiate_langs_res, Gender, OnlineTtsError, Tts, TtsConstructionError, TtsError, TtsInfo,
-    TtsStatic, VoiceDescr,
-};
-use crate::vars::NO_COMPATIBLE_LANG_MSG;
+use crate::tts::{Gender, TtsConstructionError, TtsError, TtsInfo, VoiceDescr};
 
-use async_trait::async_trait;
-use lily_common::audio::Audio;
-use reqwest::Client;
+use crate::tts::http_tts::HttpsTtsData;
+
+use reqwest::{RequestBuilder, Url};
 use serde::Deserialize;
 use unic_langid::{langid, langids, LanguageIdentifier};
 
@@ -16,150 +12,52 @@ pub struct IbmTtsData {
     pub gateway: String,
 }
 
-pub struct IbmTts {
-    client: Client,
-    api_gateway: String,
-    api_key: String,
-    curr_voice: String,
-}
+impl HttpsTtsData for IbmTtsData {
+    fn make_request_url(&self, voice: &str, input: &str) -> Result<Url, TtsError> {
+        let url_str = format!("https://{}/text-to-speech/api/v1/synthesize", self.gateway);
 
-impl IbmTts {
-    pub fn new(
-        lang: &LanguageIdentifier,
-        api_gateway: String,
-        api_key: String,
-        prefs: &VoiceDescr,
-    ) -> Result<Self, TtsConstructionError> {
-        Ok(IbmTts {
-            client: Client::new(),
-            api_gateway,
-            api_key,
-            curr_voice: Self::make_tts_voice(&Self::lang_neg(lang), prefs)?.to_string(),
-        })
+        Ok(Url::parse_with_params(&url_str, &[("voice", voice), ("text", input)]).unwrap())
     }
 
-    // Accept only negotiated LanguageIdentifiers
-    fn make_tts_voice(
-        lang: &LanguageIdentifier,
-        prefs: &VoiceDescr,
-    ) -> Result<&'static str, TtsConstructionError> {
-        let lang_str = format!(
-            "{}-{}",
-            lang.language,
-            lang.region.ok_or(TtsConstructionError::NoRegion)?.as_str()
-        );
-        match lang_str.as_str() {
-            "ar-AR" => {
-                Ok("ar-AR_OmarVoice") // Only male
-            }
-            "de-DE" => {
-                Ok(match prefs.gender {
-                    // There's also "de-DE_ErikaV3Voice"
-                    Gender::Male => "de-DE_DieterV3Voice",
-                    Gender::Female => "de-DE_BirgitV3Voice",
-                })
-            }
-            "en-GB" => {
-                Ok(match prefs.gender {
-                    // There's also "en-GB_KateV3Voice"
-                    Gender::Male => "en-GB_JamesV3Voice",
-                    Gender::Female => "en-GB_CharlotteV3Voice",
-                })
-            }
-            "en-US" => {
-                Ok(match prefs.gender {
-                    // There's also "en-US_EmilyV3Voice", "en-US_HenryV3Voice", "en-US_KevinV3Voice", "en-US_LisaV3Voice" and  "en-US_OliviaV3Voice"
-                    Gender::Male => "en-US_MichaelV3Voice",
-                    Gender::Female => "en-US_AllisonV3Voice",
-                })
-            }
-            "es-ES" => Ok(match prefs.gender {
-                Gender::Male => "es-ES_EnriqueV3Voice",
-                Gender::Female => "es-ES_LauraV3Voice",
-            }),
-            "es-LA" => {
-                Ok("es-LA_SofiaV3Voice") // Only female
-            }
-            "es-US" => {
-                Ok("es-US_SofiaV3Voice") // Only female
-            }
-            "fr-FR" => Ok(match prefs.gender {
-                Gender::Male => "fr-FR_NicolasV3Voice",
-                Gender::Female => "fr-FR_ReneeV3Voice",
-            }),
-            "it-IT" => {
-                Ok("it-IT_FrancescaV3Voice") // Only female
-            }
-            "ja-JP" => {
-                Ok("ja-JP_EmiVoice") // Only female
-            }
-            "ko-KR" => {
-                Ok("ko-KR_YoungmiVoice") // There's also "ko-KR_YunaVoice"
-            }
-            "nl-NL" => Ok(match prefs.gender {
-                Gender::Male => "nl-NL_LiamVoice",
-                Gender::Female => "nl-NL_EmmaVoice",
-            }),
-            "pt-BR" => {
-                Ok("pt-BR_IsabelaV3Voice") // Only female
-            }
-            "zh-CN" => {
-                Ok(match prefs.gender {
-                    // There's also "zh-CN_ZhangJingVoice"
-                    Gender::Male => "zh-CN_WangWeiVoice",
-                    Gender::Female => "zh-CN_LiNaVoice",
-                })
-            }
-            _ => Err(TtsConstructionError::IncompatibleLanguage),
-        }
-    }
-
-    // Accept only negotiated LanguageIdentifiers
-    fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
-        let default = langid!("en-US");
-        negotiate_langs_res(lang, &Self::available_langs(), Some(&default))
-            .expect(NO_COMPATIBLE_LANG_MSG)
-    }
-
-    fn available_langs() -> Vec<LanguageIdentifier> {
-        langids!(
-            "ar-AR", "de-DE", "en-GB", "en-US", "es-ES", "es-LA", "es-US", "fr-FR", "it-IT",
-            "ja-JP", "ko-KR", "nl-NL", "pt-BR", "zh-CN"
+    fn edit_request(&self, _input: &str, req: RequestBuilder) -> RequestBuilder {
+        req.header(
+            "Authorization",
+            format!("Basic {}", base64::encode(&format!("apikey:{}", self.key))),
         )
     }
 
-    async fn synth_text_online_err(&self, input: &str) -> Result<Audio, OnlineTtsError> {
-        let url_str = format!(
-            "https://{}/text-to-speech/api/v1/synthesize?voice=",
-            self.api_gateway
-        );
-        let url = reqwest::Url::parse(&format!("{}{}&text={}", url_str, &self.curr_voice, input))?;
+    fn get_voice_name(
+        &self,
+        lang: &str,
+        region: &str,
+        prefs: &VoiceDescr,
+    ) -> Result<String, TtsConstructionError> {
+        let res = match (lang, region, &prefs.gender) {
+            ("ar", _, _) => Ok("ar-AR_OmarVoice"), // Only male
+            ("de", _, Gender::Male) => Ok("de-DE_DieterV3Voice"),
+            ("de", _, Gender::Female) => Ok("de-DE_BirgitV3Voice"), // There's also "de-DE_ErikaV3Voice"
+            ("en", "GB", Gender::Male) => Ok("en-GB_JamesV3Voice"),
+            ("en", "GB", Gender::Female) => Ok("en-GB_CharlotteV3Voice"), // There's also "en-GB_KateV3Voice"
+            ("en", "US", Gender::Male) => Ok("en-US_MichaelV3Voice"), // There's alseo "en-US_HenryV3Voice" and "en-US_KevinV3Voice"
+            ("en", "US", Gender::Female) => Ok("en-US_AllisonV3Voice"), // There's also "en-US_EmilyV3Voice", "en-US_LisaV3Voice" and  "en-US_OliviaV3Voice"
+            ("es", "ES", Gender::Male) => Ok("es-ES_EnriqueV3Voice"),
+            ("es", "ES", Gender::Female) => Ok("es-ES_LauraV3Voice"),
+            ("es", "LA", _) => Ok("es-LA_SofiaV3Voice"), // Only female
+            ("es", "US", _) => Ok("es-US_SofiaV3Voice"), // Only female
+            ("fr", _, Gender::Male) => Ok("fr-FR_NicolasV3Voice"),
+            ("fr", _, Gender::Female) => Ok("fr-FR_ReneeV3Voice"),
+            ("it", _, _) => Ok("it-IT_FrancescaV3Voice"), // Only female
+            ("ja", _, _) => Ok("ja-JP_EmiVoice"),         // Only female
+            ("ko", _, _) => Ok("ko-KR_YoungmiVoice"),     // There's also "ko-KR_YunaVoice"
+            ("nl", _, Gender::Male) => Ok("nl-NL_LiamVoice"),
+            ("nl", _, Gender::Female) => Ok("nl-NL_EmmaVoice"),
+            ("pt", _, _) => Ok("pt-BR_IsabelaV3Voice"), // Only female
+            ("zh", _, Gender::Male) => Ok("zh-CN_WangWeiVoice"), // There's also "zh-CN_ZhangJingVoice"
+            ("zh", _, Gender::Female) => Ok("zh-CN_LiNaVoice"),
+            _ => Err(TtsConstructionError::IncompatibleLanguage),
+        };
 
-        let buf = self
-            .client
-            .post(url)
-            .header("accept", "audio/mp3")
-            .header(
-                "Authorization",
-                format!(
-                    "Basic {}",
-                    base64::encode(&format!("apikey:{}", self.api_key))
-                ),
-            )
-            .send()
-            .await?
-            .bytes()
-            .await?
-            .to_vec();
-
-        Ok(Audio::new_encoded(buf))
-    }
-}
-
-#[async_trait(?Send)]
-impl Tts for IbmTts {
-    async fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
-        Ok(self.synth_text_online_err(input).await?)
+        res.map(|s| s.into())
     }
 
     fn get_info(&self) -> TtsInfo {
@@ -168,15 +66,11 @@ impl Tts for IbmTts {
             is_online: true,
         }
     }
-}
 
-impl TtsStatic for IbmTts {
-    fn is_descr_compatible(_descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
-        // Ibm has voices for both genders in all supported languages
-        Ok(())
-    }
-
-    fn is_lang_comptaible(lang: &LanguageIdentifier) -> Result<(), TtsConstructionError> {
-        negotiate_langs_res(lang, &Self::available_langs(), None).map(|_| ())
+    fn get_available_langs(&self) -> Vec<LanguageIdentifier> {
+        langids!(
+            "ar-AR", "de-DE", "en-GB", "en-US", "es-ES", "es-LA", "es-US", "fr-FR", "it-IT",
+            "ja-JP", "ko-KR", "nl-NL", "pt-BR", "zh-CN"
+        )
     }
 }

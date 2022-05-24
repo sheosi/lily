@@ -1,73 +1,43 @@
-use crate::tts::{
-    negotiate_langs_res, OnlineTtsError, Tts, TtsConstructionError, TtsError, TtsInfo, TtsStatic,
-    VoiceDescr,
-};
-use crate::vars::NO_COMPATIBLE_LANG_MSG;
-use async_trait::async_trait;
-use reqwest::Client;
+use crate::tts::{TtsConstructionError, TtsError, TtsInfo, VoiceDescr};
+
+use reqwest::{RequestBuilder, Url};
 use unic_langid::{langid, langids, LanguageIdentifier};
 
-use lily_common::audio::Audio;
+use super::http_tts::HttpsTtsData;
 
-pub struct GttsEngine {
-    client: Client,
-}
+pub struct GttsData();
 
-impl GttsEngine {
-    pub fn new() -> Self {
-        GttsEngine {
-            client: Client::new(),
-        }
+impl HttpsTtsData for GttsData {
+    fn make_request_url(&self, voice: &str, input: &str) -> Result<reqwest::Url, TtsError> {
+        Ok(Url::parse(&google_translate_tts::url(input, voice)).unwrap())
     }
 
-    // This one will return an MP3
-    pub async fn synth(&mut self, text: &str, lang: &str) -> Result<Vec<u8>, OnlineTtsError> {
+    fn edit_request(&self, input: &str, req: reqwest::RequestBuilder) -> RequestBuilder {
         const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; WOW64) \
 	            AppleWebKit/537.36 (KHTML, like Gecko) \
 	            Chrome/47.0.2526.106 Safari/537.36";
 
-        let url = google_translate_tts::url(text, lang);
-        log::info!("{}", url);
-
-        let buf = self
-            .client
-            .get(&url)
-            .header("Referer", "http://translate.google.com/")
+        req.header("Referer", "http://translate.google.com/")
             .header("User-Agent", USER_AGENT)
-            .send()
-            .await?
-            .bytes()
-            .await?
-            .to_vec();
-
-        Ok(buf)
     }
-}
 
-pub struct GTts {
-    engine: GttsEngine,
-    curr_lang: String,
-}
+    fn get_voice_name(
+        &self,
+        lang: &str,
+        region: &str,
+        prefs: &VoiceDescr,
+    ) -> Result<String, TtsConstructionError> {
+        Ok(format!("{}-{}", lang, region))
+    }
 
-impl GTts {
-    pub fn new(lang: &LanguageIdentifier) -> Self {
-        GTts {
-            engine: GttsEngine::new(),
-            curr_lang: Self::make_tts_lang(&Self::lang_neg(lang)).to_string(),
+    fn get_info(&self) -> TtsInfo {
+        TtsInfo {
+            name: "Google Translate".to_string(),
+            is_online: true,
         }
     }
 
-    fn make_tts_lang<'a>(lang: &'a LanguageIdentifier) -> &'a str {
-        lang.language.as_str()
-    }
-
-    fn lang_neg(lang: &LanguageIdentifier) -> LanguageIdentifier {
-        let default = langid!("en");
-        negotiate_langs_res(lang, &Self::available_langs(), Some(&default))
-            .expect(NO_COMPATIBLE_LANG_MSG)
-    }
-
-    fn available_langs() -> Vec<LanguageIdentifier> {
+    fn get_available_langs(&self) -> Vec<LanguageIdentifier> {
         // Note: Google also allows others ("sq", "hy", "bs", "hr", "eo", "mk",
         // "sw", "cy"), however, they use what seems to be Espeak, at which point
         // you are better off just using espeak yourself
@@ -77,32 +47,5 @@ impl GTts {
             "ms", "ml", "my", "ne", "no", "pl", "pt", "ro", "ru", "sr", "si", "sk", "es", "su",
             "sv", "tl", "ta", "te", "th", "tr", "uk", "ur", "vi", "zh-CN", "zh-TW"
         )
-    }
-}
-
-#[async_trait(?Send)]
-impl Tts for GTts {
-    async fn synth_text(&mut self, input: &str) -> Result<Audio, TtsError> {
-        self.engine
-            .synth(input, &self.curr_lang)
-            .await
-            .map(|b| Ok(Audio::new_encoded(b)))?
-    }
-
-    fn get_info(&self) -> TtsInfo {
-        TtsInfo {
-            name: "Google Translate".to_string(),
-            is_online: true,
-        }
-    }
-}
-
-impl TtsStatic for GTts {
-    fn is_descr_compatible(_descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
-        Ok(())
-    }
-
-    fn is_lang_comptaible(lang: &LanguageIdentifier) -> Result<(), TtsConstructionError> {
-        negotiate_langs_res(lang, &Self::available_langs(), None).map(|_| ())
     }
 }
