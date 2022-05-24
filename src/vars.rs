@@ -32,7 +32,6 @@ pub const DEEPSPEECH_READ_FAIL_MSG: &str = "Failed to read deepspeech's folder";
 pub const UNEXPECTED_MSG: &str =
     "Something unexpected (and probably terrible) happened, this should be reported";
 pub const POISON_MSG: &str = "A shared lock had a panic in another thread";
-pub const NO_ADD_ENTITY_VALUE_MSG: &str = "Can't add value to entity, NLU manager not yet ready";
 
 // Other
 pub const MIN_SCORE_FOR_ACTION: f32 = 0.3;
