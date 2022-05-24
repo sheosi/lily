@@ -12,7 +12,7 @@ impl HttpsTtsData for GttsData {
         Ok(Url::parse(&google_translate_tts::url(input, voice)).unwrap())
     }
 
-    fn edit_request(&self, input: &str, req: reqwest::RequestBuilder) -> RequestBuilder {
+    fn edit_request(&self, _input: &str, req: reqwest::RequestBuilder) -> RequestBuilder {
         const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; WOW64) \
 	            AppleWebKit/537.36 (KHTML, like Gecko) \
 	            Chrome/47.0.2526.106 Safari/537.36";
@@ -25,7 +25,7 @@ impl HttpsTtsData for GttsData {
         &self,
         lang: &str,
         region: &str,
-        prefs: &VoiceDescr,
+        _prefs: &VoiceDescr,
     ) -> Result<String, TtsConstructionError> {
         Ok(format!("{}-{}", lang, region))
     }

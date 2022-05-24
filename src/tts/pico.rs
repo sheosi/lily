@@ -63,7 +63,7 @@ impl PicoTts {
 
         // 3. Create a Pico voice definition and attach the loaded resources to it
         let voice =
-            pico::System::create_voice(sys.clone(), "TestVoice").expect("Failed to create voice");
+            pico::System::create_voice(sys, "TestVoice").expect("Failed to create voice");
         voice
             .borrow_mut()
             .add_resource(ta_res)
@@ -76,7 +76,7 @@ impl PicoTts {
         // 4. Create an engine from the voice definition
         // UNSAFE: Creating an engine without attaching the resources will result in a crash!
         let engine =
-            unsafe { pico::Voice::create_engine(voice.clone()).expect("Failed to create engine") };
+            unsafe { pico::Voice::create_engine(voice).expect("Failed to create engine") };
         //let voice_def = espeak_sys::espeak_VOICE{name: std::ptr::null(), languages: std::ptr::null(), identifier: std::ptr::null(), gender: 0, age: 0, variant: 0, xx1:0, score: 0, spare: std::ptr::null_mut()};
         Ok(PicoTts { engine })
     }
@@ -136,7 +136,7 @@ impl Tts for PicoTts {
 
 impl TtsStatic for PicoTts {
     type Data = ();
-    fn is_descr_compatible(d: &Self::Data, descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
+    fn is_descr_compatible(_d: &Self::Data, descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
         //Only has female voices (by default)
         if descr.gender != Gender::Female {
             Err(TtsConstructionError::WrongGender)
@@ -145,7 +145,7 @@ impl TtsStatic for PicoTts {
         }
     }
 
-    fn is_lang_comptaible(d: &Self::Data, lang: &LanguageIdentifier) -> Result<(), TtsConstructionError> {
+    fn is_lang_comptaible(_d: &Self::Data, lang: &LanguageIdentifier) -> Result<(), TtsConstructionError> {
         let default = langid!("en-US");
 
         negotiate_langs_res(lang, &Self::available_langs(), Some(&default)).map(|_| ())

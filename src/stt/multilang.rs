@@ -83,7 +83,7 @@ impl Deref for SttPoolItem {
     type Target = Box<dyn Stt>;
 
     fn deref(&self) -> &Self::Target {
-        &self.value.as_ref().expect("")
+        self.value.as_ref().expect("")
     }
 }
 

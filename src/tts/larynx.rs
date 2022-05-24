@@ -11,9 +11,9 @@ use super::http_tts::HttpsTtsData;
 pub struct LarynxData {
     #[serde(flatten)]
     url: String,
-    
+
     #[serde(skip_deserializing, default)]
-    voices: Vec<String>
+    voices: Vec<String>,
 }
 
 impl HttpsTtsData for LarynxData {
@@ -35,10 +35,10 @@ impl HttpsTtsData for LarynxData {
         _prefs: &VoiceDescr,
     ) -> Result<String, TtsConstructionError> {
         let l = format!("{}-{}/", lang, region);
-        
+
         for v in &self.voices {
             if v.starts_with(&l) {
-                return Ok(v.clone())
+                return Ok(v.clone());
             }
         }
 
@@ -54,9 +54,10 @@ impl HttpsTtsData for LarynxData {
 
     fn get_available_langs(&self) -> Vec<LanguageIdentifier> {
         let lang_reg =
-        Regex::new("^([a-zA-Z]+-[a-zA-Z]+)/").expect("Regex failed to compile, report this");
+            Regex::new("^([a-zA-Z]+-[a-zA-Z]+)/").expect("Regex failed to compile, report this");
 
-        self.voices.iter()
+        self.voices
+            .iter()
             .filter_map(|s| lang_reg.captures(s))
             .filter_map(|c| {
                 c.get(1)
@@ -81,6 +82,10 @@ impl LarynxData {
             .await
             .unwrap();
 
-        std::str::from_utf8(&voices_bytes).unwrap().split(',').map(|s|s.to_string()).collect()
+        std::str::from_utf8(&voices_bytes)
+            .unwrap()
+            .split(',')
+            .map(|s| s.to_string())
+            .collect()
     }
 }

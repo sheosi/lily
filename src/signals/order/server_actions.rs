@@ -156,7 +156,7 @@ pub async fn on_event(
             data: ContextData::Event { event: "".into() },
         };
         let ans = signal_event.lock_it().call(&msg.event, context).await;
-        if let Err(e) = process_answers(ans, &def_lang, msg.satellite) {
+        if let Err(e) = process_answers(ans, def_lang, msg.satellite) {
             error!("Occurred a problem while processing event: {}", e);
         }
     }

@@ -124,7 +124,7 @@ impl IntentData {
                         .first()
                         .as_ref()
                         .map(|d| d.value.clone())
-                        .unwrap_or("".into());
+                        .unwrap_or_else(||"".into());
                     (name, example)
                 }
             };

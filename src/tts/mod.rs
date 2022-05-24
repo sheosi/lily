@@ -115,7 +115,7 @@ fn negotiate_langs_res(
 }
 
 // Conf ////////////////////////////////////////////////////////////////////////
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct TtsData {
     #[serde(default = "false_val")]
     pub prefer_male: bool,
@@ -127,17 +127,6 @@ pub struct TtsData {
 
     #[serde(default)]
     pub larynx: Option<LarynxData>,
-}
-
-impl Default for TtsData {
-    fn default() -> Self {
-        Self {
-            prefer_male: false,
-            prefer_online: false,
-            ibm: None,
-            larynx: None
-        }
-    }
 }
 
 // Factory /////////////////////////////////////////////////////////////////////

@@ -5,7 +5,6 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use crate::vars::POISON_MSG;
 
 use thiserror::Error;
-use unic_langid::{LanguageIdentifier, LanguageIdentifierError};
 
 #[derive(Error, Debug, Clone)]
 #[error("\"{}\" contains not-unicode characters", debug_str)]
@@ -39,12 +38,4 @@ impl<T: ?std::marker::Sized> LockIt<T> for Mutex<T> {
     fn lock_it(&self) -> MutexGuard<T> {
         self.lock().expect(POISON_MSG)
     }
-}
-
-/// Transform all languages into their LanguageIdentifier forms
-fn parse_langs(langs: Vec<String>) -> Result<Vec<LanguageIdentifier>, LanguageIdentifierError> {
-    Ok(langs
-        .into_iter()
-        .map(|l| l.parse())
-        .collect::<Result<Vec<_>, _>>()?)
 }

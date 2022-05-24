@@ -156,7 +156,7 @@ impl Timer {
                 data.get(name)
                     .map(|s| {
                         let res = s.parse();
-                        if let Err(_) = res {
+                        if res.is_err() {
                             warn!("'{}' can't be parsed as number", s);
                         }
                         res

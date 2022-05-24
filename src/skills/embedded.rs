@@ -27,8 +27,8 @@ impl SkillLoader for EmbeddedLoader {
             mut_sigreg.set_order(Arc::new(Mutex::new(new_signal_order(langs.to_owned()))))?;
             mut_sigreg.set_poll(Arc::new(Mutex::new(PollQuery::new())))?;
             mut_sigreg.insert(
-                "embedded".into(),
-                "timer".into(),
+                "embedded",
+                "timer",
                 Arc::new(Mutex::new(Timer::new())),
             )?;
         }
@@ -36,8 +36,8 @@ impl SkillLoader for EmbeddedLoader {
         {
             let mut mut_actreg = ACT_REG.lock_it();
             mut_actreg.insert(
-                "embedded".into(),
-                "say_hello".into(),
+                "embedded",
+                "say_hello",
                 Arc::new(Mutex::new(SayHelloAction::new())),
             )?;
         }

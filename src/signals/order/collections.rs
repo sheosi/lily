@@ -54,7 +54,7 @@ impl<M: NluManager + NluManagerStatic + Debug + Send> NluMap<M> {
         const NO_NLU_MSG: &str = "received_order can't be called before end_loading";
 
         self.map
-            .get_mut(&lang)
+            .get_mut(lang)
             .expect(ERR_MSG)
             .nlu
             .as_mut()

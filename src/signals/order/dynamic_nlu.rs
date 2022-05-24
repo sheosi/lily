@@ -1,7 +1,8 @@
 // Standard library
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
-use std::sync::{Mutex, Weak};
+use std::sync::atomic::Ordering;
+use std::sync::{atomic::AtomicBool, Mutex, Weak};
 
 // This crate
 use crate::actions::Action;
@@ -26,7 +27,7 @@ lazy_static! {
     static ref DYNAMIC_NLU_CHANNEL: Mutex<Option<mpsc::Sender<DynamicNluRequest>>> =
         Mutex::new(None);
     static ref NEXT_NLU_COMPILATION: Mutex<Instant> = Mutex::new(Instant::now());
-    static ref IS_NLU_COMPILATION_SCHEDULED: Mutex<bool> = Mutex::new(false);
+    static ref IS_NLU_COMPILATION_SCHEDULED: AtomicBool = AtomicBool::new(false);
 }
 
 #[derive(Debug)]
@@ -81,8 +82,8 @@ fn schedule_nlu_compilation<M: NluManager + NluManagerStatic + Debug + Send + 's
 ) {
     *NEXT_NLU_COMPILATION.lock_it() = Instant::now() + Duration::from_millis(NLU_TRAINING_DELAY);
 
-    if *IS_NLU_COMPILATION_SCHEDULED.lock_it() {
-        *IS_NLU_COMPILATION_SCHEDULED.lock_it() = true;
+    if IS_NLU_COMPILATION_SCHEDULED.load(Ordering::SeqCst) {
+        IS_NLU_COMPILATION_SCHEDULED.store(true, Ordering::SeqCst);
 
         spawn(async move {
             let next_compilation = *NEXT_NLU_COMPILATION.lock_it();
@@ -92,7 +93,7 @@ fn schedule_nlu_compilation<M: NluManager + NluManagerStatic + Debug + Send + 's
             // Note: this on something like a multithreaded system might need a barrier
             // We uncheck this so soon since from now on bumping the time won't
             // be useful
-            *IS_NLU_COMPILATION_SCHEDULED.lock_it() = false;
+            IS_NLU_COMPILATION_SCHEDULED.store(false, Ordering::SeqCst);
 
             let arc = shared_nlu.upgrade().unwrap();
             if let Err(e) = SignalOrder::end_loading(&arc, &curr_langs) {

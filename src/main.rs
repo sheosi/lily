@@ -70,7 +70,7 @@ pub async fn main() -> Result<()> {
             .filter(|i| !i.is_empty())
             .map(|i| {
                 i.parse()
-                    .expect(&format!("Locale parsing of \"{}\" failed", &i))
+                    .unwrap_or_else(|_| panic!("Locale parsing of \"{}\" failed", &i))
             })
             .collect()
     };

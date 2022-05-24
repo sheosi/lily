@@ -146,3 +146,9 @@ impl RecDevice {
         Ok(())
     }
 }
+
+impl Default for RecDevice {
+    fn default() -> Self {
+        Self::new()
+    }
+}

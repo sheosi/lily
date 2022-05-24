@@ -40,7 +40,7 @@ impl MqttInterfaceIn {
         let input: MsgNewSatellite = decode::from_read(std::io::Cursor::new(payload))?;
         let uuid2 = &input.uuid;
         let caps = input.caps;
-        CAPS_MANAGER.with(|c| c.borrow_mut().add_client(&uuid2, caps));
+        CAPS_MANAGER.with(|c| c.borrow_mut().add_client(uuid2, caps));
         let output = encode::to_vec(&MsgWelcome {
             conf: config.to_client_conf(),
             satellite: input.uuid,
@@ -177,7 +177,6 @@ impl MqttInterfaceOut {
                     None => {
                         warn!("Received answer for language {:?} not in the config or that has no TTS, using default", lang);
                         let def = def_lang
-                            .clone()
                             .expect("There's no language assigned, need one at least");
                         match tts_set.get_mut(def) {
                             Some(tts) => synth_text(tts, &str).await,

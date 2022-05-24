@@ -82,7 +82,7 @@ impl<H: HttpsTtsData> Tts for HttpTts<H> {
 
 impl<H: HttpsTtsData> TtsStatic for HttpTts<H> {
     type Data = H;
-    fn is_descr_compatible(d: &Self::Data, _descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
+    fn is_descr_compatible(_d: &Self::Data, _descr: &VoiceDescr) -> Result<(), TtsConstructionError> {
         // Ibm has voices for both genders in all supported languages
         Ok(())
     }
