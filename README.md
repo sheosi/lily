@@ -79,16 +79,21 @@ need [Rust](https://www.rust-lang.org/) and cargo (bundled alongside Rust) for t
 
 `cargo build`
 
-### Debian package
-This repository can make a Debian package, however it is still dependent on the
-`snips-nlu` python package, though will try to install it on it's own.
+### Docker image
+Lily can be made into docker images, one for the default client and another for the assistant itself:
 
-To generate the Debian package.
+**Assistant:**
 
-```shell
-cargo install cargo-deb
-cargo deb
 ```
+docker build -f Dockerfile -t lily
+```
+
+**Client:**
+
+```
+docker build -f Dockerfile.client -t lily-client
+```
+
 
 ## Features
 
@@ -96,9 +101,9 @@ cargo deb
 - [x] Intent and slot parsing
 - [x] Multilanguage
 - [x] Client/Server architecture
+- [ ] Interactivity (asking for something after the initial trigger)
 - [ ] Question answering
 - [ ] Semantic parsing
-- [ ] Interactivity (asking for something after the initial trigger)
 
 ### Multilanguage
 
@@ -108,17 +113,20 @@ Lily can be configured to support multiple languages at the same time, this mean
 
 TTS, STT and NLU are components important enough that having multiple of them makes sense, here's what's supported by Lily right now:
 
-**TTS:** Pico, Espeak, Google (using optional feature), IBM
-**STT/ASR:** PocketSphinx, Deepspeech (using optional feature), IBM
+**TTS:** Pico, Espeak, Google (using optional feature), Larynx, IBM.
+
+**STT/ASR:** PocketSphinx, Deepspeech (using optional feature), IBM.
+
 **NLU:** Snips, Rasa (using optional feature, not functional).
 
-Remember that both for **TTS** and **STT/ASR** Lily will pair any online service with an offline one as fallback, so that even without connection it will continue to work.
+Remember that both for **TTS** and **STT/ASR** Lily will pair any online service with an offline one as fallback, so that even in case of the connection failing it will continue to work.
 
 ## Where will it run?
+
 Lily is meant to be run on-device (mostly) even on constrained hardware like a Raspberry. Of course, it will still work on standard PCs and more powerful hardware.
 
 ## Current state:
 
 * *Smartness*: Can trigger actions, with a dialog system on the works
-* *Modularity*: Client and Server are their own processes, skills are getting the same treatment (making a new connection protocol from scratch).
+* *Modularity*: Clients connect to the assistant through a custom MQTT protocol, while skills connect via [VAP](https://github.com/secretsauceai/voice-assistant-protocol).
 * *Multilanguage* [Needs testing]: Can work with multiple languages and detect by voice which is being used. Detection is only made for voice (not text). Languages can`t be mixed in the same question.
