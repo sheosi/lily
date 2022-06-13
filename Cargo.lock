@@ -3566,9 +3566,9 @@ dependencies = [
 
 [[package]]
 name = "xtra"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd0133cb26accfd34360ab6b8fe9745d8907dcaee0cd7f8191dee4fd884e88d0"
+checksum = "bca0a1b28e7cf635b4e961c7330416bf842a89bca42f5c707ab02a065e1ee60f"
 dependencies = [
  "async-trait",
  "barrage",
