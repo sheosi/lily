@@ -18,7 +18,7 @@ serde = { version = "^1.0", features = [
 maplit = "^1.0"  # Literals for hasmaps, mostly used for the config of Rasa
 anyhow = "^1.0"  # For error handling overall in the app
 thiserror = "^1.0"  # For error handling in parts that can be made their own crate
-regex = "^1.5"  # To parse configuration
+regex = "^1.6"  # To parse configuration
 ctrlc = "^3.2"  # To catch ctrl-c in all platforms and exit the program
 
 # Some async deps
