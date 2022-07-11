@@ -374,13 +374,15 @@ dependencies = [
 
 [[package]]
 name = "coap"
-version = "0.11.3"
-source = "git+https://github.com/Covertness/coap-rs#76bea972df92f0b730d24435921b9a86b95d42c3"
+version = "0.12.0"
+source = "git+https://github.com/Covertness/coap-rs#afa7d108f8cd6b219ceaf1f0fced36b6e8551ddf"
 dependencies = [
  "bytes",
- "coap-lite 0.8.1",
+ "coap-lite 0.9.1",
  "futures",
  "log",
+ "lru_time_cache",
+ "mio",
  "num-derive",
  "num-traits 0.2.15",
  "regex",
@@ -396,6 +398,15 @@ name = "coap-lite"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fa1d1df3de26ab9f13899c4f0a2467d3b018069642dd4ec34b3871b2edb13ad"
+
+[[package]]
+name = "coap-lite"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b4859ead43cef7e14593c5238cb3dd8800f41ade206bdf08c44c51f2d943fd3"
+dependencies = [
+ "lru_time_cache",
+]
 
 [[package]]
 name = "coap-lite"
@@ -1497,14 +1508,25 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.8.3"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "713d550d9b44d89174e066b7a6217ae06234c10cb47819a88290d2b353c31799"
+checksum = "52da4364ffb0e4fe33a9841a98a3f3014fb964045ce4f7a45a398243c8d6b0c9"
 dependencies = [
  "libc",
  "log",
+ "miow",
+ "ntapi",
  "wasi 0.11.0+wasi-snapshot-preview1",
- "windows-sys",
+ "winapi",
+]
+
+[[package]]
+name = "miow"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9f1c5b025cda876f66ef43a113f91ebc9f4ccef34843000e0adf6ebbab84e21"
+dependencies = [
+ "winapi",
 ]
 
 [[package]]
@@ -1625,6 +1647,15 @@ checksum = "2ad2a91a8e869eeb30b9cb3119ae87773a8f4ae617f41b1eb9c154b2905f7bd6"
 dependencies = [
  "memchr",
  "version_check 0.1.5",
+]
+
+[[package]]
+name = "ntapi"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c28774a7fd2fbb4f0babd8237ce554b73af68021b5f695a3cebd6c59bac0980f"
+dependencies = [
+ "winapi",
 ]
 
 [[package]]
@@ -3298,7 +3329,7 @@ dependencies = [
 [[package]]
 name = "vap-common-skill"
 version = "0.1.0"
-source = "git+https://github.com/secretsauceai/voice-assistant-protocol/#fb5be664d7514df3f2fd63525b2b803e1709fac3"
+source = "git+https://github.com/secretsauceai/voice-assistant-protocol/#565174606a67d9611f8c3a8fe5a2651dea4f35d9"
 dependencies = [
  "serde",
  "serde_derive",
@@ -3308,7 +3339,7 @@ dependencies = [
 [[package]]
 name = "vap-skill-register"
 version = "0.1.0"
-source = "git+https://github.com/secretsauceai/voice-assistant-protocol/#fb5be664d7514df3f2fd63525b2b803e1709fac3"
+source = "git+https://github.com/secretsauceai/voice-assistant-protocol/#565174606a67d9611f8c3a8fe5a2651dea4f35d9"
 dependencies = [
  "coap",
  "coap-lite 0.8.1",
