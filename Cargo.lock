@@ -399,9 +399,9 @@ checksum = "1fa1d1df3de26ab9f13899c4f0a2467d3b018069642dd4ec34b3871b2edb13ad"
 
 [[package]]
 name = "coap-lite"
-version = "0.9.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b4859ead43cef7e14593c5238cb3dd8800f41ade206bdf08c44c51f2d943fd3"
+checksum = "3b1f6b9eca59bb0f52c91a9878270e0c0caf6dd7ffab69958860cc775a18e93d"
 dependencies = [
  "lru_time_cache",
 ]
@@ -1264,7 +1264,7 @@ dependencies = [
  "base64 0.13.0",
  "bytes",
  "chrono",
- "coap-lite 0.9.1",
+ "coap-lite 0.11.0",
  "ctrlc",
  "deepspeech",
  "delegate",

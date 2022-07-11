@@ -34,7 +34,7 @@ vap-skill-register = {git="https://github.com/secretsauceai/voice-assistant-prot
 vap-common-skill = {git="https://github.com/secretsauceai/voice-assistant-protocol/"}
 #vap-skill-register = {path="../vap/vap-skill-register"}
 #vap-common-skill = {path="../vap/vap-common-skill"}
-coap-lite = "^0.9"
+coap-lite = "^0.11"
 
 pocketsphinx = "^0.6.0"                            # Offline Stt
 deepspeech = { version = "^0.9", optional = true } # More correct and better (also slower) Stt
