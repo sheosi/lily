@@ -11,7 +11,7 @@ description = "Open source voice assistance for humans."
 
 [dependencies]
 yaml-rust = "^0.4" # Load configuration files from this program and skills
-serde_yaml = "^0.8" # Join serde and Yaml for loading conf and skills
+serde_yaml = "^0.9" # Join serde and Yaml for loading conf and skills
 serde = { version = "^1.0", features = [
     "derive",
 ] }  # Serialization framework (used by serde_yaml and serde_json)
