@@ -18,7 +18,7 @@ lily_common = {path = "../common"}
 client-components = {path = "../client-components"}
 anyhow = "^1.0" # For error handling overall in the app
 log = "^0.4" # Common API for logging so we can change backend easily
-rumqttc = "^0.15"
+rumqttc = "^0.16"
 serde_yaml = "^0.9"
 uuid = {version = "^1.1.2", features=["v4", "serde"]}
 ogg-opus = "^0.1"
