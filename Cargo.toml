@@ -60,7 +60,7 @@ reqwest = { version = "^0.11", features = [
 ] } # HTTP client
 url = "^2.3"
 base64 = "^0.13" # For sending data to the online TTS and STT
-tungstenite = { version = "^0.16", features = [
+tungstenite = { version = "^0.17", features = [
     "native-tls",
 ] } # Web sockets for online STT, each version needs to be compatible with tokio-tungstenite
 tokio-tungstenite = { version = "^0.16", features = ["native-tls"] }
