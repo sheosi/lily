@@ -1,11 +1,11 @@
 version: 2
 updates:
-- package-ecosystem: cargo
-  directory: "/"
-  schedule:
-    interval: daily
-    time: "10:00"
-  ignore:
-  - dependency-name: "*"
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: daily
+      time: 10:00
+    ignore:
+      - dependency-name: "*"
         update-types: ["version-update:semver-patch"]
-  open-pull-requests-limit: 10
+    open-pull-requests-limit: 10
