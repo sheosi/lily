@@ -22,7 +22,7 @@ regex = "^1.7"  # To parse configuration
 ctrlc = "^3.2"  # To catch ctrl-c in all platforms and exit the program
 
 # Some async deps
-tokio = { version = "^1.24", features = ["macros", "rt", "sync", "time"] }
+tokio = { version = "^1.25", features = ["macros", "rt", "sync", "time"] }
 async-trait = "^0.1"
 rumqttc = "^0.20"
 rmp-serde = "^1.1"
