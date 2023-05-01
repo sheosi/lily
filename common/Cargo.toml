@@ -24,7 +24,7 @@ rumqttc = "^0.20"
 anyhow = "^1.0" # For error handling overall in the app
 tokio = {version = "^1.28", features = ["time"], optional = true}
 rand = "^0.8" # Needs to be hold of for compatibility with cbindgen
-dirs = "^4.0"
+dirs = "^5.0"
 
 [features]
 default = ["client", "snowboy"]
