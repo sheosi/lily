@@ -2253,15 +2253,14 @@ dependencies = [
 
 [[package]]
 name = "rumqttc"
-version = "0.20.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b616bf8b706c2a6235604f5d93f9578c37d0c6161e13898b68a1da4af2d812c"
+checksum = "04483567c64bb8a9d64364a0a9437215a056a2b886140fd66e62a12394cf5998"
 dependencies = [
  "bytes",
  "flume",
  "futures",
  "log",
- "pollster",
  "rustls-native-certs",
  "rustls-pemfile",
  "thiserror",

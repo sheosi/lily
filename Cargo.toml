@@ -24,7 +24,7 @@ ctrlc = "^3.2"  # To catch ctrl-c in all platforms and exit the program
 # Some async deps
 tokio = { version = "^1.28", features = ["macros", "rt", "sync", "time"] }
 async-trait = "^0.1"
-rumqttc = "^0.20"
+rumqttc = "^0.21"
 rmp-serde = "^1.1"
 bytes = "^1.4"
 futures = "^0.3"
