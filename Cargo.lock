@@ -1286,7 +1286,7 @@ dependencies = [
  "pocketsphinx",
  "regex",
  "reqwest",
- "rmp-serde 1.1.1",
+ "rmp-serde 1.1.2",
  "rumqttc",
  "serde",
  "serde_json",
@@ -1315,7 +1315,7 @@ dependencies = [
  "lily_common",
  "log",
  "ogg-opus",
- "rmp-serde 1.1.1",
+ "rmp-serde 1.1.2",
  "rsnowboy",
  "rumqttc",
  "serde",
@@ -2251,9 +2251,9 @@ dependencies = [
 
 [[package]]
 name = "rmp-serde"
-version = "1.1.1"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5b13be192e0220b8afb7222aa5813cb62cc269ebb5cac346ca6487681d2913e"
+checksum = "bffea85eea980d8a74453e5d02a8d93028f3c34725de143085a844ebe953258a"
 dependencies = [
  "byteorder",
  "rmp",
