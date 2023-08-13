@@ -61,9 +61,6 @@ pub enum OnlineSttError {
     #[error("json parsing")]
     JsonParse(#[from] serde_json::Error),
 
-    #[error("opus encoding")]
-    OpusEncode(#[from] magnum_opus::Error),
-
     #[error("Websocket failure: {0}")]
     WebSocket(#[from] tungstenite::Error),
 

@@ -365,15 +365,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cmake"
-version = "0.1.48"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8ad8cef104ac57b68b89df3208164d228503abbdce70f6880ffa3d970e7443a"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "coap"
 version = "0.11.3"
 source = "git+https://github.com/Covertness/coap-rs#76bea972df92f0b730d24435921b9a86b95d42c3"
@@ -1280,7 +1271,6 @@ dependencies = [
  "lily_common",
  "locale_config",
  "log",
- "magnum-opus",
  "maplit",
  "ogg-opus",
  "pocketsphinx",
@@ -1417,16 +1407,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b823e83b2affd8f40a9ee8c29dbc56404c1e34cd2710921f2801e2cf29527afa"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "magnum-opus"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff49ad2a7313ae476b292c1e1b6bf17ad0542fc1d24880d85d455d8547a3ecc2"
-dependencies = [
- "libc",
- "opusic-sys",
 ]
 
 [[package]]
@@ -1857,16 +1837,6 @@ dependencies = [
  "libc",
  "pkg-config",
  "vcpkg",
-]
-
-[[package]]
-name = "opusic-sys"
-version = "0.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5eace752ce07a037241dba8f02c654799f051e431b27028056bcb480e83b54f5"
-dependencies = [
- "cmake",
- "libc",
 ]
 
 [[package]]
