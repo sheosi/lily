@@ -10,7 +10,7 @@ description = "Voice-based satellite (client) for Lily"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = {version="^1.30", features = ["rt", "macros", "sync", "io-util"]}
+tokio = {version="^1.31", features = ["rt", "macros", "sync", "io-util"]}
 rmp-serde = "^1.1"
 rsnowboy = {git = "https://github.com/sheosi/rsnowboy"} # Hotword detector
 serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
