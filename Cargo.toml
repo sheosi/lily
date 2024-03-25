@@ -26,7 +26,7 @@ tokio = { version = "^1.36", features = ["macros", "rt", "sync", "time"] }
 async-trait = "^0.1"
 rumqttc = "^0.24"
 rmp-serde = "^1.1"
-bytes = "^1.5"
+bytes = "^1.6"
 futures = "^0.3"
 xtra = {version = "^0.5", features = ["with-tokio-1"] }  # Actor framework
 delegate = "^0.12"                                                         # Used for the registries using the base ones
