@@ -10,7 +10,7 @@ edition = "2018"
 rsnowboy = {git = "https://github.com/sheosi/rsnowboy", optional = true} # Hotword detector
 webrtc-vad = {version = "^0.4", optional = true}
 cpal = {version = "^0.14", optional = true} # For recording (future substitute of sphinxad)
-ringbuf = {version = "^0.3", optional = true}# Send what is recorded from the consumer to the producer
+ringbuf = {version = "^0.4", optional = true}# Send what is recorded from the consumer to the producer
 ogg-opus = "^0.1"
 thiserror = "^1.0" # For error handling in parts that can be made their own crate
 
