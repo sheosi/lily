@@ -22,7 +22,7 @@ simplelog = "^0.12.2" # Log output
 url = "^2.5"
 rumqttc = "^0.24"
 anyhow = "^1.0" # For error handling overall in the app
-tokio = {version = "^1.37", features = ["time"], optional = true}
+tokio = {version = "^1.38", features = ["time"], optional = true}
 rand = "^0.8" # Needs to be hold of for compatibility with cbindgen
 dirs = "^4.0"
 
