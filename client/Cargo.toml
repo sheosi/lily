@@ -20,7 +20,7 @@ anyhow = "^1.0" # For error handling overall in the app
 log = "^0.4" # Common API for logging so we can change backend easily
 rumqttc = "^0.24"
 serde_yaml = "^0.9"
-uuid = {version = "^1.8.0", features=["v4", "serde"]}
+uuid = {version = "^1.9.0", features=["v4", "serde"]}
 ogg-opus = "^0.1"
 termion = "^1.5"
 
