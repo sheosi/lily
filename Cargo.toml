@@ -42,7 +42,7 @@ deepspeech = { version = "^0.9", optional = true } # More correct and better (al
 snips-nlu-lib = { git = "https://github.com/snipsco/snips-nlu-rs", tag = "0.65.6" }            # NLU
 snips-nlu-ontology = { git = "https://github.com/snipsco/snips-nlu-ontology", tag = "0.67.1" } # NLU-related things
 serde_json = "^1.0"                                                                            # Used in nlu output and to get text from IBM's Wattson
-lazy_static = "^1.4"                                                                           # We use this for the path were the data is stored
+lazy_static = "^1.5"                                                                           # We use this for the path were the data is stored
 
 ttspico = "^0.1"                                                                     # Main Tts (only for some languages)
 espeak-ng-sys = { git = "https://github.com/sheosi/espeak-ng-sys", optional = true } # Auxiliar Tts (speaks any language)

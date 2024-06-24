@@ -16,7 +16,7 @@ thiserror = "^1.0" # For error handling in parts that can be made their own crat
 
 log = "^0.4" # Common API for logging so we can change backend easily
 rodio = {version = "^0.16", optional = true, default-features =false, features = ["flac", "vorbis", "wav"]} # Playback library
-lazy_static = "^1.4" # We use this for the path were the data is stored
+lazy_static = "^1.5" # We use this for the path were the data is stored
 serde = {version = "^1.0", features = ["derive"]} # Serialization framework (used by serde_yaml and serde_json)
 simplelog = "^0.12.2" # Log output
 url = "^2.5"
