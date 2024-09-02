@@ -29,7 +29,7 @@ rmp-serde = "^1.3"
 bytes = "^1.7"
 futures = "^0.3"
 xtra = {version = "^0.5", features = ["with-tokio-1"] }  # Actor framework
-delegate = "^0.12"                                                         # Used for the registries using the base ones
+delegate = "^0.13"                                                         # Used for the registries using the base ones
 vap-skill-register = {git="https://github.com/secretsauceai/voice-assistant-protocol/"}
 vap-common-skill = {git="https://github.com/secretsauceai/voice-assistant-protocol/"}
 #vap-skill-register = {path="../vap/vap-skill-register"}
