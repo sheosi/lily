@@ -74,7 +74,7 @@ unic-langid = { version = "^0.9", features = [
     "macros",
 ] } # For parsing Unicode Language Identifiers
 locale_config = "*" # Interact with the system locale, the * is suggested by it's author
-fluent-langneg = "^0.13" # Language negotiation
+fluent-langneg = "^0.14" # Language negotiation
 
 
 [features]
