@@ -17,7 +17,7 @@ serde = { version = "^1.0", features = [
 ] }  # Serialization framework (used by serde_yaml and serde_json)
 maplit = "^1.0"  # Literals for hasmaps, mostly used for the config of Rasa
 anyhow = "^1.0"  # For error handling overall in the app
-thiserror = "^1.0"  # For error handling in parts that can be made their own crate
+thiserror = "^2.0"  # For error handling in parts that can be made their own crate
 regex = "^1.11"  # To parse configuration
 ctrlc = "^3.4"  # To catch ctrl-c in all platforms and exit the program
 
