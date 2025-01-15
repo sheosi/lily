@@ -22,7 +22,7 @@ rumqttc = "^0.24"
 serde_yaml = "^0.9"
 uuid = {version = "^1.12.0", features=["v4", "serde"]}
 ogg-opus = "^0.1"
-termion = "^1.5"
+termion = "^4.0"
 
 [package.metadata.deb]
 maintainer = "Sergio Tortosa Benedito <sertorbe@gmail.com>"
