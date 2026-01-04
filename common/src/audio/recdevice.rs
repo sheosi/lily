@@ -1,13 +1,22 @@
 use crate::vars::{CLOCK_TOO_EARLY_MSG, DEFAULT_SAMPLES_PER_SECOND, RECORD_BUFFER_SIZE};
-use log::info;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use log::{error, info};
+use ringbuf::{
+    storage::Heap,
+    traits::{Producer, Split},
+    SharedRb,
+};
+use std::{
+    sync::{Arc, Mutex},
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use thiserror::Error;
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{BufferSize, SampleRate, Stream, StreamConfig};
-use log::error;
-use ringbuf::{Consumer, RingBuffer};
+use cpal::{
+    traits::{DeviceTrait, HostTrait, StreamTrait},
+    BufferSize, SampleRate, Stream, StreamConfig,
+};
+
+use ringbuf::consumer::Consumer;
 use tokio::time::sleep;
 
 #[derive(Error, Debug)]
@@ -32,7 +41,8 @@ pub struct RecDevice {
 }
 
 struct StreamData {
-    internal_buffer_consumer: Consumer<i16>,
+    internal_buffer_consumer:
+        ringbuf::wrap::caching::Caching<Arc<SharedRb<Heap<i16>>>, false, true>,
     last_read: u128,
     _stream: SendableStream,
 }
@@ -64,7 +74,8 @@ impl RecDevice {
             buffer_size: BufferSize::Default,
         };
 
-        let internal_buffer = RingBuffer::new(RECORD_BUFFER_SIZE * 2);
+        let internal_buffer = SharedRb::new(RECORD_BUFFER_SIZE * 2);
+
         let (mut prod, cons) = internal_buffer.split();
 
         let err_fn = move |err| {

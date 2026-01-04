@@ -14,7 +14,7 @@ First install git LFS, for *Debian/Ubuntu* it is:
 sudo apt install git-lfs
 ```
 
-On *Fedora*:    
+On *Fedora*:
 
 ```shell
 sudo dnf install git-lfs
@@ -33,7 +33,7 @@ Now, you can clone the repo:
 git clone https://github.com/sheosi/lily
 ```
 
-Alternatively, if you already have cloned the repository but did not had lfs 
+Alternatively, if you already have cloned the repository but did not had lfs
 installed, on the root folder of this folder do:
 
 ```shell
@@ -50,7 +50,7 @@ And you'll be good to go.
 
 *On Debian:*
 ```shell
-sudo apt install libssl-dev libasound2-dev libpocketsphinx-dev libsphinxbase-dev clang libgsl-dev
+sudo apt install autoconf libssl-dev libasound2-dev libpocketsphinx-dev libsphinxbase-dev clang libgsl-dev libtool
 ```
 
 *On Fedora:*
