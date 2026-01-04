@@ -40,6 +40,9 @@ installed, on the root folder of this folder do:
 git lfs pull
 ```
 
+Note: Due to the use of snips-nlu (an old library for nlu) we recommend the use
+of LLVM 14, older versions might not work correctly.
+
 And you'll be good to go.
 
 ## Building

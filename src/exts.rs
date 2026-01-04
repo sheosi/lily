@@ -25,17 +25,17 @@ impl ToStrResult for PathBuf {
 }
 
 pub trait LockIt<T: ?std::marker::Sized> {
-    fn lock_it(&self) -> MutexGuard<T>;
+    fn lock_it(&self) -> MutexGuard<'_, T>;
 }
 
 impl<T: ?std::marker::Sized> LockIt<T> for &Arc<Mutex<T>> {
-    fn lock_it(&self) -> MutexGuard<T> {
+    fn lock_it(&self) -> MutexGuard<'_, T> {
         self.lock().expect(POISON_MSG)
     }
 }
 
 impl<T: ?std::marker::Sized> LockIt<T> for Mutex<T> {
-    fn lock_it(&self) -> MutexGuard<T> {
+    fn lock_it(&self) -> MutexGuard<'_, T> {
         self.lock().expect(POISON_MSG)
     }
 }
