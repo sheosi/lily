@@ -598,9 +598,9 @@ checksum = "8b55ce8103e4cf6e6b79cb33fbab97af87ffaa9ed4b291319cba3f667c52c580"
 
 [[package]]
 name = "delegate"
-version = "0.13.2"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "297806318ef30ad066b15792a8372858020ae3ca2e414ee6c2133b1eb9e9e945"
+checksum = "6178a82cf56c836a3ba61a7935cdb1c49bfaa6fa4327cd5bf554a503087de26b"
 dependencies = [
  "proc-macro2",
  "quote",
